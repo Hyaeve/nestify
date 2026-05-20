@@ -1,0 +1,21 @@
+body {
+  margin: 0;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f7fb;
+  color: #1f2d3d;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page-card {
+  border-radius: 16px;
+}
+
+.page-section-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+

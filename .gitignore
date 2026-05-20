@@ -1,0 +1,22 @@
+.DS_Store
+Thumbs.db
+
+# Runtime
+/data/runtime/*
+/data/staging/*
+!/data/runtime/.gitkeep
+!/data/staging/.gitkeep
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend
+backend/bin/
+backend/server.exe
+*.exe
+
+# Database and logs
+data/app.db
+logs/
+
