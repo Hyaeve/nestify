@@ -1,6 +1,9 @@
 package sqlite
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (s *Store) migrate() error {
 	statements := []string{
@@ -17,6 +20,7 @@ func (s *Store) migrate() error {
 			description TEXT NOT NULL DEFAULT '',
 			enabled INTEGER NOT NULL DEFAULT 1,
 			monitor_enabled INTEGER NOT NULL DEFAULT 1,
+			compatibility_mode TEXT NOT NULL DEFAULT 'local',
 			archive_mode TEXT NOT NULL,
 			run_mode TEXT NOT NULL,
 			source_dir TEXT NOT NULL,
@@ -54,6 +58,39 @@ func (s *Store) migrate() error {
 
 	if err := s.ensureDefaultSettings(); err != nil {
 		return err
+	}
+
+	if err := s.ensureRuleCompatibilityModeColumn(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleCompatibilityModeColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "compatibility_mode") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN compatibility_mode TEXT NOT NULL DEFAULT 'local';`); err != nil {
+		return fmt.Errorf("add compatibility_mode column: %w", err)
 	}
 
 	return nil

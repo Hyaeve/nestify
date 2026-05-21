@@ -150,6 +150,38 @@ func (s *Service) MoveItems(paths []string, destinationPath string) ([]string, e
 	return moved, nil
 }
 
+func (s *Service) RenameItem(path string, newName string) (string, error) {
+	resolvedPath, err := s.resolveAllowedPath(path)
+	if err != nil {
+		return "", err
+	}
+
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return "", fmt.Errorf("new name is required")
+	}
+	if filepath.Base(newName) != newName || newName == "." || newName == ".." {
+		return "", fmt.Errorf("invalid new name")
+	}
+
+	targetPath := filepath.Join(filepath.Dir(resolvedPath), newName)
+	if !s.isAllowed(targetPath) {
+		return "", fmt.Errorf("target path is outside allowed browse roots")
+	}
+	if samePath(resolvedPath, targetPath) {
+		return resolvedPath, nil
+	}
+	if _, err := os.Stat(targetPath); err == nil {
+		return "", fmt.Errorf("target name already exists")
+	}
+
+	if err := os.Rename(resolvedPath, targetPath); err != nil {
+		return "", fmt.Errorf("rename item: %w", err)
+	}
+
+	return targetPath, nil
+}
+
 func (s *Service) DeleteItems(paths []string) error {
 	if len(paths) == 0 {
 		return fmt.Errorf("paths are required")

@@ -39,6 +39,24 @@ export async function postJSON<T>(url: string, body: unknown): Promise<ApiRespon
     throw new Error(payload.message || `Request failed with status ${response.status}`)
   }
 
-  return payload
+	return payload
+}
+
+export async function deleteJSON<T>(url: string): Promise<ApiResponse<T>> {
+	const response = await fetch(url, {
+		method: 'DELETE',
+		headers: {
+			Accept: 'application/json',
+		},
+		credentials: 'include',
+	})
+
+	const payload = (await response.json()) as ApiResponse<T>
+
+	if (!response.ok) {
+		throw new Error(payload.message || `Request failed with status ${response.status}`)
+	}
+
+	return payload
 }
 

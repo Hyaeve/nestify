@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 	run := s.newRun(triggerMode, archiveMode, &ruleID, req.RuleName)
 	s.appendLog(run.ID, "info", fmt.Sprintf("prepared %s execution skeleton for rule %q", archiveMode, req.RuleName))
 	s.appendLog(run.ID, "info", fmt.Sprintf("source=%s target=%s", req.SourceDir, req.TargetDir))
+	s.runExecution(run.ID, req)
 
 	return s.cloneRun(run), nil
 }
@@ -103,6 +105,73 @@ func (s *Service) appendLog(runID, level, message string) {
 	}
 	s.logs[runID] = append(s.logs[runID], entry)
 }
+
+func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
+	go func() {
+		s.mu.Lock()
+		if run, ok := s.runs[runID]; ok {
+			run.Status = model.RunStatusRunning
+			run.Stage = model.RunStageDispatch
+			run.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
+
+		s.appendLog(runID, "info", "dispatching execution")
+		prepared, err := PrepareMode(req)
+		if err != nil {
+			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("execution failed: %v", err))
+			return
+		}
+
+		entries, scanErr := s.scanSource(req)
+		if scanErr != nil {
+			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, scanErr.Error())
+			return
+		}
+
+		s.mu.Lock()
+		if run, ok := s.runs[runID]; ok {
+			run.Stage = model.RunStageScanning
+			run.ProcessedFiles = len(entries)
+			run.SuccessCount = len(entries)
+			run.Status = model.RunStatusSucceeded
+			run.FinishedAt = ptrTime(time.Now().UTC())
+			run.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
+		s.appendLog(runID, "info", prepared.Summary)
+		s.appendLog(runID, "info", fmt.Sprintf("processed %d files", len(entries)))
+		s.appendLog(runID, "info", "execution completed")
+	}()
+}
+
+func (s *Service) scanSource(req ExecuteRuleRequest) ([]string, error) {
+	if strings.TrimSpace(req.SourceDir) == "" {
+		return nil, fmt.Errorf("source dir is required")
+	}
+	items, err := filepath.Glob(filepath.Join(req.SourceDir, "*"))
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("source dir has no files")
+	}
+	return items, nil
+}
+
+func (s *Service) finishRun(runID, status, stage, logMsg string) {
+	s.mu.Lock()
+	if run, ok := s.runs[runID]; ok {
+		run.Status = status
+		run.Stage = stage
+		run.UpdatedAt = time.Now().UTC()
+		run.FinishedAt = ptrTime(time.Now().UTC())
+	}
+	s.mu.Unlock()
+	s.appendLog(runID, "error", logMsg)
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
 
 func (s *Service) cloneRun(run *model.RunInstance) *model.RunInstance {
 	if run == nil {

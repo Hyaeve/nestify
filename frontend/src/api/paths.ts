@@ -43,10 +43,15 @@ export interface CreateFolderResult {
 }
 
 export interface FileMutationPayload {
-  paths: string[]
-  destination_path?: string
-  output_dir?: string
-  archive_name?: string
+	paths: string[]
+	destination_path?: string
+	output_dir?: string
+	archive_name?: string
+}
+
+export interface RenameItemPayload {
+	path: string
+	new_name: string
 }
 
 export interface FileMutationResult {
@@ -76,14 +81,21 @@ export function createFolder(parentPath: string, name: string) {
 }
 
 export function copyItems(paths: string[], destinationPath: string) {
-  return postJSON<FileMutationResult>('/api/v1/files/copy', {
-    paths,
-    destination_path: destinationPath,
-  })
+	return postJSON<FileMutationResult>('/api/v1/files/copy', {
+		paths,
+		destination_path: destinationPath,
+	})
+}
+
+export function renameItem(path: string, newName: string) {
+	return postJSON<FileMutationResult>('/api/v1/files/rename', {
+		path,
+		new_name: newName,
+	})
 }
 
 export function moveItems(paths: string[], destinationPath: string) {
-  return postJSON<FileMutationResult>('/api/v1/files/move', {
+	return postJSON<FileMutationResult>('/api/v1/files/move', {
     paths,
     destination_path: destinationPath,
   })

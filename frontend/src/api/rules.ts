@@ -1,4 +1,4 @@
-import { getJSON } from './http'
+import { deleteJSON, getJSON } from './http'
 
 export interface RuleItem {
   id: number
@@ -6,6 +6,7 @@ export interface RuleItem {
   description: string
   enabled: boolean
   monitor_enabled: boolean
+  compatibility_mode: 'local' | 'compatibility'
   archive_mode: 'package' | 'collect'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
@@ -37,6 +38,7 @@ export interface CreateRulePayload {
   description: string
   enabled: boolean
   monitor_enabled: boolean
+  compatibility_mode: 'local' | 'compatibility'
   archive_mode: 'package' | 'collect'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
@@ -59,14 +61,15 @@ export function fetchRule(id: number) {
 }
 
 export function createRule(payload: CreateRulePayload) {
-  return fetch('/api/v1/rules', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  }).then(async (response) => {
+	return fetch('/api/v1/rules', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+		},
+		credentials: 'include',
+		body: JSON.stringify(payload),
+	}).then(async (response) => {
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.message || 'Create rule failed')
@@ -76,18 +79,23 @@ export function createRule(payload: CreateRulePayload) {
 }
 
 export function updateRule(id: number, payload: UpdateRulePayload) {
-  return fetch(`/api/v1/rules/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  }).then(async (response) => {
+	return fetch(`/api/v1/rules/${id}`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+		},
+		credentials: 'include',
+		body: JSON.stringify(payload),
+	}).then(async (response) => {
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.message || 'Update rule failed')
     }
     return data
-  })
+	})
+}
+
+export function deleteRule(id: number) {
+	return deleteJSON<Record<string, never>>(`/api/v1/rules/${id}`)
 }

@@ -4,11 +4,11 @@ const THEME_STORAGE_KEY = 'nestify-theme'
 
 export function getStoredTheme(): ThemeMode {
   if (typeof window === 'undefined') {
-    return 'dark'
+    return 'light'
   }
 
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
-  return stored === 'light' ? 'light' : 'dark'
+  return stored === 'dark' ? 'dark' : 'light'
 }
 
 export function applyTheme(theme: ThemeMode) {

@@ -80,6 +80,24 @@ func NewRouter(deps Dependencies) http.Handler {
 		})
 	})
 
+	mux.HandleFunc("/api/v1/system/restart", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, jsonResponse{
+			Success: true,
+			Code:    "RESTARTING",
+			Message: "System restart requested",
+		})
+
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			os.Exit(0)
+		}()
+	})
+
 	mux.HandleFunc("/api/v1/auth/login", api.handleLogin)
 	mux.HandleFunc("/api/v1/auth/session", api.handleCurrentSession)
 	mux.HandleFunc("/api/v1/auth/logout", api.handleLogout)
@@ -88,6 +106,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/paths/validate", api.handlePathValidate)
 	mux.HandleFunc("/api/v1/files/create-folder", api.handleCreateFolder)
 	mux.HandleFunc("/api/v1/files/upload", api.handleUploadFiles)
+	mux.HandleFunc("/api/v1/files/rename", api.handleRenameItem)
 	mux.HandleFunc("/api/v1/files/copy", api.handleCopyItems)
 	mux.HandleFunc("/api/v1/files/move", api.handleMoveItems)
 	mux.HandleFunc("/api/v1/files/delete", api.handleDeleteItems)
@@ -117,6 +136,11 @@ type prepareRuleExecutionRequest struct {
 type createFolderRequest struct {
 	ParentPath string `json:"parent_path"`
 	Name       string `json:"name"`
+}
+
+type renameItemRequest struct {
+	Path    string `json:"path"`
+	NewName string `json:"new_name"`
 }
 
 type fileMutationRequest struct {
@@ -377,6 +401,31 @@ func (a *apiHandler) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Files uploaded", Data: model.FileItemsMutationResponse{Items: saved, Total: len(saved)}})
+}
+
+func (a *apiHandler) handleRenameItem(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input renameItemRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	renamedPath, err := a.pathBrowse.RenameItem(input.Path, input.NewName)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "RENAME_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Item renamed", Data: model.FileItemsMutationResponse{Items: []string{renamedPath}, Total: 1}})
 }
 
 func (a *apiHandler) handleCopyItems(w http.ResponseWriter, r *http.Request) {
@@ -728,8 +777,14 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 func (a *apiHandler) handleRules(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		if !a.requireSession(w, r) {
+			return
+		}
 		a.handleListRules(w, r)
 	case http.MethodPost:
+		if !a.requireSession(w, r) {
+			return
+		}
 		a.handleCreateRule(w, r)
 	default:
 		writeMethodNotAllowed(w)
@@ -749,12 +804,36 @@ func (a *apiHandler) handleRuleByID(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		if !a.requireSession(w, r) {
+			return
+		}
 		a.handleGetRuleByID(w, r, id)
 	case http.MethodPut:
+		if !a.requireSession(w, r) {
+			return
+		}
 		a.handleUpdateRule(w, r, id)
+	case http.MethodDelete:
+		if !a.requireSession(w, r) {
+			return
+		}
+		a.handleDeleteRule(w, r, id)
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+func (a *apiHandler) handleDeleteRule(w http.ResponseWriter, r *http.Request, id int64) {
+	if err := a.store.DeleteRule(id); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Rule deleted",
+	})
 }
 
 func (a *apiHandler) handleGetRuleByID(w http.ResponseWriter, r *http.Request, id int64) {
@@ -880,14 +959,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.ArchiveMode, input.RunMode)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.ArchiveMode, input.RunMode)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, archiveMode, runMode string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -896,6 +975,14 @@ func validateRuleFields(name, sourceDir, targetDir, archiveMode, runMode string)
 	}
 	if strings.TrimSpace(targetDir) == "" {
 		return errors.New("target_dir is required")
+	}
+
+	compatibilityMode = strings.TrimSpace(compatibilityMode)
+	if compatibilityMode == "" {
+		compatibilityMode = "local"
+	}
+	if compatibilityMode != "local" && compatibilityMode != "compatibility" {
+		return errors.New("compatibility_mode must be local or compatibility")
 	}
 
 	archiveMode = strings.TrimSpace(archiveMode)

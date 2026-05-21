@@ -12,7 +12,7 @@ import (
 
 func (s *Store) ListRules() ([]model.Rule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, description, enabled, monitor_enabled, archive_mode, run_mode,
+		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 		       options_json, package_options_json, collect_options_json, filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
@@ -43,7 +43,7 @@ func (s *Store) ListRules() ([]model.Rule, error) {
 
 func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 	row := s.db.QueryRow(`
-		SELECT id, name, description, enabled, monitor_enabled, archive_mode, run_mode,
+		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 		       options_json, package_options_json, collect_options_json, filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
@@ -66,20 +66,25 @@ func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 	now := time.Now().UTC()
 	archiveMode := strings.TrimSpace(input.ArchiveMode)
+	compatibilityMode := strings.TrimSpace(input.CompatibilityMode)
+	if compatibilityMode == "" {
+		compatibilityMode = "local"
+	}
 	runMode := strings.TrimSpace(input.RunMode)
 
 	result, err := s.db.Exec(`
 		INSERT INTO rules (
-			name, description, enabled, monitor_enabled, archive_mode, run_mode,
+			name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
 			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 			options_json, package_options_json, collect_options_json, filters_json,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		strings.TrimSpace(input.Name),
 		strings.TrimSpace(input.Description),
 		boolToInt(defaultBool(input.Enabled, true)),
 		boolToInt(defaultBool(input.MonitorEnabled, true)),
+		compatibilityMode,
 		archiveMode,
 		runMode,
 		strings.TrimSpace(input.SourceDir),
@@ -114,6 +119,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    description = ?,
 		    enabled = ?,
 		    monitor_enabled = ?,
+		    compatibility_mode = ?,
 		    archive_mode = ?,
 		    run_mode = ?,
 		    source_dir = ?,
@@ -130,6 +136,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		strings.TrimSpace(input.Description),
 		boolToInt(defaultBool(input.Enabled, true)),
 		boolToInt(defaultBool(input.MonitorEnabled, true)),
+		defaultString(strings.TrimSpace(input.CompatibilityMode), "local"),
 		strings.TrimSpace(input.ArchiveMode),
 		strings.TrimSpace(input.RunMode),
 		strings.TrimSpace(input.SourceDir),
@@ -158,6 +165,32 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 	return s.GetRuleByID(id)
 }
 
+func (s *Store) DeleteRule(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM rules WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete rule: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) UpdateRuleExecutionStats(id int64, status string, successCount, skipCount, failureCount int) error {
+	_, err := s.db.Exec(`
+		UPDATE rules
+		SET last_run_status = ?,
+		    last_success_count = ?,
+		    last_skip_count = ?,
+		    last_failure_count = ?,
+		    updated_at = ?
+		WHERE id = ?
+	`, strings.TrimSpace(status), successCount, skipCount, failureCount, time.Now().UTC().Format(time.RFC3339), id)
+	if err != nil {
+		return fmt.Errorf("update rule execution stats: %w", err)
+	}
+
+	return nil
+}
+
 func defaultBool(value *bool, fallback bool) bool {
 	if value == nil {
 		return fallback
@@ -168,6 +201,14 @@ func defaultBool(value *bool, fallback bool) bool {
 
 func defaultInt(value int, fallback int) int {
 	if value == 0 {
+		return fallback
+	}
+
+	return value
+}
+
+func defaultString(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
 		return fallback
 	}
 
@@ -202,6 +243,7 @@ func scanRule(s scanner) (model.Rule, error) {
 		&rule.Description,
 		&enabled,
 		&monitorEnabled,
+		&rule.CompatibilityMode,
 		&rule.ArchiveMode,
 		&rule.RunMode,
 		&rule.SourceDir,
@@ -226,6 +268,9 @@ func scanRule(s scanner) (model.Rule, error) {
 
 	rule.Enabled = intToBool(enabled)
 	rule.MonitorEnabled = intToBool(monitorEnabled)
+	if strings.TrimSpace(rule.CompatibilityMode) == "" {
+		rule.CompatibilityMode = "local"
+	}
 	rule.RunOnStart = intToBool(runOnStart)
 	rule.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	rule.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
