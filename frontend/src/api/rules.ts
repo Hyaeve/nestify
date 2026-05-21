@@ -13,6 +13,10 @@ export interface RuleItem {
   watch_debounce_ms: number
   cron_expression: string
   run_on_start: boolean
+  options_json?: string
+  package_options_json?: string
+  collect_options_json?: string
+  filters_json?: string
   last_run_status: string
   last_success_count: number
   last_skip_count: number
@@ -40,6 +44,8 @@ export interface CreateRulePayload {
   watch_debounce_ms?: number
   cron_expression?: string
   run_on_start?: boolean
+  package_options?: Record<string, boolean>
+  collect_options?: Record<string, boolean>
 }
 
 export interface UpdateRulePayload extends CreateRulePayload {}

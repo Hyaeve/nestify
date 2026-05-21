@@ -3,7 +3,7 @@
     <template #header>
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span>规则管理</span>
-        <el-button type="primary" @click="createDialogVisible = true">新增规则</el-button>
+        <el-button type="primary" @click="openCreateDialog">新增规则</el-button>
       </div>
     </template>
 
@@ -20,7 +20,7 @@
       <el-table-column label="归档模式" width="120">
         <template #default="scope">
           <el-tag :type="scope.row.archive_mode === 'package' ? 'success' : 'info'">
-            {{ scope.row.archive_mode }}
+            {{ scope.row.archive_mode === 'package' ? '打包归档' : '收集归档' }}
           </el-tag>
         </template>
       </el-table-column>
@@ -79,25 +79,53 @@
         <el-input v-model="createForm.name" placeholder="例如：Manga Package Rule" />
       </el-form-item>
 
-      <el-row :gutter="16">
-        <el-col :span="12">
-          <el-form-item label="归档模式">
-            <el-select v-model="createForm.archive_mode" style="width: 100%;">
-              <el-option label="package" value="package" />
-              <el-option label="collect" value="collect" />
-            </el-select>
-          </el-form-item>
-        </el-col>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="归档模式">
+              <el-radio-group v-model="createForm.archive_mode" class="archive-mode-group">
+                <el-radio-button value="package">打包归档</el-radio-button>
+                <el-radio-button value="collect">收集归档</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
 
-        <el-col :span="12">
-          <el-form-item label="功能开关">
-            <el-space wrap>
-              <el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" />
-              <el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" />
-            </el-space>
-          </el-form-item>
-        </el-col>
-      </el-row>
+          <el-col :span="12">
+            <el-form-item label="触发方式">
+              <el-space wrap>
+                <el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" />
+                <el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" />
+              </el-space>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="mode-config-panel">
+          <div class="mode-config-panel__header">
+            <div>
+              <div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div>
+              <div class="mode-config-panel__description">{{ getModeDescription(createForm.archive_mode) }}</div>
+            </div>
+            <el-tag type="primary">当前模式</el-tag>
+          </div>
+
+          <el-row v-if="createForm.archive_mode === 'package'" :gutter="12">
+            <el-col v-for="option in packageModeOptions" :key="option.key" :span="12">
+              <label class="mode-option-card">
+                <el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox>
+                <span class="mode-option-card__description">{{ option.description }}</span>
+              </label>
+            </el-col>
+          </el-row>
+
+          <el-row v-else :gutter="12">
+            <el-col v-for="option in collectModeOptions" :key="option.key" :span="12">
+              <label class="mode-option-card">
+                <el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox>
+                <span class="mode-option-card__description">{{ option.description }}</span>
+              </label>
+            </el-col>
+          </el-row>
+        </div>
 
       <el-form-item v-if="createForm.schedule_enabled" label="计划表达式">
         <el-input v-model="createForm.cron_expression" placeholder="例如：0 */30 * * * *" />
@@ -146,25 +174,53 @@
         <el-input v-model="editForm.name" placeholder="例如：Manga Package Rule" />
       </el-form-item>
 
-      <el-row :gutter="16">
-        <el-col :span="12">
-          <el-form-item label="归档模式">
-            <el-select v-model="editForm.archive_mode" style="width: 100%;">
-              <el-option label="package" value="package" />
-              <el-option label="collect" value="collect" />
-            </el-select>
-          </el-form-item>
-        </el-col>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="归档模式">
+              <el-radio-group v-model="editForm.archive_mode" class="archive-mode-group">
+                <el-radio-button value="package">打包归档</el-radio-button>
+                <el-radio-button value="collect">收集归档</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
 
-        <el-col :span="12">
-          <el-form-item label="功能开关">
-            <el-space wrap>
-              <el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" />
-              <el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" />
-            </el-space>
-          </el-form-item>
-        </el-col>
-      </el-row>
+          <el-col :span="12">
+            <el-form-item label="触发方式">
+              <el-space wrap>
+                <el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" />
+                <el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" />
+              </el-space>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <div class="mode-config-panel">
+          <div class="mode-config-panel__header">
+            <div>
+              <div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div>
+              <div class="mode-config-panel__description">{{ getModeDescription(editForm.archive_mode) }}</div>
+            </div>
+            <el-tag type="primary">当前模式</el-tag>
+          </div>
+
+          <el-row v-if="editForm.archive_mode === 'package'" :gutter="12">
+            <el-col v-for="option in packageModeOptions" :key="option.key" :span="12">
+              <label class="mode-option-card">
+                <el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox>
+                <span class="mode-option-card__description">{{ option.description }}</span>
+              </label>
+            </el-col>
+          </el-row>
+
+          <el-row v-else :gutter="12">
+            <el-col v-for="option in collectModeOptions" :key="option.key" :span="12">
+              <label class="mode-option-card">
+                <el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox>
+                <span class="mode-option-card__description">{{ option.description }}</span>
+              </label>
+            </el-col>
+          </el-row>
+        </div>
 
       <el-form-item v-if="editForm.schedule_enabled" label="计划表达式">
         <el-input v-model="editForm.cron_expression" placeholder="例如：0 */30 * * * *" />
@@ -223,6 +279,81 @@ import { fetchRunLogs, prepareRuleExecution, type RunInstance, type RunLogEntry 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { createRule, fetchRule, fetchRules, updateRule, type RuleItem } from '../api/rules'
 
+type ArchiveMode = 'package' | 'collect'
+type PackageOptionKey =
+  | 'preserve_structure'
+  | 'include_manifest'
+  | 'verify_after_archive'
+  | 'cleanup_source_after_archive'
+type CollectOptionKey =
+  | 'recursive_collect'
+  | 'deduplicate_same_name'
+  | 'keep_latest_only'
+  | 'collect_related_files'
+
+const packageModeOptions: Array<{ key: PackageOptionKey; label: string; description: string }> = [
+  { key: 'preserve_structure', label: '保留目录结构', description: '按源目录层级打包归档，避免目标目录结构混乱。' },
+  { key: 'include_manifest', label: '生成归档清单', description: '为每次打包写入清单，方便后续核对归档内容。' },
+  { key: 'verify_after_archive', label: '归档后校验', description: '完成后再次检查结果，减少丢包或缺失问题。' },
+  { key: 'cleanup_source_after_archive', label: '成功后清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
+]
+
+const collectModeOptions: Array<{ key: CollectOptionKey; label: string; description: string }> = [
+  { key: 'recursive_collect', label: '递归收集子目录', description: '自动扫描所有子目录，把符合条件的文件一并收集。' },
+  { key: 'deduplicate_same_name', label: '同名文件去重', description: '遇到重复文件时自动跳过重复项，减少覆盖冲突。' },
+  { key: 'keep_latest_only', label: '仅保留最新文件', description: '存在多个版本时优先保留最新文件。' },
+  { key: 'collect_related_files', label: '收集关联文件', description: '在收集主文件时同步带上相关说明或附属文件。' },
+]
+
+function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
+  return {
+    preserve_structure: true,
+    include_manifest: true,
+    verify_after_archive: true,
+    cleanup_source_after_archive: false,
+  }
+}
+
+function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
+  return {
+    recursive_collect: true,
+    deduplicate_same_name: true,
+    keep_latest_only: false,
+    collect_related_files: true,
+  }
+}
+
+function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefined, defaults: T): T {
+  if (!raw) {
+    return { ...defaults }
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const normalized = { ...defaults }
+
+    for (const key of Object.keys(defaults)) {
+      if (typeof parsed[key] === 'boolean') {
+        normalized[key as keyof T] = parsed[key] as T[keyof T]
+      }
+    }
+
+    return normalized
+  } catch {
+    return { ...defaults }
+  }
+}
+
+function getModeTitle(mode: ArchiveMode) {
+  return mode === 'package' ? '打包归档功能' : '收集归档功能'
+}
+
+function getModeDescription(mode: ArchiveMode) {
+  return mode === 'package'
+    ? '选择打包归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
+    : '选择收集归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
+}
+
 const loading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
@@ -244,12 +375,14 @@ const createForm = reactive({
   enabled: true,
   monitor_enabled: true,
   schedule_enabled: false,
-  archive_mode: 'package' as 'package' | 'collect',
+  archive_mode: 'package' as ArchiveMode,
   source_dir: '',
   target_dir: '',
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
+  package_options: createDefaultPackageOptions(),
+  collect_options: createDefaultCollectOptions(),
 })
 
 const editForm = reactive({
@@ -258,13 +391,20 @@ const editForm = reactive({
   enabled: true,
   monitor_enabled: true,
   schedule_enabled: false,
-  archive_mode: 'package' as 'package' | 'collect',
+  archive_mode: 'package' as ArchiveMode,
   source_dir: '',
   target_dir: '',
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
+  package_options: createDefaultPackageOptions(),
+  collect_options: createDefaultCollectOptions(),
 })
+
+function openCreateDialog() {
+  resetCreateForm()
+  createDialogVisible.value = true
+}
 
 function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'watch' | 'cron' | 'once' {
   if (scheduleEnabled) {
@@ -309,6 +449,8 @@ async function submitCreateRule() {
       watch_debounce_ms: createForm.watch_debounce_ms,
       cron_expression: createForm.schedule_enabled ? createForm.cron_expression : '',
       run_on_start: createForm.run_on_start,
+      package_options: { ...createForm.package_options },
+      collect_options: { ...createForm.collect_options },
     })
 
     ElMessage.success('规则创建成功')
@@ -334,6 +476,8 @@ function resetCreateForm() {
   createForm.cron_expression = ''
   createForm.watch_debounce_ms = 2000
   createForm.run_on_start = true
+  createForm.package_options = createDefaultPackageOptions()
+  createForm.collect_options = createDefaultCollectOptions()
 }
 
 function resetEditForm() {
@@ -348,6 +492,8 @@ function resetEditForm() {
   editForm.cron_expression = ''
   editForm.watch_debounce_ms = 2000
   editForm.run_on_start = true
+  editForm.package_options = createDefaultPackageOptions()
+  editForm.collect_options = createDefaultCollectOptions()
 }
 
 function openDirectoryPicker(form: 'create' | 'edit', field: 'source_dir' | 'target_dir') {
@@ -407,6 +553,8 @@ async function openEditDialog(id: number) {
     editForm.cron_expression = rule.cron_expression
     editForm.watch_debounce_ms = rule.watch_debounce_ms
     editForm.run_on_start = rule.run_on_start
+    editForm.package_options = parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
+    editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
 
     editDialogVisible.value = true
   } catch (error) {
@@ -438,6 +586,8 @@ async function submitUpdateRule() {
       watch_debounce_ms: editForm.watch_debounce_ms,
       cron_expression: editForm.schedule_enabled ? editForm.cron_expression : '',
       run_on_start: editForm.run_on_start,
+      package_options: { ...editForm.package_options },
+      collect_options: { ...editForm.collect_options },
     })
 
     ElMessage.success('规则更新成功')
@@ -481,4 +631,68 @@ onMounted(() => {
   void loadRules()
 })
 </script>
+
+<style scoped>
+.archive-mode-group {
+  width: 100%;
+}
+
+.archive-mode-group :deep(.el-radio-button),
+.archive-mode-group :deep(.el-radio-button__inner) {
+  width: 50%;
+}
+
+.mode-config-panel {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-fill-color-extra-light);
+}
+
+.mode-config-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mode-config-panel__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.mode-config-panel__description {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
+.mode-option-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  cursor: pointer;
+}
+
+.mode-option-card:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.mode-option-card__description {
+  padding-left: 24px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+</style>
 

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -87,8 +88,8 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
 		`{}`,
-		`{}`,
-		`{}`,
+		marshalBoolMap(input.PackageOptions),
+		marshalBoolMap(input.CollectOptions),
 		`{}`,
 		now.Format(time.RFC3339),
 		now.Format(time.RFC3339),
@@ -120,6 +121,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    watch_debounce_ms = ?,
 		    cron_expression = ?,
 		    run_on_start = ?,
+		    package_options_json = ?,
+		    collect_options_json = ?,
 		    updated_at = ?
 		WHERE id = ?
 	`,
@@ -134,6 +137,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		defaultInt(input.WatchDebounceMS, 2000),
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
+		marshalBoolMap(input.PackageOptions),
+		marshalBoolMap(input.CollectOptions),
 		now.Format(time.RFC3339),
 		id,
 	)
@@ -167,6 +172,19 @@ func defaultInt(value int, fallback int) int {
 	}
 
 	return value
+}
+
+func marshalBoolMap(value map[string]bool) string {
+	if len(value) == 0 {
+		return `{}`
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return `{}`
+	}
+
+	return string(encoded)
 }
 
 type scanner interface {

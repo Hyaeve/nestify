@@ -42,32 +42,9 @@ func (s *Service) Browse(path string) (*model.BrowseDirectoriesResponse, error) 
 		return nil, err
 	}
 
-	entries, err := os.ReadDir(resolved)
-	if err != nil {
-		return nil, fmt.Errorf("read directory: %w", err)
-	}
-
-	items := make([]model.DirectoryEntry, 0)
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		childPath := filepath.Join(resolved, entry.Name())
-		items = append(items, model.DirectoryEntry{
-			Name:        entry.Name(),
-			Path:        childPath,
-			HasChildren: directoryHasChildren(childPath),
-		})
-	}
-
-	sort.Slice(items, func(i, j int) bool {
-		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
-	})
-
 	response := &model.BrowseDirectoriesResponse{
 		CurrentPath: resolved,
-		Entries:     items,
+		Entries:     []model.DirectoryEntry{},
 	}
 
 	if !samePath(resolved, root) {
@@ -76,6 +53,48 @@ func (s *Service) Browse(path string) (*model.BrowseDirectoriesResponse, error) 
 			response.ParentPath = parent
 		}
 	}
+
+	entries, err := os.ReadDir(resolved)
+	if err != nil {
+		if os.IsPermission(err) {
+			return response, nil
+		}
+		return nil, fmt.Errorf("read directory: %w", err)
+	}
+
+	items := make([]model.DirectoryEntry, 0)
+	for _, entry := range entries {
+		childPath := filepath.Join(resolved, entry.Name())
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			continue
+		}
+
+		item := model.DirectoryEntry{
+			Name:        entry.Name(),
+			Path:        childPath,
+			IsDir:       entry.IsDir(),
+			Size:        info.Size(),
+			ModifiedAt:  model.FormatTimeRFC3339(info.ModTime()),
+			HasChildren: false,
+		}
+
+		if entry.IsDir() {
+			item.Size = 0
+			item.HasChildren = directoryHasChildren(childPath)
+		}
+
+		items = append(items, item)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir
+		}
+		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
+	})
+
+	response.Entries = items
 
 	return response, nil
 }

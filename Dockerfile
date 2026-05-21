@@ -14,12 +14,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/nestify ./cmd/server
 
 FROM alpine:3.20
 WORKDIR /app
-RUN addgroup -S nestify && adduser -S nestify -G nestify
 COPY --from=backend-builder /out/nestify /app/nestify
 COPY --from=frontend-builder /workspace/frontend/dist /app/web
 COPY config/config.example.yaml /config/config.example.yaml
-RUN mkdir -p /data/runtime /data/staging /logs && chown -R nestify:nestify /app /data /logs /config
-USER nestify
+RUN mkdir -p /data/runtime /data/staging /logs /config
 EXPOSE 8080
 ENV NESTIFY_WEB_DIR=/app/web
 ENV NESTIFY_DB_PATH=/data/app.db

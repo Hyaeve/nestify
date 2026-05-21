@@ -1,21 +1,114 @@
+:root {
+  color-scheme: light;
+  --bg-app: #eef4ff;
+  --bg-panel: rgba(255, 255, 255, 0.92);
+  --bg-panel-strong: #ffffff;
+  --bg-elevated: #f8fbff;
+  --bg-sidebar: #ffffff;
+  --text-primary: #1f2d3d;
+  --text-secondary: #6b7280;
+  --border-color: rgba(148, 163, 184, 0.24);
+  --accent-color: #409eff;
+  --accent-soft: rgba(64, 158, 255, 0.16);
+  --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-app: #0b1220;
+  --bg-panel: rgba(14, 22, 38, 0.92);
+  --bg-panel-strong: #111827;
+  --bg-elevated: #182132;
+  --bg-sidebar: #0f172a;
+  --text-primary: #e5eefc;
+  --text-secondary: #94a3b8;
+  --border-color: rgba(71, 85, 105, 0.52);
+  --accent-color: #60a5fa;
+  --accent-soft: rgba(96, 165, 250, 0.18);
+  --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.45);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f5f7fb;
-  color: #1f2d3d;
+  background: var(--bg-app);
+  color: var(--text-primary);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 #app {
   min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.12), transparent 30%),
+    radial-gradient(circle at right bottom, rgba(56, 189, 248, 0.1), transparent 26%),
+    var(--bg-app);
+  color: var(--text-primary);
 }
 
 .page-card {
-  border-radius: 16px;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .page-section-title {
   margin: 0 0 16px;
   font-size: 18px;
   font-weight: 600;
+}
+
+.el-card {
+  --el-card-bg-color: var(--bg-panel);
+  background: var(--bg-panel);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-soft);
+}
+
+.el-dialog {
+  --el-dialog-bg-color: var(--bg-panel-strong);
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.el-table {
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--accent-soft);
+  --el-table-header-bg-color: rgba(148, 163, 184, 0.08);
+  --el-table-border-color: var(--border-color);
+  --el-table-text-color: var(--text-primary);
+  --el-table-header-text-color: var(--text-secondary);
+}
+
+.el-table th.el-table__cell,
+.el-table tr,
+.el-table td.el-table__cell,
+.el-table__body-wrapper,
+.el-table__inner-wrapper::before {
+  background: transparent;
+}
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--border-color) inset;
+}
+
+.el-menu {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: var(--text-secondary);
+  --el-menu-hover-bg-color: rgba(96, 165, 250, 0.14);
+  --el-menu-active-color: var(--accent-color);
+  border-right: none;
+}
+
+.el-menu-item.is-active {
+  background: var(--accent-soft);
+  border-radius: 12px;
 }
 

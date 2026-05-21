@@ -86,6 +86,12 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/paths/roots", api.handlePathRoots)
 	mux.HandleFunc("/api/v1/paths/browse", api.handlePathBrowse)
 	mux.HandleFunc("/api/v1/paths/validate", api.handlePathValidate)
+	mux.HandleFunc("/api/v1/files/create-folder", api.handleCreateFolder)
+	mux.HandleFunc("/api/v1/files/upload", api.handleUploadFiles)
+	mux.HandleFunc("/api/v1/files/copy", api.handleCopyItems)
+	mux.HandleFunc("/api/v1/files/move", api.handleMoveItems)
+	mux.HandleFunc("/api/v1/files/delete", api.handleDeleteItems)
+	mux.HandleFunc("/api/v1/files/pack-cbz", api.handlePackCBZ)
 	mux.HandleFunc("/api/v1/manual/preflight", api.handleManualPreflight)
 	mux.HandleFunc("/api/v1/executions/prepare-rule", api.handlePrepareRuleExecution)
 	mux.HandleFunc("/api/v1/runs/", api.handleRuns)
@@ -106,6 +112,18 @@ type loginRequest struct {
 type prepareRuleExecutionRequest struct {
 	RuleID      int64  `json:"rule_id"`
 	TriggerMode string `json:"trigger_mode"`
+}
+
+type createFolderRequest struct {
+	ParentPath string `json:"parent_path"`
+	Name       string `json:"name"`
+}
+
+type fileMutationRequest struct {
+	Paths           []string `json:"paths"`
+	DestinationPath string   `json:"destination_path"`
+	OutputDir       string   `json:"output_dir"`
+	ArchiveName     string   `json:"archive_name"`
 }
 
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -308,6 +326,156 @@ func (a *apiHandler) handlePathValidate(w http.ResponseWriter, r *http.Request) 
 		Message: "Path validated",
 		Data:    data,
 	})
+}
+
+func (a *apiHandler) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input createFolderRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	createdPath, err := a.pathBrowse.CreateDirectory(input.ParentPath, input.Name)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "CREATE_FOLDER_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Folder created", Data: model.CreateDirectoryResponse{Path: createdPath}})
+}
+
+func (a *apiHandler) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	if err := r.ParseMultipartForm(512 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_MULTIPART", Message: err.Error()})
+		return
+	}
+
+	destinationPath := r.FormValue("destination_path")
+	files := r.MultipartForm.File["files"]
+	saved, err := a.pathBrowse.UploadFiles(destinationPath, files)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "UPLOAD_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Files uploaded", Data: model.FileItemsMutationResponse{Items: saved, Total: len(saved)}})
+}
+
+func (a *apiHandler) handleCopyItems(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	items, err := a.pathBrowse.CopyItems(input.Paths, input.DestinationPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "COPY_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Items copied", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
+}
+
+func (a *apiHandler) handleMoveItems(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	items, err := a.pathBrowse.MoveItems(input.Paths, input.DestinationPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "MOVE_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Items moved", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
+}
+
+func (a *apiHandler) handleDeleteItems(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	if err := a.pathBrowse.DeleteItems(input.Paths); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "DELETE_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Items deleted", Data: model.FileItemsMutationResponse{Total: len(input.Paths)}})
+}
+
+func (a *apiHandler) handlePackCBZ(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	outputPath, err := a.pathBrowse.PackItemsAsCBZ(input.Paths, input.OutputDir, input.ArchiveName)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "PACK_CBZ_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "CBZ archive created", Data: model.FileItemsMutationResponse{Total: len(input.Paths), OutputPath: outputPath}})
 }
 
 func (a *apiHandler) handleManualPreflight(w http.ResponseWriter, r *http.Request) {
