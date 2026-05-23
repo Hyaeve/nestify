@@ -370,7 +370,7 @@ async function handleLogout() {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 12px;
+  width: 18px;
   height: 84px;
   color: rgba(148, 163, 184, 0.78);
   opacity: 0;
@@ -396,13 +396,13 @@ async function handleLogout() {
 
 .aside-toggle :deep(.el-icon) {
   display: block;
-  width: 12px;
+  width: 18px;
   height: 84px;
   font-size: 0;
 }
 
 .aside-toggle :deep(.el-icon svg) {
-  width: 12px;
+  width: 18px;
   height: 84px;
 }
 

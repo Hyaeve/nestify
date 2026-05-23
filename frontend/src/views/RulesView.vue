@@ -2,6 +2,7 @@
   <div class="rules-page">
     <div class="rules-tabs">
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="activeTab = 'rules'">归档规则</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="activeTab = 'purify'">净化规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="activeTab = 'history'">归档历史</button>
     </div>
 
@@ -102,6 +103,20 @@
           </template>
         </el-table-column>
       </el-table>
+    </el-card>
+
+    <el-card v-show="activeTab === 'purify'" class="page-card rules-card">
+      <template #header>
+        <div class="rules-card__header">
+          <div>
+            <div class="rules-card__title">净化规则</div>
+            <div class="mode-config-panel__description">清理自定义监控目录下的空文件夹，或清理文件名命中匹配字符的文件。</div>
+          </div>
+          <el-button type="primary" round disabled>+ 添加净化规则</el-button>
+        </div>
+      </template>
+
+      <el-empty description="净化规则入口已加入，下一步接入独立规则模型与执行能力" />
     </el-card>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
@@ -215,7 +230,7 @@ function getModeDescription(mode: ArchiveMode) { return mode === 'package' ? '�
 function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'watch' | 'cron' | 'once' { if (scheduleEnabled) return 'cron'; if (monitorEnabled) return 'watch'; return 'once' }
 function formatDateTime(value: string) { return new Date(value).toLocaleString('zh-CN', { hour12: false }) }
 
-const activeTab = ref<'rules' | 'history'>('rules')
+const activeTab = ref<'rules' | 'purify' | 'history'>('rules')
 const loading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
