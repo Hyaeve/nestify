@@ -114,6 +114,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/manual/preflight", api.handleManualPreflight)
 	mux.HandleFunc("/api/v1/executions/prepare-rule", api.handlePrepareRuleExecution)
 	mux.HandleFunc("/api/v1/runs/", api.handleRuns)
+	mux.HandleFunc("/api/v1/run-history", api.handleRunHistory)
 	mux.HandleFunc("/api/v1/settings", api.handleSettings)
 	mux.HandleFunc("/api/v1/rules", api.handleRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
@@ -717,6 +718,28 @@ func (a *apiHandler) handleRunLogs(w http.ResponseWriter, runID string) {
 		Data: map[string]any{
 			"items": entries,
 			"total": len(entries),
+		},
+	})
+}
+
+func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	items := a.executor.ListHistory()
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Run history loaded",
+		Data: map[string]any{
+			"items": items,
+			"total": len(items),
 		},
 	})
 }

@@ -1,5 +1,7 @@
 # Nestify
 
+![Nestify Logo](./Nestify.png)
+
 Nestify 是一个面向 NAS / 家庭服务器场景的可视化归档管理平台。
 
 当前仓库处于首轮工程骨架阶段，已建立：

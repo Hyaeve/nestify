@@ -1,12 +1,16 @@
 :root {
   color-scheme: light;
   --bg-app: #f5f7fb;
+  --bg-app-overlay: none;
+  --bg-app-base: radial-gradient(circle at top left, rgba(64, 158, 255, 0.06), transparent 28%), linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
   --bg-panel: rgba(255, 255, 255, 0.96);
   --bg-panel-strong: #ffffff;
   --bg-elevated: #ffffff;
   --bg-sidebar: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.94);
   --text-primary: #26323f;
   --text-secondary: #8b97a8;
+  --text-tertiary: #94a3b8;
   --border-color: rgba(148, 163, 184, 0.18);
   --accent-color: #409eff;
   --accent-soft: rgba(64, 158, 255, 0.1);
@@ -16,13 +20,17 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
   --bg-app: #0b1220;
-  --bg-panel: rgba(14, 22, 38, 0.92);
-  --bg-panel-strong: #111827;
-  --bg-elevated: #182132;
-  --bg-sidebar: #0f172a;
+  --bg-app-overlay: radial-gradient(circle at 1px 1px, rgba(96, 165, 250, 0.12) 1.2px, transparent 0);
+  --bg-app-base: radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 22%), radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 18%), linear-gradient(180deg, #0f1119 0%, #0a0d14 100%);
+  --bg-panel: rgba(16, 22, 36, 0.82);
+  --bg-panel-strong: #131a2a;
+  --bg-elevated: #182133;
+  --bg-sidebar: #111522;
+  --bg-header: rgba(16, 18, 28, 0.88);
   --text-primary: #e5eefc;
-  --text-secondary: #94a3b8;
-  --border-color: rgba(71, 85, 105, 0.52);
+  --text-secondary: #9aa7bd;
+  --text-tertiary: #6d7b94;
+  --border-color: rgba(71, 85, 105, 0.42);
   --accent-color: #60a5fa;
   --accent-soft: rgba(96, 165, 250, 0.18);
   --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.45);
@@ -42,9 +50,10 @@ body {
 
 #app {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(64, 158, 255, 0.06), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  background-color: var(--bg-app);
+  background-image: var(--bg-app-overlay), var(--bg-app-base);
+  background-size: 36px 36px, cover;
+  background-attachment: fixed;
   color: var(--text-primary);
 }
 
@@ -63,6 +72,12 @@ body {
   --el-card-bg-color: var(--bg-panel);
   background: var(--bg-panel);
   border-color: var(--border-color);
+  box-shadow: var(--shadow-soft);
+}
+
+.el-card.is-always-shadow,
+.el-card.is-hover-shadow:focus,
+.el-card.is-hover-shadow:hover {
   box-shadow: var(--shadow-soft);
 }
 
@@ -111,6 +126,34 @@ body {
 .el-table__body-wrapper,
 .el-table__inner-wrapper::before {
   background: transparent;
+}
+
+.el-descriptions {
+  --el-descriptions-table-border: var(--border-color);
+}
+
+.el-descriptions__body,
+.el-descriptions__table {
+  background: transparent;
+}
+
+.el-descriptions__label.el-descriptions__cell.is-bordered-label,
+.el-descriptions__content.el-descriptions__cell.is-bordered-content {
+  background: var(--bg-elevated);
+  border-color: var(--border-color);
+}
+
+.el-descriptions__label.el-descriptions__cell.is-bordered-label {
+  color: var(--text-secondary);
+}
+
+.el-descriptions__content.el-descriptions__cell.is-bordered-content {
+  color: var(--text-primary);
+}
+
+.el-empty__description,
+.el-empty__description p {
+  color: var(--text-secondary);
 }
 
 .el-input__wrapper,

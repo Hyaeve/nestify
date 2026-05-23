@@ -13,16 +13,27 @@ import (
 )
 
 type Service struct {
-	mu   sync.RWMutex
-	runs map[string]*model.RunInstance
-	logs map[string][]model.RunLogEntry
+	mu      sync.RWMutex
+	runs    map[string]*model.RunInstance
+	logs    map[string][]model.RunLogEntry
+	history []model.RunHistoryItem
 }
 
 func NewService() *Service {
 	return &Service{
-		runs: make(map[string]*model.RunInstance),
-		logs: make(map[string][]model.RunLogEntry),
+		runs:    make(map[string]*model.RunInstance),
+		logs:    make(map[string][]model.RunLogEntry),
+		history: make([]model.RunHistoryItem, 0),
 	}
+}
+
+func (s *Service) ListHistory() []model.RunHistoryItem {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]model.RunHistoryItem, len(s.history))
+	copy(items, s.history)
+	return items
 }
 
 func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
@@ -129,12 +140,22 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 			return
 		}
 
+		skipCount := 0
+		successCount := len(entries)
+		status := model.RunStatusSucceeded
+		if len(entries) == 0 {
+			skipCount = 1
+			successCount = 0
+			status = model.RunStatusFailed
+		}
+
 		s.mu.Lock()
 		if run, ok := s.runs[runID]; ok {
 			run.Stage = model.RunStageScanning
 			run.ProcessedFiles = len(entries)
-			run.SuccessCount = len(entries)
-			run.Status = model.RunStatusSucceeded
+			run.SuccessCount = successCount
+			run.SkipCount = skipCount
+			run.Status = status
 			run.FinishedAt = ptrTime(time.Now().UTC())
 			run.UpdatedAt = time.Now().UTC()
 		}
@@ -142,6 +163,7 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		s.appendLog(runID, "info", prepared.Summary)
 		s.appendLog(runID, "info", fmt.Sprintf("processed %d files", len(entries)))
 		s.appendLog(runID, "info", "execution completed")
+		s.recordHistory(runID, prepared.Summary)
 	}()
 }
 
@@ -152,9 +174,6 @@ func (s *Service) scanSource(req ExecuteRuleRequest) ([]string, error) {
 	items, err := filepath.Glob(filepath.Join(req.SourceDir, "*"))
 	if err != nil {
 		return nil, err
-	}
-	if len(items) == 0 {
-		return nil, fmt.Errorf("source dir has no files")
 	}
 	return items, nil
 }
@@ -172,6 +191,51 @@ func (s *Service) finishRun(runID, status, stage, logMsg string) {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+func (s *Service) recordHistory(runID, summary string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	run, ok := s.runs[runID]
+	if !ok || run == nil {
+		return
+	}
+
+	item := model.RunHistoryItem{
+		ID:             run.ID,
+		RuleID:         run.RuleID,
+		RuleName:       run.RuleName,
+		TriggerMode:    run.TriggerMode,
+		ArchiveMode:    run.ArchiveMode,
+		Status:         mapRunStatus(run),
+		ProcessedFiles: run.ProcessedFiles,
+		SuccessCount:   run.SuccessCount,
+		SkipCount:      run.SkipCount,
+		FailureCount:   run.FailureCount,
+		Summary:        summary,
+		StartedAt:      run.StartedAt,
+		UpdatedAt:      run.UpdatedAt,
+		FinishedAt:     run.FinishedAt,
+	}
+
+	s.history = append([]model.RunHistoryItem{item}, s.history...)
+}
+
+func mapRunStatus(run *model.RunInstance) string {
+	if run == nil {
+		return "failed"
+	}
+	if run.FailureCount > 0 || run.Status == model.RunStatusFailed {
+		return "failed"
+	}
+	if run.SkipCount > 0 {
+		return "skip"
+	}
+	if run.SuccessCount > 0 || run.Status == model.RunStatusSucceeded {
+		return "success"
+	}
+	return "skip"
+}
 
 func (s *Service) cloneRun(run *model.RunInstance) *model.RunInstance {
 	if run == nil {

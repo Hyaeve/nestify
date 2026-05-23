@@ -1,42 +1,52 @@
 <template>
   <el-container class="admin-layout">
-    <el-aside :width="isCollapsed ? '76px' : '220px'" class="admin-layout__aside">
+    <el-aside :width="isCollapsed ? '68px' : '196px'" :class="['admin-layout__aside', { 'is-collapsed': isCollapsed }]">
       <div class="brand">
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.2</div>
+          <div class="brand__version">V0.3</div>
         </div>
       </div>
-      <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu">
-        <el-menu-item index="/dashboard">
-          <el-icon><Odometer /></el-icon>
-          <span>仪表盘</span>
-        </el-menu-item>
-        <el-menu-item index="/rules">
-          <el-icon><Operation /></el-icon>
-          <span>规则管理</span>
-        </el-menu-item>
-        <el-menu-item index="/manual-pack">
-          <el-icon><FolderOpened /></el-icon>
-          <span>文件管理</span>
-        </el-menu-item>
-        <el-menu-item index="/logs">
-          <el-icon><Document /></el-icon>
-          <span>任务日志</span>
-        </el-menu-item>
-        <el-menu-item index="/settings">
-          <el-icon><Setting /></el-icon>
-          <span>系统设置</span>
-        </el-menu-item>
-      </el-menu>
+      <div class="aside-control">
+        <button class="aside-toggle" type="button" @click="toggleAside">
+          <span class="aside-toggle__track">
+            <span class="aside-toggle__line"></span>
+            <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
+              <el-icon>
+                <ArrowLeftBold v-if="!isCollapsed" />
+                <ArrowRightBold v-else />
+              </el-icon>
+            </span>
+          </span>
+          <span class="aside-toggle__label">{{ isCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
+        </button>
+      </div>
 
-      <el-button circle class="aside-toggle" @click="toggleAside">
-        <el-icon>
-          <ArrowLeftBold v-if="!isCollapsed" />
-          <ArrowRightBold v-else />
-        </el-icon>
-      </el-button>
+      <div class="aside-scroll">
+        <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu">
+          <el-menu-item index="/dashboard">
+            <el-icon><Odometer /></el-icon>
+            <span>仪表盘</span>
+          </el-menu-item>
+          <el-menu-item index="/rules">
+            <el-icon><Operation /></el-icon>
+            <span>规则管理</span>
+          </el-menu-item>
+          <el-menu-item index="/manual-pack">
+            <el-icon><FolderOpened /></el-icon>
+            <span>文件管理</span>
+          </el-menu-item>
+          <el-menu-item index="/logs">
+            <el-icon><Document /></el-icon>
+            <span>任务日志</span>
+          </el-menu-item>
+          <el-menu-item index="/settings">
+            <el-icon><Setting /></el-icon>
+            <span>系统设置</span>
+          </el-menu-item>
+        </el-menu>
+      </div>
     </el-aside>
 
     <el-container>
@@ -49,7 +59,6 @@
           </div>
         </div>
         <div class="header-actions">
-          <el-tag effect="plain" class="pro-tag">高级版</el-tag>
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
               <Sunny v-if="!isDark" />
@@ -185,10 +194,16 @@ async function handleLogout() {
   background: transparent;
 
   &__aside {
-    position: relative;
-    overflow: visible;
+    position: sticky;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border-color);
+    box-shadow: 10px 0 30px rgba(2, 6, 23, 0.12);
+    backdrop-filter: blur(16px);
     transition: width 0.2s ease;
   }
 
@@ -199,7 +214,7 @@ async function handleLogout() {
     gap: 16px;
     height: 62px;
     padding: 0 28px;
-    background: rgba(255, 255, 255, 0.94);
+    background: var(--bg-header);
     border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(18px);
   }
@@ -215,14 +230,15 @@ async function handleLogout() {
   align-items: center;
   gap: 12px;
   min-height: 72px;
-  padding: 14px 16px;
+  padding: 14px 12px 12px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
 }
 
 .brand__logo {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(59, 130, 246, 0.14);
@@ -233,20 +249,42 @@ async function handleLogout() {
 }
 
 .brand__name {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.1;
 }
 
 .brand__version {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
   letter-spacing: 0.08em;
 }
 
+.aside-control {
+  padding: 8px 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.aside-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 8px 16px;
+  scrollbar-gutter: stable;
+}
+
+.aside-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.aside-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.26);
+}
+
 .menu {
-  padding: 12px 10px 18px;
+  padding: 0;
 }
 
 .header-left {
@@ -286,36 +324,115 @@ async function handleLogout() {
   color: var(--text-primary);
 }
 
-.pro-tag {
-  border-radius: 999px;
-  color: #34a853;
-  border-color: rgba(52, 168, 83, 0.22);
-  background: rgba(52, 168, 83, 0.08);
+.aside-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.aside-toggle {
+.aside-toggle:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.aside-toggle__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 54px;
+}
+
+.aside-toggle__line {
   position: absolute;
-  top: 50%;
-  right: -16px;
-  z-index: 5;
-  width: 32px;
-  height: 32px;
-  transform: translateY(-50%);
-  border-color: var(--border-color);
-  background: var(--bg-panel-strong);
-  color: var(--text-secondary);
-  box-shadow: var(--shadow-soft);
+  width: 4px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.38);
+  transition:
+    width 0.2s ease,
+    height 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.aside-toggle:hover .aside-toggle__line {
+  width: 5px;
+  height: 46px;
+  background: var(--accent-color);
+}
+
+.aside-toggle__chevron {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: rgba(148, 163, 184, 0.92);
+  transform: translateX(5px);
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.aside-toggle:hover .aside-toggle__chevron {
+  color: var(--accent-color);
+}
+
+.aside-toggle__chevron.is-collapsed {
+  transform: translateX(-5px);
+}
+
+.aside-toggle__label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-layout__aside.is-collapsed .brand {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.admin-layout__aside.is-collapsed .aside-toggle {
+  justify-content: center;
+  padding: 8px 10px;
+}
+
+.admin-layout__aside.is-collapsed .aside-toggle__label {
+  display: none;
 }
 
 :deep(.el-menu-item) {
-  height: 48px;
+  height: 44px;
   margin-bottom: 6px;
-  border-radius: 16px;
+  border-radius: 14px;
+}
+
+:deep(.el-menu-item:hover) {
+  background: rgba(64, 158, 255, 0.08);
 }
 
 :deep(.el-menu--collapse .el-menu-item) {
   padding: 0;
   justify-content: center;
+  width: 52px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 :deep(.el-menu-item .el-icon) {

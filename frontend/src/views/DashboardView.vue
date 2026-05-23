@@ -1,20 +1,32 @@
 <template>
-  <div>
-    <el-row :gutter="16">
+  <div class="dashboard-view">
+    <el-row :gutter="16" class="dashboard-row">
       <el-col :span="8">
-        <el-card class="page-card"><strong>总规则数</strong><div>0</div></el-card>
+        <el-card class="page-card metric-card">
+          <div class="metric-card__label">总规则数</div>
+          <div class="metric-card__value">0</div>
+          <div class="metric-card__hint">等待规则统计接口接入</div>
+        </el-card>
       </el-col>
       <el-col :span="8">
-        <el-card class="page-card"><strong>今日处理</strong><div>0</div></el-card>
+        <el-card class="page-card metric-card">
+          <div class="metric-card__label">今日处理</div>
+          <div class="metric-card__value">0</div>
+          <div class="metric-card__hint">今日暂无处理记录</div>
+        </el-card>
       </el-col>
       <el-col :span="8">
-        <el-card class="page-card"><strong>运行中任务</strong><div>0</div></el-card>
+        <el-card class="page-card metric-card">
+          <div class="metric-card__label">运行中任务</div>
+          <div class="metric-card__value">0</div>
+          <div class="metric-card__hint">当前没有活跃任务</div>
+        </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" style="margin-top: 16px;">
+    <el-row :gutter="16" class="dashboard-row dashboard-row--detail">
       <el-col :span="14">
-        <el-card class="page-card">
+        <el-card class="page-card dashboard-card">
           <h3 class="page-section-title">当前任务进度</h3>
           <el-descriptions :column="1" border>
             <el-descriptions-item label="后端连接状态">
@@ -38,9 +50,9 @@
         </el-card>
       </el-col>
       <el-col :span="10">
-        <el-card class="page-card">
+        <el-card class="page-card dashboard-card dashboard-card--summary">
           <h3 class="page-section-title">最近执行摘要</h3>
-          <el-empty description="骨架阶段：执行摘要待接入后端接口" />
+          <el-empty class="dashboard-empty" description="骨架阶段：执行摘要待接入后端接口" />
         </el-card>
       </el-col>
     </el-row>
@@ -85,4 +97,65 @@ onMounted(() => {
   void loadHealth()
 })
 </script>
+
+<style scoped lang="scss">
+.dashboard-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-row {
+  margin-top: 0 !important;
+}
+
+.metric-card {
+  min-height: 124px;
+  border: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
+}
+
+.metric-card__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.metric-card__value {
+  margin-top: 14px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-card__hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.dashboard-card {
+  min-height: 360px;
+  border: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
+}
+
+.dashboard-card--summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-empty {
+  min-height: 280px;
+}
+
+:deep(.el-card__body) {
+  position: relative;
+}
+
+:deep(.el-tag) {
+  border-radius: 999px;
+}
+</style>
 

@@ -52,6 +52,23 @@ type RunLogEntry struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type RunHistoryItem struct {
+	ID             string     `json:"id"`
+	RuleID         *int64     `json:"rule_id,omitempty"`
+	RuleName       string     `json:"rule_name,omitempty"`
+	TriggerMode    string     `json:"trigger_mode"`
+	ArchiveMode    string     `json:"archive_mode,omitempty"`
+	Status         string     `json:"status"`
+	ProcessedFiles int        `json:"processed_files"`
+	SuccessCount   int        `json:"success_count"`
+	SkipCount      int        `json:"skip_count"`
+	FailureCount   int        `json:"failure_count"`
+	Summary        string     `json:"summary"`
+	StartedAt      time.Time  `json:"started_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	FinishedAt     *time.Time `json:"finished_at,omitempty"`
+}
+
 type ManualPreflightRequest struct {
 	SourceDir string `json:"source_dir"`
 	OutputDir string `json:"output_dir,omitempty"`
