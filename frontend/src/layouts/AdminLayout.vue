@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.6</div>
+          <div class="brand__version">V0.7</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -318,8 +318,8 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 10px;
-  min-height: 120px;
+  width: 14px;
+  min-height: 132px;
   padding: 0;
   color: var(--text-secondary);
   background: transparent;
@@ -339,7 +339,7 @@ async function handleLogout() {
   right: 0;
   z-index: 6;
   transform: translateY(-50%);
-  width: 10px;
+  width: 14px;
   background: transparent;
 }
 
@@ -354,11 +354,11 @@ async function handleLogout() {
 
 .aside-toggle__line {
   position: absolute;
-  left: 4px;
+  left: 6px;
   width: 2px;
   height: 84px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.26);
   transition:
     width 0.2s ease,
     height 0.2s ease,
@@ -367,38 +367,47 @@ async function handleLogout() {
 }
 
 .aside-toggle__chevron {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 10px;
-  height: 10px;
-  margin-left: 0;
-  color: rgba(148, 163, 184, 0.72);
-  background: transparent;
-  border-radius: 999px;
-  transform: translateY(0);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 84px;
+  color: rgba(148, 163, 184, 0.78);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.86);
   transition:
     color 0.2s ease,
-    background-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    opacity 0.18s ease,
+    transform 0.18s ease;
 }
 
-.aside-toggle:hover .aside-toggle__line {
+.aside-toggle:hover .aside-toggle__line,
+.aside-toggle:focus-visible .aside-toggle__line {
   background: var(--accent-color);
+  opacity: 0;
 }
 
-.aside-toggle:hover .aside-toggle__chevron {
-  box-shadow: none;
+.aside-toggle:hover .aside-toggle__chevron,
+.aside-toggle:focus-visible .aside-toggle__chevron {
   color: var(--accent-color);
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .aside-toggle :deep(.el-icon) {
-  font-size: 10px;
+  display: block;
+  width: 12px;
+  height: 84px;
+  font-size: 0;
 }
 
-.aside-toggle__chevron.is-collapsed {
-  transform: translateY(0);
+.aside-toggle :deep(.el-icon svg) {
+  width: 12px;
+  height: 84px;
+}
+
+.aside-toggle__chevron.is-collapsed :deep(.el-icon svg) {
+  transform: scaleX(-1);
 }
 
 .admin-layout__aside.is-collapsed .brand {
