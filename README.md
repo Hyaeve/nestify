@@ -1,6 +1,6 @@
 # Nestify
 
-![Nestify Logo](./Nestify.png)
+<img src="./Nestify.png" alt="Nestify Logo" width="180" />
 
 Nestify 是一个面向 NAS / 家庭服务器场景的可视化归档管理平台。
 
@@ -128,7 +128,7 @@ docker compose up --build
 ### 触发方式
 
 - 推送到 `main` / `master`
-- 推送标签 `v*`，例如 `v0.1.0`
+- 推送标签 `v*`，例如 `v0.4.0`
 - 手动触发 GitHub Actions
 - Pull Request 时会执行镜像构建验证，但不会推送镜像
 
@@ -150,7 +150,7 @@ ghcr.io/yourname/nestify
 
 - 默认分支推送：`latest`
 - 分支名标签：例如 `main`
-- Git 标签：例如 `v0.1.0`
+- Git 标签：例如 `v0.4.0`
 - 提交 SHA 标签
 
 ### 首次使用前需要确认

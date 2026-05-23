@@ -851,6 +851,10 @@ func (a *apiHandler) handleDeleteRule(w http.ResponseWriter, r *http.Request, id
 		writeInternalError(w, err)
 		return
 	}
+	if err := a.executor.ReloadAutomation(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
 
 	writeJSON(w, http.StatusOK, jsonResponse{
 		Success: true,
@@ -906,6 +910,10 @@ func (a *apiHandler) handleUpdateRule(w http.ResponseWriter, r *http.Request, id
 
 	rule, err := a.store.UpdateRule(id, input)
 	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if err := a.executor.ReloadAutomation(); err != nil {
 		writeInternalError(w, err)
 		return
 	}
@@ -969,6 +977,10 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 
 	rule, err := a.store.CreateRule(input)
 	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if err := a.executor.ReloadAutomation(); err != nil {
 		writeInternalError(w, err)
 		return
 	}

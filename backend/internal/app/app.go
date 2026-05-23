@@ -30,6 +30,13 @@ func Run() error {
 		}
 	}()
 
+	execService := executor.NewService(store)
+	automationCtx, automationCancel := context.WithCancel(context.Background())
+	defer automationCancel()
+	if err := execService.StartAutomation(automationCtx); err != nil {
+		return err
+	}
+
 	srv := &http.Server{
 		Addr: env.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Dependencies{
@@ -37,7 +44,7 @@ func Run() error {
 			Store:      store,
 			Sessions:   auth.NewSessionManager(24 * time.Hour),
 			PathBrowse: pathbrowse.New(env.BrowseRoots),
-			Executor:   executor.NewService(),
+			Executor:   execService,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -58,6 +65,7 @@ func Run() error {
 	case err := <-errCh:
 		return err
 	case <-sigCh:
+		automationCancel()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return srv.Shutdown(ctx)

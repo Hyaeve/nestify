@@ -48,6 +48,22 @@ func (s *Store) migrate() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
+		`CREATE TABLE IF NOT EXISTS run_history (
+			id TEXT PRIMARY KEY,
+			rule_id INTEGER,
+			rule_name TEXT NOT NULL DEFAULT '',
+			trigger_mode TEXT NOT NULL,
+			archive_mode TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			processed_files INTEGER NOT NULL DEFAULT 0,
+			success_count INTEGER NOT NULL DEFAULT 0,
+			skip_count INTEGER NOT NULL DEFAULT 0,
+			failure_count INTEGER NOT NULL DEFAULT 0,
+			summary TEXT NOT NULL DEFAULT '',
+			started_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			finished_at TEXT NOT NULL DEFAULT ''
+		);`,
 	}
 
 	for _, statement := range statements {

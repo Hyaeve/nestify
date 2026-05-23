@@ -1,33 +1,54 @@
 package executor
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"nestify/backend/internal/model"
+	"nestify/backend/internal/store/sqlite"
 )
 
 type Service struct {
 	mu      sync.RWMutex
+	store   *sqlite.Store
 	runs    map[string]*model.RunInstance
 	logs    map[string][]model.RunLogEntry
 	history []model.RunHistoryItem
+
+	automationMu     sync.Mutex
+	automationCtx    context.Context
+	automationCancel context.CancelFunc
+	cronRunner       *cron.Cron
+	watchCancels     map[int64]context.CancelFunc
+	activeRules      map[int64]struct{}
 }
 
-func NewService() *Service {
+func NewService(store *sqlite.Store) *Service {
 	return &Service{
-		runs:    make(map[string]*model.RunInstance),
-		logs:    make(map[string][]model.RunLogEntry),
-		history: make([]model.RunHistoryItem, 0),
+		store:        store,
+		runs:         make(map[string]*model.RunInstance),
+		logs:         make(map[string][]model.RunLogEntry),
+		history:      make([]model.RunHistoryItem, 0),
+		watchCancels: make(map[int64]context.CancelFunc),
+		activeRules:  make(map[int64]struct{}),
 	}
 }
 
 func (s *Service) ListHistory() []model.RunHistoryItem {
+	if s.store != nil {
+		items, err := s.store.ListRunHistory()
+		if err == nil {
+			return items
+		}
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -48,6 +69,9 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 	}
 
 	ruleID := req.RuleID
+	if ruleID > 0 && !s.markRuleActive(ruleID) {
+		return nil, fmt.Errorf("rule is already running")
+	}
 	run := s.newRun(triggerMode, archiveMode, &ruleID, req.RuleName)
 	s.appendLog(run.ID, "info", fmt.Sprintf("prepared %s execution skeleton for rule %q", archiveMode, req.RuleName))
 	s.appendLog(run.ID, "info", fmt.Sprintf("source=%s target=%s", req.SourceDir, req.TargetDir))
@@ -119,6 +143,8 @@ func (s *Service) appendLog(runID, level, message string) {
 
 func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 	go func() {
+		defer s.unmarkRuleActive(req.RuleID)
+
 		s.mu.Lock()
 		if run, ok := s.runs[runID]; ok {
 			run.Status = model.RunStatusRunning
@@ -131,51 +157,49 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		prepared, err := PrepareMode(req)
 		if err != nil {
 			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("execution failed: %v", err))
+			s.persistRunHistory(runID, fmt.Sprintf("execution failed: %v", err))
 			return
 		}
 
-		entries, scanErr := s.scanSource(req)
-		if scanErr != nil {
-			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, scanErr.Error())
-			return
+		stats, execErr := s.executeRule(runID, req)
+		if execErr != nil && stats.FailureCount == 0 {
+			stats.FailureCount = 1
 		}
 
-		skipCount := 0
-		successCount := len(entries)
-		status := model.RunStatusSucceeded
-		if len(entries) == 0 {
-			skipCount = 1
-			successCount = 0
-			status = model.RunStatusFailed
+		finalStatus := model.RunStatusSucceeded
+		if stats.FailureCount > 0 || execErr != nil {
+			finalStatus = model.RunStatusFailed
 		}
 
 		s.mu.Lock()
 		if run, ok := s.runs[runID]; ok {
-			run.Stage = model.RunStageScanning
-			run.ProcessedFiles = len(entries)
-			run.SuccessCount = successCount
-			run.SkipCount = skipCount
-			run.Status = status
+			run.Stage = model.RunStageFinalizing
+			run.ProcessedFiles = stats.ProcessedFiles
+			run.SuccessCount = stats.SuccessCount
+			run.SkipCount = stats.SkipCount
+			run.FailureCount = stats.FailureCount
+			run.Status = finalStatus
 			run.FinishedAt = ptrTime(time.Now().UTC())
 			run.UpdatedAt = time.Now().UTC()
 		}
 		s.mu.Unlock()
-		s.appendLog(runID, "info", prepared.Summary)
-		s.appendLog(runID, "info", fmt.Sprintf("processed %d files", len(entries)))
-		s.appendLog(runID, "info", "execution completed")
-		s.recordHistory(runID, prepared.Summary)
-	}()
-}
 
-func (s *Service) scanSource(req ExecuteRuleRequest) ([]string, error) {
-	if strings.TrimSpace(req.SourceDir) == "" {
-		return nil, fmt.Errorf("source dir is required")
-	}
-	items, err := filepath.Glob(filepath.Join(req.SourceDir, "*"))
-	if err != nil {
-		return nil, err
-	}
-	return items, nil
+		if execErr != nil {
+			s.appendLog(runID, "error", execErr.Error())
+		} else {
+			s.appendLog(runID, "info", prepared.Summary)
+			s.appendLog(runID, "info", stats.Summary)
+			s.appendLog(runID, "info", "execution completed")
+		}
+
+		if req.RuleID > 0 && s.store != nil {
+			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		}
+		s.persistRunHistory(runID, stats.Summary)
+		if execErr != nil {
+			return
+		}
+	}()
 }
 
 func (s *Service) finishRun(runID, status, stage, logMsg string) {
@@ -192,13 +216,21 @@ func (s *Service) finishRun(runID, status, stage, logMsg string) {
 
 func ptrTime(t time.Time) *time.Time { return &t }
 
-func (s *Service) recordHistory(runID, summary string) {
+func (s *Service) persistRunHistory(runID, summary string) {
+	item := s.recordHistory(runID, summary)
+	if item == nil || s.store == nil {
+		return
+	}
+	_ = s.store.UpsertRunHistory(*item)
+}
+
+func (s *Service) recordHistory(runID, summary string) *model.RunHistoryItem {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	run, ok := s.runs[runID]
 	if !ok || run == nil {
-		return
+		return nil
 	}
 
 	item := model.RunHistoryItem{
@@ -219,6 +251,7 @@ func (s *Service) recordHistory(runID, summary string) {
 	}
 
 	s.history = append([]model.RunHistoryItem{item}, s.history...)
+	return &item
 }
 
 func mapRunStatus(run *model.RunInstance) string {
@@ -235,6 +268,43 @@ func mapRunStatus(run *model.RunInstance) string {
 		return "success"
 	}
 	return "skip"
+}
+
+func mapRunStatusByCounts(successCount, skipCount, failureCount int) string {
+	if failureCount > 0 {
+		return "failed"
+	}
+	if skipCount > 0 && successCount == 0 {
+		return "skip"
+	}
+	if successCount > 0 {
+		return "success"
+	}
+	return "skip"
+}
+
+func (s *Service) markRuleActive(ruleID int64) bool {
+	if ruleID <= 0 {
+		return true
+	}
+
+	s.automationMu.Lock()
+	defer s.automationMu.Unlock()
+	if _, exists := s.activeRules[ruleID]; exists {
+		return false
+	}
+	s.activeRules[ruleID] = struct{}{}
+	return true
+}
+
+func (s *Service) unmarkRuleActive(ruleID int64) {
+	if ruleID <= 0 {
+		return
+	}
+
+	s.automationMu.Lock()
+	delete(s.activeRules, ruleID)
+	s.automationMu.Unlock()
 }
 
 func (s *Service) cloneRun(run *model.RunInstance) *model.RunInstance {

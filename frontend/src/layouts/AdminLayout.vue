@@ -5,24 +5,9 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.3</div>
+          <div class="brand__version">V0.4</div>
         </div>
       </div>
-      <div class="aside-control">
-        <button class="aside-toggle" type="button" @click="toggleAside">
-          <span class="aside-toggle__track">
-            <span class="aside-toggle__line"></span>
-            <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
-              <el-icon>
-                <ArrowLeftBold v-if="!isCollapsed" />
-                <ArrowRightBold v-else />
-              </el-icon>
-            </span>
-          </span>
-          <span class="aside-toggle__label">{{ isCollapsed ? '展开侧栏' : '收起侧栏' }}</span>
-        </button>
-      </div>
-
       <div class="aside-scroll">
         <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu">
           <el-menu-item index="/dashboard">
@@ -47,6 +32,18 @@
           </el-menu-item>
         </el-menu>
       </div>
+
+      <button class="aside-toggle aside-toggle--edge" type="button" @click="toggleAside" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'">
+        <span class="aside-toggle__track">
+          <span class="aside-toggle__line"></span>
+          <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
+            <el-icon>
+              <ArrowLeftBold v-if="!isCollapsed" />
+              <ArrowRightBold v-else />
+            </el-icon>
+          </span>
+        </span>
+      </button>
     </el-aside>
 
     <el-container>
@@ -212,15 +209,15 @@ async function handleLogout() {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    height: 62px;
-    padding: 0 28px;
+    height: 52px;
+    padding: 0 18px;
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(18px);
   }
 
   &__main {
-    padding: 24px 28px;
+    padding: 18px 20px;
     background: transparent;
   }
 }
@@ -261,11 +258,6 @@ async function handleLogout() {
   letter-spacing: 0.08em;
 }
 
-.aside-control {
-  padding: 8px 8px 10px;
-  border-bottom: 1px solid var(--border-color);
-}
-
 .aside-scroll {
   flex: 1;
   min-height: 0;
@@ -301,13 +293,13 @@ async function handleLogout() {
 
 .page-title__crumb,
 .page-title__text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .page-title__crumb,
 .page-title__divider {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -315,7 +307,7 @@ async function handleLogout() {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .icon-button {
@@ -328,9 +320,7 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
   min-height: 44px;
-  padding: 8px 12px;
   color: var(--text-secondary);
   background: transparent;
   border: 0;
@@ -341,9 +331,24 @@ async function handleLogout() {
     background-color 0.2s ease;
 }
 
+.aside-toggle--edge {
+  position: absolute;
+  top: 50%;
+  right: -18px;
+  z-index: 6;
+  width: 26px;
+  height: 96px;
+  min-height: 96px;
+  padding: 0;
+  justify-content: center;
+  transform: translateY(-50%);
+  border-radius: 0 18px 18px 0;
+  background: transparent;
+}
+
 .aside-toggle:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .aside-toggle__track {
@@ -351,16 +356,16 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 54px;
+  width: 18px;
+  height: 64px;
 }
 
 .aside-toggle__line {
   position: absolute;
-  width: 4px;
-  height: 42px;
+  width: 5px;
+  height: 72px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.38);
+  background: rgba(148, 163, 184, 0.34);
   transition:
     width 0.2s ease,
     height 0.2s ease,
@@ -369,8 +374,8 @@ async function handleLogout() {
 }
 
 .aside-toggle:hover .aside-toggle__line {
-  width: 5px;
-  height: 46px;
+  width: 6px;
+  height: 80px;
   background: var(--accent-color);
 }
 
@@ -396,25 +401,10 @@ async function handleLogout() {
   transform: translateX(-5px);
 }
 
-.aside-toggle__label {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
 .admin-layout__aside.is-collapsed .brand {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
-}
-
-.admin-layout__aside.is-collapsed .aside-toggle {
-  justify-content: center;
-  padding: 8px 10px;
-}
-
-.admin-layout__aside.is-collapsed .aside-toggle__label {
-  display: none;
 }
 
 :deep(.el-menu-item) {
