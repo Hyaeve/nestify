@@ -172,7 +172,7 @@ import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleIte
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 
 type ArchiveMode = 'package' | 'collect'
-type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive'
+type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 
@@ -181,6 +181,7 @@ const packageModeOptions = [
   { key: 'include_manifest', label: '生成归档清单', description: '为每次打包写入清单，方便后续核对归档内容。' },
   { key: 'verify_after_archive', label: '归档后校验', description: '完成后再次检查结果，减少丢包或缺失问题。' },
   { key: 'cleanup_source_after_archive', label: '成功后清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
+  { key: 'package_nested_folders', label: '打包嵌套子目录', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
 ] as const
 
 const collectModeOptions = [
@@ -191,7 +192,7 @@ const collectModeOptions = [
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { preserve_structure: true, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false }
+  return { preserve_structure: true, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false }
 }
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
   return { recursive_collect: true, deduplicate_same_name: true, keep_latest_only: false, collect_related_files: true }

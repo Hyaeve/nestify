@@ -56,10 +56,11 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 
 	sortEntriesNaturally(entries)
+	packageNestedFolders := req.PackageOptions["package_nested_folders"]
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() {
-			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, &stats); err != nil {
+			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, packageNestedFolders, &stats); err != nil {
 				stats.FailureCount++
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
 			}
@@ -86,11 +87,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	return stats, nil
 }
 
-func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode string, stats *executionStats) error {
-	if err := os.MkdirAll(targetSeriesDir, 0o755); err != nil {
-		return fmt.Errorf("create series target dir: %w", err)
-	}
-
+func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode string, packageNestedFolders bool, stats *executionStats) error {
 	entries, err := os.ReadDir(seriesPath)
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
@@ -102,10 +99,40 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	}
 
 	sortEntriesNaturally(entries)
+	files := make([]os.DirEntry, 0, len(entries))
+	hasSubdirs := false
+	allImages := true
+	for _, entry := range entries {
+		if entry.IsDir() {
+			hasSubdirs = true
+			allImages = false
+			continue
+		}
+		files = append(files, entry)
+		if !isImageFile(entry.Name()) {
+			allImages = false
+		}
+	}
+
+	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && allImages {
+		archivePath, err := createCBZFromFiles(seriesPath, files, targetSeriesDir, filepath.Base(seriesPath)+".cbz")
+		if err != nil {
+			return err
+		}
+		if err := os.RemoveAll(seriesPath); err != nil {
+			return fmt.Errorf("remove packed source directory: %w", err)
+		}
+		stats.ProcessedFiles += len(files)
+		stats.SuccessCount++
+		stats.PackedVolumes++
+		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
+		return nil
+	}
+
 	for _, entry := range entries {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
 			}
@@ -122,7 +149,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	return nil
 }
 
-func (s *Service) processVolumeDir(runID, volumePath, targetSeriesDir, archiveMode string, stats *executionStats) error {
+func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode string, packageNestedFolders bool, stats *executionStats) error {
 	entries, err := os.ReadDir(volumePath)
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
@@ -150,7 +177,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetSeriesDir, archiveMo
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && allImages {
-		archivePath, err := createCBZFromFiles(volumePath, files, targetSeriesDir, filepath.Base(volumePath)+".cbz")
+		archivePath, err := createCBZFromFiles(volumePath, files, targetDir, filepath.Base(volumePath)+".cbz")
 		if err != nil {
 			return err
 		}
@@ -164,17 +191,30 @@ func (s *Service) processVolumeDir(runID, volumePath, targetSeriesDir, archiveMo
 		return nil
 	}
 
+	if archiveMode == "package" && hasSubdirs && !packageNestedFolders {
+		stats.SkipCount++
+		s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", volumePath))
+		return nil
+	}
+
+	nextTargetDir := targetDir
+	fileTargetDir := targetDir
+	if archiveMode == "package" && hasSubdirs {
+		nextTargetDir = filepath.Join(targetDir, filepath.Base(volumePath))
+		fileTargetDir = nextTargetDir
+	}
+
 	for _, entry := range entries {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
 			}
 			continue
 		}
 
-		if err := s.moveLooseFile(runID, entryPath, targetSeriesDir, stats); err != nil {
+		if err := s.moveLooseFile(runID, entryPath, fileTargetDir, stats); err != nil {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("move nested file %s failed: %v", entryPath, err))
 		}

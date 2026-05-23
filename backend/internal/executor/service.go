@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -215,6 +216,20 @@ func (s *Service) finishRun(runID, status, stage, logMsg string) {
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
+
+func ParseBoolOptionsJSON(raw string) map[string]bool {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "{}" {
+		return map[string]bool{}
+	}
+
+	parsed := make(map[string]bool)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return map[string]bool{}
+	}
+
+	return parsed
+}
 
 func (s *Service) persistRunHistory(runID, summary string) {
 	item := s.recordHistory(runID, summary)

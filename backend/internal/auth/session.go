@@ -69,6 +69,19 @@ func (m *SessionManager) Delete(token string) {
 	m.mu.Unlock()
 }
 
+func (m *SessionManager) ReplaceUser(token string, user model.SessionUser) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	session, ok := m.sessions[token]
+	if !ok {
+		return
+	}
+
+	session.User = user
+	m.sessions[token] = session
+}
+
 func randomToken(size int) (string, error) {
 	buf := make([]byte, size)
 	if _, err := rand.Read(buf); err != nil {

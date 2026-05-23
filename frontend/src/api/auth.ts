@@ -57,3 +57,27 @@ export async function logout() {
 
   return payload
 }
+
+export interface UpdateAdminAccountPayload {
+  username: string
+  current_password: string
+  new_password: string
+}
+
+export function updateAdminAccount(payload: UpdateAdminAccountPayload) {
+  return fetch('/api/v1/settings/admin-account', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  }).then(async (response) => {
+    const data = (await response.json()) as ApiResponse<SessionUser>
+    if (!response.ok) {
+      throw new Error(data.message || '更新管理员账号失败')
+    }
+    return data
+  })
+}

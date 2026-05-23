@@ -116,6 +116,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/runs/", api.handleRuns)
 	mux.HandleFunc("/api/v1/run-history", api.handleRunHistory)
 	mux.HandleFunc("/api/v1/settings", api.handleSettings)
+	mux.HandleFunc("/api/v1/settings/admin-account", api.handleUpdateAdminAccount)
 	mux.HandleFunc("/api/v1/rules", api.handleRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
 
@@ -149,6 +150,12 @@ type fileMutationRequest struct {
 	DestinationPath string   `json:"destination_path"`
 	OutputDir       string   `json:"output_dir"`
 	ArchiveName     string   `json:"archive_name"`
+}
+
+type updateAdminAccountRequest struct {
+	Username        string `json:"username"`
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
 }
 
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -605,12 +612,13 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 	}
 
 	prepared, err := executor.PrepareMode(executor.ExecuteRuleRequest{
-		RuleID:      rule.ID,
-		RuleName:    rule.Name,
-		ArchiveMode: rule.ArchiveMode,
-		TriggerMode: input.TriggerMode,
-		SourceDir:   rule.SourceDir,
-		TargetDir:   rule.TargetDir,
+		RuleID:         rule.ID,
+		RuleName:       rule.Name,
+		ArchiveMode:    rule.ArchiveMode,
+		TriggerMode:    input.TriggerMode,
+		SourceDir:      rule.SourceDir,
+		TargetDir:      rule.TargetDir,
+		PackageOptions: executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 	})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
@@ -622,12 +630,13 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 	}
 
 	run, err := a.executor.PrepareRuleRun(executor.ExecuteRuleRequest{
-		RuleID:      rule.ID,
-		RuleName:    rule.Name,
-		ArchiveMode: rule.ArchiveMode,
-		TriggerMode: input.TriggerMode,
-		SourceDir:   rule.SourceDir,
-		TargetDir:   rule.TargetDir,
+		RuleID:         rule.ID,
+		RuleName:       rule.Name,
+		ArchiveMode:    rule.ArchiveMode,
+		TriggerMode:    input.TriggerMode,
+		SourceDir:      rule.SourceDir,
+		TargetDir:      rule.TargetDir,
+		PackageOptions: executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 	})
 	if err != nil {
 		writeInternalError(w, err)
@@ -794,6 +803,117 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Code:    "OK",
 		Message: "Settings loaded",
 		Data:    settings,
+	})
+}
+
+func (a *apiHandler) handleUpdateAdminAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	session, ok := a.sessionFromRequest(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, jsonResponse{
+			Success: false,
+			Code:    "UNAUTHORIZED",
+			Message: "未登录",
+		})
+		return
+	}
+
+	var input updateAdminAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_JSON",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	username := strings.TrimSpace(input.Username)
+	currentPassword := input.CurrentPassword
+	newPassword := input.NewPassword
+	if username == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_ADMIN_USERNAME",
+			Message: "管理员账号不能为空",
+		})
+		return
+	}
+	if strings.TrimSpace(currentPassword) == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "CURRENT_PASSWORD_REQUIRED",
+			Message: "请输入当前密码",
+		})
+		return
+	}
+	if username == session.User.Username && strings.TrimSpace(newPassword) == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "NO_ADMIN_CHANGES",
+			Message: "请至少修改管理员账号或新密码",
+		})
+		return
+	}
+
+	admin, err := a.store.GetAdminByID(session.User.ID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if admin == nil {
+		writeJSON(w, http.StatusNotFound, jsonResponse{
+			Success: false,
+			Code:    "ADMIN_NOT_FOUND",
+			Message: "管理员不存在",
+		})
+		return
+	}
+	if auth.ComparePassword(admin.PasswordHash, currentPassword) != nil {
+		writeJSON(w, http.StatusUnauthorized, jsonResponse{
+			Success: false,
+			Code:    "INVALID_CURRENT_PASSWORD",
+			Message: "当前密码错误",
+		})
+		return
+	}
+
+	nextPasswordHash := admin.PasswordHash
+	if strings.TrimSpace(newPassword) != "" {
+		hash, err := auth.HashPassword(newPassword)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		nextPasswordHash = hash
+	}
+
+	updatedAdmin, err := a.store.UpdateAdminCredentials(admin.ID, username, nextPasswordHash)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "UPDATE_ADMIN_FAILED",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		a.sessions.ReplaceUser(cookie.Value, model.SessionUser{ID: updatedAdmin.ID, Username: updatedAdmin.Username})
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "管理员账号已更新",
+		Data: model.SessionUser{
+			ID:       updatedAdmin.ID,
+			Username: updatedAdmin.Username,
+		},
 	})
 }
 

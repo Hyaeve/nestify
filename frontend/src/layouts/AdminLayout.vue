@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.4</div>
+          <div class="brand__version">V0.5</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -33,7 +33,7 @@
         </el-menu>
       </div>
 
-      <button class="aside-toggle aside-toggle--edge" type="button" @click="toggleAside" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'">
+      <button class="aside-toggle aside-toggle--edge" type="button" @click="toggleAside" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'" :title="isCollapsed ? '展开侧栏' : '收起侧栏'">
         <span class="aside-toggle__track">
           <span class="aside-toggle__line"></span>
           <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
@@ -230,7 +230,7 @@ async function handleLogout() {
   padding: 14px 12px 12px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  background: var(--bg-sidebar);
 }
 
 .brand__logo {
@@ -321,34 +321,43 @@ async function handleLogout() {
   align-items: center;
   gap: 10px;
   min-height: 44px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   background: transparent;
   border: 0;
   border-radius: 14px;
   cursor: pointer;
   transition:
     color 0.2s ease,
-    background-color 0.2s ease;
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .aside-toggle--edge {
   position: absolute;
   top: 50%;
-  right: -18px;
+  right: 10px;
   z-index: 6;
-  width: 26px;
-  height: 96px;
-  min-height: 96px;
+  width: 38px;
+  height: 112px;
+  min-height: 112px;
   padding: 0;
   justify-content: center;
   transform: translateY(-50%);
-  border-radius: 0 18px 18px 0;
-  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .aside-toggle:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.02);
+  color: var(--accent-color);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+}
+
+.aside-toggle:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
 }
 
 .aside-toggle__track {
@@ -356,16 +365,16 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 64px;
+  width: 24px;
+  height: 76px;
 }
 
 .aside-toggle__line {
   position: absolute;
-  width: 5px;
-  height: 72px;
+  width: 8px;
+  height: 88px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.34);
+  background: var(--accent-soft);
   transition:
     width 0.2s ease,
     height 0.2s ease,
@@ -374,8 +383,8 @@ async function handleLogout() {
 }
 
 .aside-toggle:hover .aside-toggle__line {
-  width: 6px;
-  height: 80px;
+  width: 10px;
+  height: 92px;
   background: var(--accent-color);
 }
 
@@ -384,21 +393,26 @@ async function handleLogout() {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  color: rgba(148, 163, 184, 0.92);
-  transform: translateX(5px);
+  width: 28px;
+  height: 28px;
+  color: #ffffff;
+  background: var(--accent-color);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(64, 158, 255, 0.28);
+  transform: none;
   transition:
     color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
     transform 0.2s ease;
 }
 
 .aside-toggle:hover .aside-toggle__chevron {
-  color: var(--accent-color);
+  box-shadow: 0 10px 22px rgba(64, 158, 255, 0.36);
 }
 
 .aside-toggle__chevron.is-collapsed {
-  transform: translateX(-5px);
+  transform: none;
 }
 
 .admin-layout__aside.is-collapsed .brand {

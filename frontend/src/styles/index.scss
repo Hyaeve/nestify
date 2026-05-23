@@ -2,7 +2,7 @@
   color-scheme: light;
   --bg-app: #f5f7fb;
   --bg-app-overlay: none;
-  --bg-app-base: radial-gradient(circle at top left, rgba(64, 158, 255, 0.06), transparent 28%), linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  --bg-app-base: none;
   --bg-panel: rgba(255, 255, 255, 0.96);
   --bg-panel-strong: #ffffff;
   --bg-elevated: #ffffff;
@@ -19,9 +19,9 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #0b1220;
-  --bg-app-overlay: radial-gradient(circle at 1px 1px, rgba(96, 165, 250, 0.12) 1.2px, transparent 0);
-  --bg-app-base: radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 22%), radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 18%), linear-gradient(180deg, #0f1119 0%, #0a0d14 100%);
+  --bg-app: #0f172a;
+  --bg-app-overlay: none;
+  --bg-app-base: none;
   --bg-panel: rgba(16, 22, 36, 0.82);
   --bg-panel-strong: #131a2a;
   --bg-elevated: #182133;
@@ -50,10 +50,7 @@ body {
 
 #app {
   min-height: 100vh;
-  background-color: var(--bg-app);
-  background-image: var(--bg-app-overlay), var(--bg-app-base);
-  background-size: 36px 36px, cover;
-  background-attachment: fixed;
+  background: var(--bg-app);
   color: var(--text-primary);
 }
 
