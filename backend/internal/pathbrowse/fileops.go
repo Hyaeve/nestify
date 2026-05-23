@@ -236,7 +236,9 @@ func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string) 
 	}
 
 	archivePath := uniqueDestinationPath(outputDir, archiveName)
-	archiveFile, err := os.Create(archivePath)
+	tempPath := archivePath + ".tmp"
+	_ = os.Remove(tempPath)
+	archiveFile, err := os.Create(tempPath)
 	if err != nil {
 		return "", fmt.Errorf("create cbz file: %w", err)
 	}
@@ -253,7 +255,18 @@ func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string) 
 	}
 
 	if err := zipWriter.Close(); err != nil {
+		_ = os.Remove(tempPath)
 		return "", fmt.Errorf("finalize cbz file: %w", err)
+	}
+
+	if _, err := os.Stat(tempPath); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("verify cbz file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, archivePath); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("publish cbz file: %w", err)
 	}
 
 	return archivePath, nil

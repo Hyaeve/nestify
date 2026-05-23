@@ -19,6 +19,7 @@ type executionStats struct {
 	FailureCount   int
 	PackedVolumes  int
 	MovedFiles     int
+	HistoryEvents  int
 	Summary        string
 }
 
@@ -62,6 +63,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		if entry.IsDir() {
 			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, packageNestedFolders, &stats); err != nil {
 				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
 			}
 			continue
@@ -69,6 +71,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 		if err := s.moveLooseFile(runID, entryPath, targetDir, &stats); err != nil {
 			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move file %s failed: %v", entryPath, err), &stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move file %s failed: %v", entryPath, err))
 		}
 	}
@@ -94,6 +97,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	}
 	if len(entries) == 0 {
 		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped empty series %s", seriesPath), stats)
 		_ = os.Remove(seriesPath)
 		return nil
 	}
@@ -125,6 +129,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		stats.ProcessedFiles += len(files)
 		stats.SuccessCount++
 		stats.PackedVolumes++
+		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
 		return nil
 	}
@@ -134,6 +139,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if entry.IsDir() {
 			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
 			}
 			continue
@@ -141,6 +147,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 
 		if err := s.moveLooseFile(runID, entryPath, targetSeriesDir, stats); err != nil {
 			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move series file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move series file %s failed: %v", entryPath, err))
 		}
 	}
@@ -156,6 +163,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode str
 	}
 	if len(entries) == 0 {
 		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped empty volume %s", volumePath), stats)
 		_ = os.Remove(volumePath)
 		return nil
 	}
@@ -187,12 +195,14 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode str
 		stats.ProcessedFiles += len(files)
 		stats.SuccessCount++
 		stats.PackedVolumes++
+		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
 		return nil
 	}
 
 	if archiveMode == "package" && hasSubdirs && !packageNestedFolders {
 		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s", volumePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", volumePath))
 		return nil
 	}
@@ -209,6 +219,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode str
 		if entry.IsDir() {
 			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
 			}
 			continue
@@ -216,6 +227,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode str
 
 		if err := s.moveLooseFile(runID, entryPath, fileTargetDir, stats); err != nil {
 			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move nested file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move nested file %s failed: %v", entryPath, err))
 		}
 	}
@@ -237,6 +249,7 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir string, stats *exec
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MovedFiles++
+	s.persistRunHistory(runID, fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath))
 	return nil
 }
@@ -247,28 +260,54 @@ func createCBZFromFiles(volumePath string, files []os.DirEntry, targetDir, archi
 	}
 
 	archivePath := uniqueArchiveDestinationPath(targetDir, archiveName)
-	archiveFile, err := os.Create(archivePath)
+	tempPath := archivePath + ".tmp"
+	_ = os.Remove(tempPath)
+	archiveFile, err := os.Create(tempPath)
 	if err != nil {
 		return "", fmt.Errorf("create cbz file: %w", err)
 	}
-	defer func() {
-		_ = archiveFile.Close()
-	}()
 
 	zipWriter := zip.NewWriter(archiveFile)
 	for _, entry := range files {
 		sourcePath := filepath.Join(volumePath, entry.Name())
 		if err := addFileToArchive(zipWriter, sourcePath, entry.Name()); err != nil {
 			_ = zipWriter.Close()
+			_ = archiveFile.Close()
+			_ = os.Remove(tempPath)
 			return "", err
 		}
 	}
 
 	if err := zipWriter.Close(); err != nil {
+		_ = archiveFile.Close()
+		_ = os.Remove(tempPath)
 		return "", fmt.Errorf("finalize cbz file: %w", err)
+	}
+	if err := archiveFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("close cbz file: %w", err)
+	}
+	if err := verifyAndPublishCBZ(tempPath, archivePath); err != nil {
+		return "", err
 	}
 
 	return archivePath, nil
+}
+
+func verifyAndPublishCBZ(tempPath, archivePath string) error {
+	reader, err := zip.OpenReader(tempPath)
+	if err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("verify cbz file: %w", err)
+	}
+	_ = reader.Close()
+
+	if err := os.Rename(tempPath, archivePath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("publish cbz file: %w", err)
+	}
+
+	return nil
 }
 
 func addFileToArchive(zipWriter *zip.Writer, sourcePath, archivePath string) error {

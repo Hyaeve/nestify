@@ -158,7 +158,7 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		prepared, err := PrepareMode(req)
 		if err != nil {
 			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("execution failed: %v", err))
-			s.persistRunHistory(runID, fmt.Sprintf("execution failed: %v", err))
+			s.persistRunHistory(runID, fmt.Sprintf("execution failed: %v", err), nil)
 			return
 		}
 
@@ -196,7 +196,9 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		if req.RuleID > 0 && s.store != nil {
 			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
 		}
-		s.persistRunHistory(runID, stats.Summary)
+		if stats.HistoryEvents == 0 {
+			s.persistRunHistory(runID, stats.Summary, &stats)
+		}
 		if execErr != nil {
 			return
 		}
@@ -231,15 +233,18 @@ func ParseBoolOptionsJSON(raw string) map[string]bool {
 	return parsed
 }
 
-func (s *Service) persistRunHistory(runID, summary string) {
-	item := s.recordHistory(runID, summary)
+func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {
+	item := s.recordHistory(runID, summary, stats)
+	if stats != nil {
+		stats.HistoryEvents++
+	}
 	if item == nil || s.store == nil {
 		return
 	}
 	_ = s.store.UpsertRunHistory(*item)
 }
 
-func (s *Service) recordHistory(runID, summary string) *model.RunHistoryItem {
+func (s *Service) recordHistory(runID, summary string, stats *executionStats) *model.RunHistoryItem {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -248,17 +253,30 @@ func (s *Service) recordHistory(runID, summary string) *model.RunHistoryItem {
 		return nil
 	}
 
+	status := mapRunStatus(run)
+	processedFiles := run.ProcessedFiles
+	successCount := run.SuccessCount
+	skipCount := run.SkipCount
+	failureCount := run.FailureCount
+	if stats != nil {
+		status = mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		processedFiles = stats.ProcessedFiles
+		successCount = stats.SuccessCount
+		skipCount = stats.SkipCount
+		failureCount = stats.FailureCount
+	}
+
 	item := model.RunHistoryItem{
-		ID:             run.ID,
+		ID:             mustRandomID(),
 		RuleID:         run.RuleID,
 		RuleName:       run.RuleName,
 		TriggerMode:    run.TriggerMode,
 		ArchiveMode:    run.ArchiveMode,
-		Status:         mapRunStatus(run),
-		ProcessedFiles: run.ProcessedFiles,
-		SuccessCount:   run.SuccessCount,
-		SkipCount:      run.SkipCount,
-		FailureCount:   run.FailureCount,
+		Status:         status,
+		ProcessedFiles: processedFiles,
+		SuccessCount:   successCount,
+		SkipCount:      skipCount,
+		FailureCount:   failureCount,
 		Summary:        summary,
 		StartedAt:      run.StartedAt,
 		UpdatedAt:      run.UpdatedAt,

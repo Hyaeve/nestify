@@ -52,7 +52,19 @@
       <el-col :span="10">
         <el-card class="page-card dashboard-card dashboard-card--summary">
           <h3 class="page-section-title">最近执行摘要</h3>
-          <el-empty class="dashboard-empty" description="骨架阶段：执行摘要待接入后端接口" />
+          <div v-if="summaryItems.length" class="summary-list">
+            <div v-for="item in summaryItems" :key="item.id" class="summary-item">
+              <div class="summary-item__header">
+                <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
+                <el-tag :type="getStatusType(item.status)" effect="plain" size="small">{{ getStatusText(item.status) }}</el-tag>
+              </div>
+              <div class="summary-item__meta">
+                <span>{{ formatDate(item.started_at) }}</span>
+                <span>{{ item.summary || '无摘要' }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
         </el-card>
       </el-col>
     </el-row>
@@ -63,10 +75,12 @@
 import { computed, onMounted, ref } from 'vue'
 
 import { fetchHealth, type HealthPayload } from '../api/system'
+import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 
 const health = ref<HealthPayload | null>(null)
 const healthError = ref('')
 const loading = ref(false)
+const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 
 const healthStatus = computed(() => {
   if (loading.value) return '检查中'
@@ -77,6 +91,22 @@ const healthStatus = computed(() => {
 const healthService = computed(() => health.value?.service ?? '未知')
 const healthTime = computed(() => health.value?.time ?? '尚未获取')
 const healthTagType = computed(() => (health.value ? 'success' : loading.value ? 'warning' : 'danger'))
+
+function getStatusType(status: string) {
+  if (status === 'success' || status === 'succeeded') return 'success'
+  if (status === 'skip' || status === 'skipped') return 'warning'
+  return 'danger'
+}
+
+function getStatusText(status: string) {
+  if (status === 'success' || status === 'succeeded') return '成功'
+  if (status === 'skip' || status === 'skipped') return '跳过'
+  return '失败'
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
 
 async function loadHealth() {
   loading.value = true
@@ -93,8 +123,17 @@ async function loadHealth() {
   }
 }
 
+async function loadSummary() {
+  try {
+    summaryItems.value = (await fetchRunHistory()).data?.items.slice(0, 5) ?? []
+  } catch {
+    summaryItems.value = []
+  }
+}
+
 onMounted(() => {
   void loadHealth()
+  void loadSummary()
 })
 </script>
 
@@ -144,6 +183,40 @@ onMounted(() => {
 .dashboard-card--summary {
   display: flex;
   flex-direction: column;
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.summary-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-item__name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.summary-item__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .dashboard-empty {

@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.5</div>
+          <div class="brand__version">V0.6</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -33,15 +33,13 @@
         </el-menu>
       </div>
 
-      <button class="aside-toggle aside-toggle--edge" type="button" @click="toggleAside" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'" :title="isCollapsed ? '展开侧栏' : '收起侧栏'">
-        <span class="aside-toggle__track">
-          <span class="aside-toggle__line"></span>
-          <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
-            <el-icon>
-              <ArrowLeftBold v-if="!isCollapsed" />
-              <ArrowRightBold v-else />
-            </el-icon>
-          </span>
+      <button class="aside-toggle aside-toggle--edge" type="button" @click="toggleAside" :aria-label="isCollapsed ? '展开侧栏' : '收起侧栏'">
+        <span class="aside-toggle__line"></span>
+        <span class="aside-toggle__chevron" :class="{ 'is-collapsed': isCollapsed }">
+          <el-icon>
+            <ArrowLeftBold v-if="!isCollapsed" />
+            <ArrowRightBold v-else />
+          </el-icon>
         </span>
       </button>
     </el-aside>
@@ -319,12 +317,14 @@ async function handleLogout() {
 .aside-toggle {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  color: var(--text-primary);
+  justify-content: center;
+  width: 10px;
+  min-height: 120px;
+  padding: 0;
+  color: var(--text-secondary);
   background: transparent;
   border: 0;
-  border-radius: 14px;
+  border-radius: 999px;
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -336,45 +336,29 @@ async function handleLogout() {
 .aside-toggle--edge {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: 0;
   z-index: 6;
-  width: 38px;
-  height: 112px;
-  min-height: 112px;
-  padding: 0;
-  justify-content: center;
   transform: translateY(-50%);
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  width: 10px;
+  background: transparent;
 }
 
 .aside-toggle:hover {
   color: var(--accent-color);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+  box-shadow: none;
 }
 
 .aside-toggle:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-}
-
-.aside-toggle__track {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 76px;
+  outline: none;
 }
 
 .aside-toggle__line {
   position: absolute;
-  width: 8px;
-  height: 88px;
+  left: 4px;
+  width: 2px;
+  height: 84px;
   border-radius: 999px;
-  background: var(--accent-soft);
+  background: rgba(148, 163, 184, 0.22);
   transition:
     width 0.2s ease,
     height 0.2s ease,
@@ -382,24 +366,17 @@ async function handleLogout() {
     transform 0.2s ease;
 }
 
-.aside-toggle:hover .aside-toggle__line {
-  width: 10px;
-  height: 92px;
-  background: var(--accent-color);
-}
-
 .aside-toggle__chevron {
   position: relative;
-  z-index: 1;
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  color: #ffffff;
-  background: var(--accent-color);
+  width: 10px;
+  height: 10px;
+  margin-left: 0;
+  color: rgba(148, 163, 184, 0.72);
+  background: transparent;
   border-radius: 999px;
-  box-shadow: 0 8px 18px rgba(64, 158, 255, 0.28);
-  transform: none;
+  transform: translateY(0);
   transition:
     color 0.2s ease,
     background-color 0.2s ease,
@@ -407,12 +384,21 @@ async function handleLogout() {
     transform 0.2s ease;
 }
 
+.aside-toggle:hover .aside-toggle__line {
+  background: var(--accent-color);
+}
+
 .aside-toggle:hover .aside-toggle__chevron {
-  box-shadow: 0 10px 22px rgba(64, 158, 255, 0.36);
+  box-shadow: none;
+  color: var(--accent-color);
+}
+
+.aside-toggle :deep(.el-icon) {
+  font-size: 10px;
 }
 
 .aside-toggle__chevron.is-collapsed {
-  transform: none;
+  transform: translateY(0);
 }
 
 .admin-layout__aside.is-collapsed .brand {
