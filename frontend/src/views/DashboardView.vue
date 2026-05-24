@@ -296,6 +296,14 @@ onMounted(() => {
   margin-top: 0 !important;
 }
 
+.dashboard-row--detail {
+  align-items: stretch;
+}
+
+.dashboard-row--detail :deep(.el-col) {
+  display: flex;
+}
+
 .metric-card {
   min-height: 124px;
   border: 1px solid var(--border-color);
@@ -328,6 +336,10 @@ onMounted(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
 }
 
+.dashboard-row--detail .page-card {
+  flex: 1;
+}
+
 .dashboard-card--summary {
   display: flex;
   flex-direction: column;
@@ -337,6 +349,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 100%;
 }
 
 .summary-list {

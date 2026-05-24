@@ -10,6 +10,7 @@ type ExecuteRuleRequest struct {
 	TargetDir         string
 	Options           map[string]bool
 	PackageOptions    map[string]bool
+	CollectOptions    map[string]bool
 	Filters           []string
 }
 

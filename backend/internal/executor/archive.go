@@ -64,10 +64,11 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 	sortEntriesNaturally(entries)
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
+	cleanupSourceAfterArchive := req.PackageOptions["cleanup_source_after_archive"] || req.CollectOptions["cleanup_source_after_archive"]
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() {
-			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, &stats); err != nil {
+			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
@@ -80,6 +81,10 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			s.persistRunHistory(runID, fmt.Sprintf("move file %s failed: %v", entryPath, err), &stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move file %s failed: %v", entryPath, err))
 		}
+	}
+
+	if cleanupSourceAfterArchive {
+		_ = removeDirIfEmpty(sourceDir)
 	}
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
@@ -96,7 +101,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	return stats, nil
 }
 
-func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, stats *executionStats) error {
+func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, seriesPath)
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
@@ -145,7 +150,9 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
-		_ = removeDirIfEmpty(seriesPath)
+		if cleanupSourceAfterArchive {
+			_ = removeDirIfEmpty(seriesPath)
+		}
 		return nil
 	}
 
@@ -153,14 +160,16 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		_ = removeDirIfEmpty(seriesPath)
+		if cleanupSourceAfterArchive {
+			_ = removeDirIfEmpty(seriesPath)
+		}
 		return nil
 	}
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
@@ -175,11 +184,13 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		}
 	}
 
-	_ = removeDirIfEmpty(seriesPath)
+	if cleanupSourceAfterArchive {
+		_ = removeDirIfEmpty(seriesPath)
+	}
 	return nil
 }
 
-func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders bool, stats *executionStats) error {
+func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, volumePath)
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
@@ -228,7 +239,9 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
-		_ = removeDirIfEmpty(volumePath)
+		if cleanupSourceAfterArchive {
+			_ = removeDirIfEmpty(volumePath)
+		}
 		return nil
 	}
 
@@ -236,7 +249,9 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		_ = removeDirIfEmpty(volumePath)
+		if cleanupSourceAfterArchive {
+			_ = removeDirIfEmpty(volumePath)
+		}
 		return nil
 	}
 
@@ -257,7 +272,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 	for _, entry := range entries {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
@@ -272,7 +287,9 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		}
 	}
 
-	_ = removeDirIfEmpty(volumePath)
+	if cleanupSourceAfterArchive {
+		_ = removeDirIfEmpty(volumePath)
+	}
 	return nil
 }
 

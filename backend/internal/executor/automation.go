@@ -167,6 +167,7 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		TargetDir:         rule.TargetDir,
 		Options:           ParseBoolOptionsJSON(rule.OptionsJSON),
 		PackageOptions:    ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		CollectOptions:    ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           ParseStringListJSON(rule.FiltersJSON),
 	})
 }

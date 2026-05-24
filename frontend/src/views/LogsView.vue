@@ -137,7 +137,7 @@ const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const modeFilter = ref<'all' | 'package' | 'collect' | 'cleanup'>('all')
-const logsPageSize = 100
+const logsPageSize = 50
 const logsCurrentPage = ref(1)
 
 const totalLogs = computed(() => historyItems.value.length)

@@ -80,10 +80,22 @@
         </div>
       </template>
 
-      <div class="history-summary">
-        <span>成功 {{ successCount }}</span>
-        <span>跳过 {{ skipCount }}</span>
-        <span>失败 {{ failedCount }}</span>
+      <div class="history-toolbar">
+        <div class="history-summary">
+          <span>成功 {{ successCount }}</span>
+          <span>跳过 {{ skipCount }}</span>
+          <span>失败 {{ failedCount }}</span>
+        </div>
+        <div class="history-search">
+          <el-input
+            v-model="historyKeywordInput"
+            clearable
+            placeholder="关键词搜索（规则名 / 摘要）"
+            @keyup.enter="handleHistorySearch"
+          />
+          <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
+          <el-button @click="resetHistorySearch">重置</el-button>
+        </div>
       </div>
 
       <el-table :data="pagedHistoryItems">
@@ -113,13 +125,13 @@
         </el-table-column>
       </el-table>
 
-      <div v-if="historyItems.length > historyPageSize" class="history-pagination">
+      <div v-if="filteredHistoryItems.length > historyPageSize" class="history-pagination">
         <el-pagination
           v-model:current-page="historyCurrentPage"
           background
           layout="prev, pager, next"
           :page-size="historyPageSize"
-          :total="historyItems.length"
+          :total="filteredHistoryItems.length"
         />
       </div>
     </el-card>
@@ -340,7 +352,7 @@ import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/ru
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
-type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files'
+type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | null
@@ -360,6 +372,7 @@ const collectModeOptions = [
   { key: 'deduplicate_same_name', label: '同名文件去重', description: '遇到重复文件时自动跳过重复项，减少覆盖冲突。' },
   { key: 'keep_latest_only', label: '仅保留最新文件', description: '存在多个版本时优先保留最新文件。' },
   { key: 'collect_related_files', label: '收集关联文件', description: '在收集主文件时同步带上相关说明或附属文件。' },
+  { key: 'cleanup_source_after_archive', label: '成功后清理源文件夹', description: '收集成功后清理已处理目录中的空文件夹，保持源目录整洁。' },
 ] as const
 
 const cleanupModeOptions = [
@@ -372,7 +385,7 @@ function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
-  return { recursive_collect: true, deduplicate_same_name: true, keep_latest_only: false, collect_related_files: true }
+  return { recursive_collect: true, deduplicate_same_name: true, keep_latest_only: false, collect_related_files: true, cleanup_source_after_archive: false }
 }
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
@@ -450,8 +463,10 @@ const editingPurifyRuleID = ref<number | null>(null)
 const directoryPickerVisible = ref(false)
 const directoryPickerInitialPath = ref('')
 const directoryPickerTarget = ref<DirectoryPickerTarget>(null)
-const historyPageSize = 100
+const historyPageSize = 50
 const historyCurrentPage = ref(1)
+const historyKeywordInput = ref('')
+const historyKeyword = ref('')
 
 const rules = ref<RuleItem[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
@@ -461,13 +476,28 @@ const purifyRules = computed(() => rules.value.filter((item) => item.archive_mod
 const successCount = computed(() => historyItems.value.filter((item) => item.status === 'success').length)
 const skipCount = computed(() => historyItems.value.filter((item) => item.status === 'skip').length)
 const failedCount = computed(() => historyItems.value.filter((item) => item.status === 'failed').length)
+const filteredHistoryItems = computed(() => {
+  const keyword = historyKeyword.value.trim().toLowerCase()
+  if (!keyword) {
+    return historyItems.value
+  }
+
+  return historyItems.value.filter((item) => {
+    const searchableText = [item.rule_name, item.summary, item.status, item.archive_mode, item.trigger_mode]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+
+    return searchableText.includes(keyword)
+  })
+})
 const pagedHistoryItems = computed(() => {
   const start = (historyCurrentPage.value - 1) * historyPageSize
-  return historyItems.value.slice(start, start + historyPageSize)
+  return filteredHistoryItems.value.slice(start, start + historyPageSize)
 })
 
 watch(
-  () => historyItems.value.length,
+  () => filteredHistoryItems.value.length,
   (length) => {
     const maxPage = Math.max(1, Math.ceil(length / historyPageSize))
     if (historyCurrentPage.value > maxPage) {
@@ -475,6 +505,10 @@ watch(
     }
   },
 )
+
+watch(historyKeyword, () => {
+  historyCurrentPage.value = 1
+})
 
 const createForm = reactive({
   name: '',
@@ -698,6 +732,16 @@ async function loadHistory() {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败'
   }
+}
+
+function handleHistorySearch() {
+  historyKeyword.value = historyKeywordInput.value.trim()
+}
+
+function resetHistorySearch() {
+  historyKeywordInput.value = ''
+  historyKeyword.value = ''
+  historyCurrentPage.value = 1
 }
 
 async function submitCreateRule() {
@@ -974,7 +1018,10 @@ onMounted(() => {
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
 .history-actions { display: flex; gap: 8px; }
-.history-summary { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 12px; color: var(--el-text-color-secondary); }
+.history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.history-summary { display: flex; flex-wrap: wrap; gap: 12px; color: var(--el-text-color-secondary); }
+.history-search { display: flex; align-items: center; gap: 8px; }
+.history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
@@ -1015,4 +1062,10 @@ onMounted(() => {
 .mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
 .mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+
+@media (max-width: 900px) {
+  .history-toolbar { flex-direction: column; align-items: stretch; }
+  .history-search { flex-wrap: wrap; }
+  .history-search :deep(.el-input) { width: 100%; }
+}
 </style>

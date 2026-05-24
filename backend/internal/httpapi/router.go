@@ -635,6 +635,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		TargetDir:         rule.TargetDir,
 		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 	})
 	if err != nil {
@@ -656,6 +657,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		TargetDir:         rule.TargetDir,
 		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 	})
 	if err != nil {
