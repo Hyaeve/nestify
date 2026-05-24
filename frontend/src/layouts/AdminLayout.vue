@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.9.1</div>
+          <div class="brand__version">V0.9.2</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -399,11 +399,16 @@ async function handleLogout() {
   width: 18px;
   height: 84px;
   font-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .aside-toggle :deep(.el-icon svg) {
   width: 18px;
-  height: 84px;
+  height: 18px;
+  transform: scaleY(4.25);
+  transform-origin: center;
 }
 
 .aside-toggle__chevron.is-collapsed :deep(.el-icon svg) {

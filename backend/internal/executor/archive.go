@@ -110,12 +110,17 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 
 	sortEntriesNaturally(entries)
 	files := make([]os.DirEntry, 0, len(entries))
+	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
 	allImages := true
 	for _, entry := range entries {
 		if entry.IsDir() {
 			hasSubdirs = true
 			allImages = false
+			continue
+		}
+		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
+			coverFiles = append(coverFiles, entry)
 			continue
 		}
 		files = append(files, entry)
@@ -129,14 +134,26 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if err != nil {
 			return err
 		}
-		if err := os.RemoveAll(seriesPath); err != nil {
-			return fmt.Errorf("remove packed source directory: %w", err)
+		if err := removePackedSourceFiles(seriesPath, files); err != nil {
+			return fmt.Errorf("remove packed source files: %w", err)
+		}
+		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
+			return err
 		}
 		stats.ProcessedFiles += len(files)
 		stats.SuccessCount++
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
+		_ = removeDirIfEmpty(seriesPath)
+		return nil
+	}
+
+	if archiveMode == "package" && !hasSubdirs && len(files) == 0 && len(coverFiles) > 0 {
+		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
+			return err
+		}
+		_ = removeDirIfEmpty(seriesPath)
 		return nil
 	}
 
@@ -176,12 +193,17 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 
 	sortEntriesNaturally(entries)
 	files := make([]os.DirEntry, 0, len(entries))
+	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
 	allImages := true
 	for _, entry := range entries {
 		if entry.IsDir() {
 			hasSubdirs = true
 			allImages = false
+			continue
+		}
+		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
+			coverFiles = append(coverFiles, entry)
 			continue
 		}
 		files = append(files, entry)
@@ -195,14 +217,26 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		if err != nil {
 			return err
 		}
-		if err := os.RemoveAll(volumePath); err != nil {
-			return fmt.Errorf("remove packed source directory: %w", err)
+		if err := removePackedSourceFiles(volumePath, files); err != nil {
+			return fmt.Errorf("remove packed source files: %w", err)
+		}
+		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
+			return err
 		}
 		stats.ProcessedFiles += len(files)
 		stats.SuccessCount++
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
+		_ = removeDirIfEmpty(volumePath)
+		return nil
+	}
+
+	if archiveMode == "package" && !hasSubdirs && len(files) == 0 && len(coverFiles) > 0 {
+		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
+			return err
+		}
+		_ = removeDirIfEmpty(volumePath)
 		return nil
 	}
 
@@ -257,6 +291,27 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir string, stats *exec
 	stats.MovedFiles++
 	s.persistRunHistory(runID, fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath))
+	return nil
+}
+
+func (s *Service) moveCoverFiles(runID, basePath string, files []os.DirEntry, targetDir string, stats *executionStats) error {
+	for _, entry := range files {
+		sourcePath := filepath.Join(basePath, entry.Name())
+		if err := s.moveLooseFile(runID, sourcePath, targetDir, stats); err != nil {
+			return fmt.Errorf("move cover file %s: %w", sourcePath, err)
+		}
+	}
+
+	return nil
+}
+
+func removePackedSourceFiles(basePath string, files []os.DirEntry) error {
+	for _, entry := range files {
+		if err := os.Remove(filepath.Join(basePath, entry.Name())); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -488,4 +543,13 @@ func isImageFile(name string) bool {
 	default:
 		return false
 	}
+}
+
+func isCoverImageFile(name string) bool {
+	if !isImageFile(name) {
+		return false
+	}
+
+	baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(name)), filepath.Ext(name))
+	return strings.Contains(baseName, "cover")
 }

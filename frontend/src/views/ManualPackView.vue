@@ -907,12 +907,14 @@ onBeforeUnmount(() => {
 
 .path-row__crumb {
   position: relative;
-  padding: 0;
+  padding: 4px 8px;
   font-size: 16px;
   color: #6b7280;
   background: transparent;
   border: 0;
+  border-radius: 8px;
   cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 
 .path-row__crumb::after {
@@ -921,9 +923,15 @@ onBeforeUnmount(() => {
   color: #c0c4cc;
 }
 
+.path-row__crumb:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
 .path-row__crumb.is-current {
-  color: var(--text-primary);
+  color: var(--el-color-primary);
   font-weight: 600;
+  background: var(--el-color-primary-light-9);
 }
 
 .path-row__crumb:last-child::after {
@@ -944,14 +952,20 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 0;
+  padding: 8px 10px;
   text-align: left;
   background: transparent;
   border: 0;
+  border-radius: 12px;
+  transition: background-color 0.2s ease;
 }
 
 .entry-name.is-dir {
   cursor: pointer;
+}
+
+.entry-name:hover {
+  background: var(--el-color-primary-light-9);
 }
 
 .entry-name__icon {
@@ -968,6 +982,7 @@ onBeforeUnmount(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+  transition: color 0.2s ease;
 }
 
 .entry-name.is-dir .entry-name__title {
@@ -978,6 +993,12 @@ onBeforeUnmount(() => {
   margin-top: 4px;
   color: var(--text-secondary);
   font-size: 12px;
+  transition: color 0.2s ease;
+}
+
+.entry-name:hover .entry-name__title,
+.entry-name:hover .entry-name__path {
+  color: var(--el-color-primary);
 }
 
 .entry-actions {

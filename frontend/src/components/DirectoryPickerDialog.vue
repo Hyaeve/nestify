@@ -289,10 +289,27 @@ async function confirmSelection() {
 
 .picker-tree__label {
   color: var(--el-text-color-primary);
+  line-height: 1.4;
 }
 
 .picker-tree__path {
   color: var(--el-text-color-secondary);
   font-size: 12px;
+  line-height: 1.4;
+}
+
+.picker-tree :deep(.el-tree-node__content) {
+  height: auto;
+  min-height: 44px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.picker-tree :deep(.el-tree-node__expand-icon) {
+  margin-top: 8px;
+}
+
+.picker-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background-color: var(--el-color-primary-light-9);
 }
 </style>
