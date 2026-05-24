@@ -59,7 +59,7 @@
           <span v-if="searchKeyword">关键字：{{ searchKeyword }}</span>
         </div>
 
-        <el-table v-loading="loading" :data="filteredItems" border stripe class="logs-table" empty-text="暂无任务日志">
+        <el-table v-loading="loading" :data="pagedFilteredItems" border stripe class="logs-table" empty-text="暂无任务日志">
           <el-table-column label="时间" min-width="180">
             <template #default="scope">
               {{ formatDateTime(scope.row.started_at) }}
@@ -110,13 +110,23 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <div v-if="filteredItems.length > logsPageSize" class="logs-pagination">
+          <el-pagination
+            v-model:current-page="logsCurrentPage"
+            background
+            layout="prev, pager, next"
+            :page-size="logsPageSize"
+            :total="filteredItems.length"
+          />
+        </div>
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
@@ -127,6 +137,8 @@ const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const modeFilter = ref<'all' | 'package' | 'collect' | 'cleanup'>('all')
+const logsPageSize = 100
+const logsCurrentPage = ref(1)
 
 const totalLogs = computed(() => historyItems.value.length)
 
@@ -177,11 +189,31 @@ const filteredItems = computed(() => {
   })
 })
 
+const pagedFilteredItems = computed(() => {
+  const start = (logsCurrentPage.value - 1) * logsPageSize
+  return filteredItems.value.slice(start, start + logsPageSize)
+})
+
+watch([statusFilter, modeFilter, searchKeyword], () => {
+  logsCurrentPage.value = 1
+})
+
+watch(
+  () => filteredItems.value.length,
+  (length) => {
+    const maxPage = Math.max(1, Math.ceil(length / logsPageSize))
+    if (logsCurrentPage.value > maxPage) {
+      logsCurrentPage.value = maxPage
+    }
+  },
+)
+
 async function loadHistory() {
   loading.value = true
   try {
     const response = await fetchRunHistory()
     historyItems.value = response.data?.items ?? []
+    logsCurrentPage.value = 1
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '任务日志加载失败')
   } finally {
@@ -198,6 +230,7 @@ function resetFilters() {
   searchKeyword.value = ''
   statusFilter.value = 'all'
   modeFilter.value = 'all'
+  logsCurrentPage.value = 1
 }
 
 async function handleClearHistory() {
@@ -211,6 +244,7 @@ async function handleClearHistory() {
     await clearRunHistory()
     historyItems.value = []
     resetFilters()
+    logsCurrentPage.value = 1
     ElMessage.success('任务日志已清空')
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
@@ -355,6 +389,11 @@ onMounted(() => {
   gap: 16px;
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.logs-pagination {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .logs-table :deep(.el-table__cell) {

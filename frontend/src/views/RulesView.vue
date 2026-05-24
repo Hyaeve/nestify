@@ -18,16 +18,11 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="archiveRules">
+        <el-table v-loading="loading" :data="archiveRules">
         <el-table-column prop="name" label="规则名称" min-width="140" />
         <el-table-column label="模式" width="100">
           <template #default="scope">
-            <el-tag type="info" effect="plain">{{ scope.row.archive_mode === 'package' ? 'CBZ' : '普通' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="整理方式" width="100">
-          <template #default="scope">
-            <el-tag effect="plain">{{ scope.row.archive_mode === 'package' ? '打包' : '移动' }}</el-tag>
+            <el-tag type="info" effect="plain">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="执行模式" width="110">
@@ -49,11 +44,25 @@
             <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right" align="center">
           <template #default="scope">
-            <el-button link type="primary" @click="openEditDialog(scope.row.id)">编辑</el-button>
-            <el-button link type="success" @click="prepareExecution(scope.row.id)">整理</el-button>
-            <el-button link type="danger" @click="removeRule(scope.row.id)">删除</el-button>
+            <div class="rule-actions">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link class="rule-action rule-action--primary" @click="openEditDialog(scope.row.id)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="整理" placement="top">
+                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
+                  <el-icon><Operation /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -77,7 +86,7 @@
         <span>失败 {{ failedCount }}</span>
       </div>
 
-      <el-table :data="historyItems">
+      <el-table :data="pagedHistoryItems">
         <el-table-column label="规则 / 摘要" min-width="360">
           <template #default="scope">
             <div class="history-rule">
@@ -99,10 +108,20 @@
         </el-table-column>
         <el-table-column label="操作" width="90">
           <template #default="scope">
-            <el-button link type="danger" @click="removeHistoryItem(scope.$index)">删除</el-button>
+            <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+
+      <div v-if="historyItems.length > historyPageSize" class="history-pagination">
+        <el-pagination
+          v-model:current-page="historyCurrentPage"
+          background
+          layout="prev, pager, next"
+          :page-size="historyPageSize"
+          :total="historyItems.length"
+        />
+      </div>
     </el-card>
 
     <el-card v-show="activeTab === 'purify'" class="page-card rules-card">
@@ -116,7 +135,7 @@
         </div>
       </template>
 
-      <el-table v-if="purifyRules.length" v-loading="loading" :data="purifyRules">
+        <el-table v-if="purifyRules.length" v-loading="loading" :data="purifyRules">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="100">
           <template #default>
@@ -149,11 +168,25 @@
             <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right" align="center">
           <template #default="scope">
-            <el-button link type="primary" @click="openEditPurifyDialog(scope.row.id)">编辑</el-button>
-            <el-button link type="success" @click="prepareExecution(scope.row.id)">净化</el-button>
-            <el-button link type="danger" @click="removeRule(scope.row.id)">删除</el-button>
+            <div class="rule-actions">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link class="rule-action rule-action--primary" @click="openEditPurifyDialog(scope.row.id)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="净化" placement="top">
+                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
+                  <el-icon><Operation /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -295,6 +328,7 @@
 </template>
 
 <script setup lang="ts">
+import { Delete, Edit, Operation } from '@element-plus/icons-vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -416,6 +450,8 @@ const editingPurifyRuleID = ref<number | null>(null)
 const directoryPickerVisible = ref(false)
 const directoryPickerInitialPath = ref('')
 const directoryPickerTarget = ref<DirectoryPickerTarget>(null)
+const historyPageSize = 100
+const historyCurrentPage = ref(1)
 
 const rules = ref<RuleItem[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
@@ -425,6 +461,20 @@ const purifyRules = computed(() => rules.value.filter((item) => item.archive_mod
 const successCount = computed(() => historyItems.value.filter((item) => item.status === 'success').length)
 const skipCount = computed(() => historyItems.value.filter((item) => item.status === 'skip').length)
 const failedCount = computed(() => historyItems.value.filter((item) => item.status === 'failed').length)
+const pagedHistoryItems = computed(() => {
+  const start = (historyCurrentPage.value - 1) * historyPageSize
+  return historyItems.value.slice(start, start + historyPageSize)
+})
+
+watch(
+  () => historyItems.value.length,
+  (length) => {
+    const maxPage = Math.max(1, Math.ceil(length / historyPageSize))
+    if (historyCurrentPage.value > maxPage) {
+      historyCurrentPage.value = maxPage
+    }
+  },
+)
 
 const createForm = reactive({
   name: '',
@@ -644,6 +694,7 @@ async function loadRules() {
 async function loadHistory() {
   try {
     historyItems.value = (await fetchRunHistory()).data?.items ?? []
+    historyCurrentPage.value = 1
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败'
   }
@@ -871,6 +922,7 @@ async function prepareExecution(ruleID: number) {
         updated_at: run.updated_at,
         finished_at: run.finished_at,
       })
+      historyCurrentPage.value = 1
     }
 
     ElMessage.success('规则执行完成')
@@ -898,10 +950,11 @@ async function removeRule(id: number) {
 
 function clearHistory(status: HistoryStatus) {
   historyItems.value = historyItems.value.filter((item) => item.status !== status)
+  historyCurrentPage.value = 1
 }
 
-function removeHistoryItem(index: number) {
-  historyItems.value.splice(index, 1)
+function removeHistoryItem(id: string) {
+  historyItems.value = historyItems.value.filter((item) => item.id !== id)
 }
 
 onMounted(() => {
@@ -922,6 +975,7 @@ onMounted(() => {
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
 .history-actions { display: flex; gap: 8px; }
 .history-summary { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 12px; color: var(--el-text-color-secondary); }
+.history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
 .history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
@@ -929,6 +983,12 @@ onMounted(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
+.rule-actions { display: inline-flex; align-items: center; gap: 8px; }
+.rule-action { padding: 4px; font-size: 18px; }
+.rule-action--primary { color: var(--el-color-primary); }
+.rule-action--success { color: var(--el-color-success); }
+.rule-action--danger { color: var(--el-color-danger); }
+.rule-action:hover { transform: translateY(-1px); }
 .archive-mode-group {
   display: inline-flex;
   width: auto;

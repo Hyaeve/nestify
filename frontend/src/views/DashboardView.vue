@@ -44,50 +44,85 @@
         </el-card>
       </el-col>
       <el-col :span="10">
-        <el-card class="page-card resource-card resource-card--vertical">
-          <h3 class="page-section-title">系统资源</h3>
+        <div class="dashboard-side-stack">
+          <el-card class="page-card resource-card resource-card--compact">
+            <h3 class="page-section-title">系统资源</h3>
 
-          <div class="resource-stack">
-            <div class="resource-line">
-              <div class="resource-line__head">
-                <span class="resource-line__title">CPU {{ formatPercentage(systemResource?.cpu_usage) }}</span>
-                <span class="resource-line__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
+            <div class="resource-stack">
+              <div class="resource-line">
+                <div class="resource-line__head">
+                  <span class="resource-line__title">CPU {{ formatPercentage(systemResource?.cpu_usage) }}</span>
+                  <span class="resource-line__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
+                </div>
+                <el-progress :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" />
               </div>
-              <el-progress :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" />
-            </div>
 
-            <div class="resource-line">
-              <div class="resource-line__head">
-                <span class="resource-line__title">内存 {{ formatPercentage(systemResource?.memory_usage) }}</span>
-                <span class="resource-line__desc">{{ formatMemorySummary }}</span>
+              <div class="resource-line">
+                <div class="resource-line__head">
+                  <span class="resource-line__title">内存 {{ formatPercentage(systemResource?.memory_usage) }}</span>
+                  <span class="resource-line__desc">{{ formatMemorySummary }}</span>
+                </div>
+                <el-progress :percentage="systemResource?.memory_usage ?? 0" :show-text="false" color="#409eff" />
               </div>
-              <el-progress :percentage="systemResource?.memory_usage ?? 0" :show-text="false" color="#409eff" />
+
+              <div class="resource-kv">
+                <span class="resource-kv__label">Nestify 内存占用</span>
+                <span class="resource-kv__value resource-kv__value--primary">{{ systemResource?.nestify_memory || '0 B' }}</span>
+              </div>
+
+              <div class="resource-kv">
+                <span class="resource-kv__label">运行时间</span>
+                <span class="resource-kv__value">{{ systemResource?.uptime || '0分' }}</span>
+              </div>
+
+              <div class="resource-kv">
+                <span class="resource-kv__label">服务标识</span>
+                <span class="resource-kv__value">{{ healthService }}</span>
+              </div>
             </div>
 
-            <div class="resource-kv">
-              <span class="resource-kv__label">Nestify 内存占用</span>
-              <span class="resource-kv__value resource-kv__value--primary">{{ systemResource?.nestify_memory || '0 B' }}</span>
+            <el-alert
+              v-if="healthError"
+              class="resource-card__alert"
+              type="error"
+              :closable="false"
+              :title="healthError"
+            />
+          </el-card>
+
+          <el-card class="page-card dashboard-card task-preview-card">
+            <div class="task-preview-card__header">
+              <h3 class="page-section-title">进行中任务预览</h3>
+              <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="plain" size="small">
+                {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
+              </el-tag>
             </div>
 
-            <div class="resource-kv">
-              <span class="resource-kv__label">运行时间</span>
-              <span class="resource-kv__value">{{ systemResource?.uptime || '0分' }}</span>
+            <div v-if="runningPreviewItems.length" class="task-preview-list">
+              <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
+                <div class="task-preview-item__header">
+                  <div>
+                    <div class="task-preview-item__name">{{ item.name }}</div>
+                    <div class="task-preview-item__meta">{{ archiveModeText(item.archive_mode) }} · {{ runModeText(item.run_mode) }}</div>
+                  </div>
+                  <el-tag type="warning" effect="plain" size="small">进行中</el-tag>
+                </div>
+
+                <el-progress :percentage="estimateProgress(item)" :stroke-width="8" :show-text="false" status="success" />
+
+                <div class="task-preview-item__stats">
+                  <span>成功 {{ item.last_success_count }}</span>
+                  <span>跳过 {{ item.last_skip_count }}</span>
+                  <span>失败 {{ item.last_failure_count }}</span>
+                </div>
+
+                <div class="task-preview-item__path" :title="item.source_dir">{{ item.source_dir || '未配置源路径' }}</div>
+              </div>
             </div>
 
-            <div class="resource-kv">
-              <span class="resource-kv__label">服务标识</span>
-              <span class="resource-kv__value">{{ healthService }}</span>
-            </div>
-          </div>
-
-          <el-alert
-            v-if="healthError"
-            class="resource-card__alert"
-            type="error"
-            :closable="false"
-            :title="healthError"
-          />
-        </el-card>
+            <el-empty v-else class="task-preview-empty" description="当前没有正在执行的规则任务" />
+          </el-card>
+        </div>
       </el-col>
     </el-row>
   </div>
@@ -127,6 +162,7 @@ const formatMemorySummary = computed(() => {
 
 const totalRuleCount = computed(() => rules.value.length)
 const enabledRuleCount = computed(() => rules.value.filter((item) => item.enabled).length)
+const runningPreviewItems = computed(() => rules.value.filter((item) => item.last_run_status === 'running').slice(0, 3))
 
 const todayRunCount = computed(() => {
   const today = new Date()
@@ -175,6 +211,27 @@ function formatPercentage(value?: number) {
   }
 
   return `${value.toFixed(1)}%`
+}
+
+function archiveModeText(mode: RuleItem['archive_mode']) {
+  if (mode === 'package') return '打包'
+  if (mode === 'collect') return '收集'
+  return '清理'
+}
+
+function runModeText(mode: RuleItem['run_mode']) {
+  if (mode === 'watch') return '监听模式'
+  if (mode === 'cron') return '定时模式'
+  return '手动模式'
+}
+
+function estimateProgress(item: RuleItem) {
+  const total = item.last_success_count + item.last_skip_count + item.last_failure_count
+  if (total <= 0) {
+    return 12
+  }
+
+  return Math.min(92, Math.max(18, total % 100))
 }
 
 async function loadHealth() {
@@ -276,6 +333,12 @@ onMounted(() => {
   flex-direction: column;
 }
 
+.dashboard-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .summary-list {
   display: flex;
   flex-direction: column;
@@ -322,6 +385,10 @@ onMounted(() => {
 
 .resource-card--vertical {
   min-height: 360px;
+}
+
+.resource-card--compact {
+  min-height: 280px;
 }
 
 .resource-stack {
@@ -381,6 +448,81 @@ onMounted(() => {
 
 .resource-card__alert {
   margin-top: 16px;
+}
+
+.task-preview-card {
+  min-height: 220px;
+}
+
+.task-preview-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.task-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-preview-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.task-preview-item__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.task-preview-item__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.task-preview-item__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.task-preview-item__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.task-preview-item__path {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-preview-empty {
+  min-height: 180px;
+}
+
+@media (max-width: 1280px) {
+  .dashboard-row--detail :deep(.el-col) {
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
 }
 
 :deep(.el-card__body) {

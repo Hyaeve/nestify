@@ -38,7 +38,6 @@
         :data="treeData"
         :props="treeProps"
         lazy
-        highlight-current
         :expand-on-click-node="false"
         :load="loadNode"
         @node-click="handleNodeClick"
@@ -46,7 +45,6 @@
         <template #default="{ data }">
           <div class="picker-tree__node">
             <span class="picker-tree__label">{{ data.label }}</span>
-            <span class="picker-tree__path">{{ data.path }}</span>
           </div>
         </template>
       </el-tree>
@@ -281,10 +279,9 @@ async function confirmSelection() {
 
 .picker-tree__node {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
   min-width: 0;
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 .picker-tree__label {
@@ -292,24 +289,14 @@ async function confirmSelection() {
   line-height: 1.4;
 }
 
-.picker-tree__path {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
 .picker-tree :deep(.el-tree-node__content) {
   height: auto;
-  min-height: 44px;
-  align-items: flex-start;
+  min-height: 36px;
+  align-items: center;
   padding: 4px 0;
 }
 
 .picker-tree :deep(.el-tree-node__expand-icon) {
-  margin-top: 8px;
-}
-
-.picker-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background-color: var(--el-color-primary-light-9);
+  margin-top: 0;
 }
 </style>
