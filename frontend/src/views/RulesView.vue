@@ -3,7 +3,7 @@
     <div class="rules-tabs">
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="activeTab = 'rules'">归档规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="activeTab = 'purify'">净化规则</button>
-      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="activeTab = 'history'">归档历史</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="activeTab = 'history'">归巢历史</button>
     </div>
 
     <el-alert v-if="errorMessage" :closable="false" type="error" :title="errorMessage" class="rules-error" />
@@ -62,7 +62,7 @@
     <el-card v-show="activeTab === 'history'" class="page-card history-card">
       <template #header>
         <div class="rules-card__header">
-          <div class="rules-card__title">归档历史</div>
+          <div class="rules-card__title">归巢历史</div>
           <div class="history-actions">
             <el-button type="success" plain @click="clearHistory('success')">删除成功</el-button>
             <el-button type="warning" plain @click="clearHistory('skip')">删除跳过</el-button>

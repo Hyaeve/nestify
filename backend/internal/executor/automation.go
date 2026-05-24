@@ -156,13 +156,16 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 
 func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 	_, _ = s.PrepareRuleRun(ExecuteRuleRequest{
-		RuleID:         rule.ID,
-		RuleName:       rule.Name,
-		ArchiveMode:    rule.ArchiveMode,
-		TriggerMode:    triggerMode,
-		SourceDir:      rule.SourceDir,
-		TargetDir:      rule.TargetDir,
-		PackageOptions: ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		RuleID:            rule.ID,
+		RuleName:          rule.Name,
+		ArchiveMode:       rule.ArchiveMode,
+		TriggerMode:       triggerMode,
+		CompatibilityMode: rule.CompatibilityMode,
+		SourceDir:         rule.SourceDir,
+		TargetDir:         rule.TargetDir,
+		Options:           ParseBoolOptionsJSON(rule.OptionsJSON),
+		PackageOptions:    ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		Filters:           ParseStringListJSON(rule.FiltersJSON),
 	})
 }
 

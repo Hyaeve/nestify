@@ -60,7 +60,7 @@ func (s *Service) ListHistory() []model.RunHistoryItem {
 
 func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
 	archiveMode := strings.TrimSpace(req.ArchiveMode)
-	if archiveMode != "package" && archiveMode != "collect" {
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" {
 		return nil, fmt.Errorf("unsupported archive mode: %s", archiveMode)
 	}
 
@@ -231,6 +231,29 @@ func ParseBoolOptionsJSON(raw string) map[string]bool {
 	}
 
 	return parsed
+}
+
+func ParseStringListJSON(raw string) []string {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "[]" || value == "{}" {
+		return []string{}
+	}
+
+	parsed := make([]string, 0)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return []string{}
+	}
+
+	items := make([]string, 0, len(parsed))
+	for _, item := range parsed {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		items = append(items, trimmed)
+	}
+
+	return items
 }
 
 func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {

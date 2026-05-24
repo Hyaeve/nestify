@@ -41,8 +41,10 @@ type CreateRuleInput struct {
 	WatchDebounceMS   int             `json:"watch_debounce_ms"`
 	CronExpression    string          `json:"cron_expression"`
 	RunOnStart        *bool           `json:"run_on_start"`
+	Options           map[string]bool `json:"options"`
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
+	Filters           []string        `json:"filters"`
 }
 
 type UpdateRuleInput struct {
@@ -58,6 +60,8 @@ type UpdateRuleInput struct {
 	WatchDebounceMS   int             `json:"watch_debounce_ms"`
 	CronExpression    string          `json:"cron_expression"`
 	RunOnStart        *bool           `json:"run_on_start"`
+	Options           map[string]bool `json:"options"`
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
+	Filters           []string        `json:"filters"`
 }

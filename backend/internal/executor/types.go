@@ -1,13 +1,16 @@
 package executor
 
 type ExecuteRuleRequest struct {
-	RuleID         int64
-	RuleName       string
-	ArchiveMode    string
-	TriggerMode    string
-	SourceDir      string
-	TargetDir      string
-	PackageOptions map[string]bool
+	RuleID            int64
+	RuleName          string
+	ArchiveMode       string
+	TriggerMode       string
+	CompatibilityMode string
+	SourceDir         string
+	TargetDir         string
+	Options           map[string]bool
+	PackageOptions    map[string]bool
+	Filters           []string
 }
 
 type PreparedMode struct {

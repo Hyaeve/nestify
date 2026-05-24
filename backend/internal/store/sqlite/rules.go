@@ -92,10 +92,10 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		defaultInt(input.WatchDebounceMS, 2000),
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
-		`{}`,
+		marshalBoolMap(input.Options),
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
-		`{}`,
+		marshalStringList(input.Filters),
 		now.Format(time.RFC3339),
 		now.Format(time.RFC3339),
 	)
@@ -127,8 +127,10 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    watch_debounce_ms = ?,
 		    cron_expression = ?,
 		    run_on_start = ?,
+		    options_json = ?,
 		    package_options_json = ?,
 		    collect_options_json = ?,
+		    filters_json = ?,
 		    updated_at = ?
 		WHERE id = ?
 	`,
@@ -144,8 +146,10 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		defaultInt(input.WatchDebounceMS, 2000),
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
+		marshalBoolMap(input.Options),
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
+		marshalStringList(input.Filters),
 		now.Format(time.RFC3339),
 		id,
 	)
@@ -223,6 +227,31 @@ func marshalBoolMap(value map[string]bool) string {
 	encoded, err := json.Marshal(value)
 	if err != nil {
 		return `{}`
+	}
+
+	return string(encoded)
+}
+
+func marshalStringList(value []string) string {
+	if len(value) == 0 {
+		return `[]`
+	}
+
+	items := make([]string, 0, len(value))
+	for _, item := range value {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		items = append(items, trimmed)
+	}
+	if len(items) == 0 {
+		return `[]`
+	}
+
+	encoded, err := json.Marshal(items)
+	if err != nil {
+		return `[]`
 	}
 
 	return string(encoded)

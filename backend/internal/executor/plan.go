@@ -18,6 +18,13 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 			TargetDir:   req.TargetDir,
 			Summary:     "collect mode skeleton prepared",
 		}, nil
+	case "cleanup":
+		return &PreparedMode{
+			ArchiveMode: req.ArchiveMode,
+			SourceDir:   req.SourceDir,
+			TargetDir:   req.TargetDir,
+			Summary:     "cleanup mode skeleton prepared",
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported archive mode: %s", req.ArchiveMode)
 	}

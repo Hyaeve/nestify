@@ -612,13 +612,16 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 	}
 
 	prepared, err := executor.PrepareMode(executor.ExecuteRuleRequest{
-		RuleID:         rule.ID,
-		RuleName:       rule.Name,
-		ArchiveMode:    rule.ArchiveMode,
-		TriggerMode:    input.TriggerMode,
-		SourceDir:      rule.SourceDir,
-		TargetDir:      rule.TargetDir,
-		PackageOptions: executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		RuleID:            rule.ID,
+		RuleName:          rule.Name,
+		ArchiveMode:       rule.ArchiveMode,
+		TriggerMode:       input.TriggerMode,
+		CompatibilityMode: rule.CompatibilityMode,
+		SourceDir:         rule.SourceDir,
+		TargetDir:         rule.TargetDir,
+		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 	})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
@@ -630,13 +633,16 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 	}
 
 	run, err := a.executor.PrepareRuleRun(executor.ExecuteRuleRequest{
-		RuleID:         rule.ID,
-		RuleName:       rule.Name,
-		ArchiveMode:    rule.ArchiveMode,
-		TriggerMode:    input.TriggerMode,
-		SourceDir:      rule.SourceDir,
-		TargetDir:      rule.TargetDir,
-		PackageOptions: executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		RuleID:            rule.ID,
+		RuleName:          rule.Name,
+		ArchiveMode:       rule.ArchiveMode,
+		TriggerMode:       input.TriggerMode,
+		CompatibilityMode: rule.CompatibilityMode,
+		SourceDir:         rule.SourceDir,
+		TargetDir:         rule.TargetDir,
+		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
+		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 	})
 	if err != nil {
 		writeInternalError(w, err)
@@ -1128,7 +1134,8 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	if strings.TrimSpace(sourceDir) == "" {
 		return errors.New("source_dir is required")
 	}
-	if strings.TrimSpace(targetDir) == "" {
+	archiveMode = strings.TrimSpace(archiveMode)
+	if archiveMode != "cleanup" && strings.TrimSpace(targetDir) == "" {
 		return errors.New("target_dir is required")
 	}
 
@@ -1140,9 +1147,8 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		return errors.New("compatibility_mode must be local or compatibility")
 	}
 
-	archiveMode = strings.TrimSpace(archiveMode)
-	if archiveMode != "package" && archiveMode != "collect" {
-		return errors.New("archive_mode must be package or collect")
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" {
+		return errors.New("archive_mode must be package, collect, or cleanup")
 	}
 
 	runMode = strings.TrimSpace(runMode)
