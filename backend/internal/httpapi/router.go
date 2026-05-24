@@ -738,25 +738,36 @@ func (a *apiHandler) handleRunLogs(w http.ResponseWriter, runID string) {
 }
 
 func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeMethodNotAllowed(w)
-		return
-	}
-
 	if !a.requireSession(w, r) {
 		return
 	}
 
-	items := a.executor.ListHistory()
-	writeJSON(w, http.StatusOK, jsonResponse{
-		Success: true,
-		Code:    "OK",
-		Message: "Run history loaded",
-		Data: map[string]any{
-			"items": items,
-			"total": len(items),
-		},
-	})
+	switch r.Method {
+	case http.MethodGet:
+		items := a.executor.ListHistory()
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Run history loaded",
+			Data: map[string]any{
+				"items": items,
+				"total": len(items),
+			},
+		})
+	case http.MethodDelete:
+		if err := a.executor.ClearHistory(); err != nil {
+			writeInternalError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Run history cleared",
+		})
+	default:
+		writeMethodNotAllowed(w)
+	}
 }
 
 func registerStaticRoutes(mux *http.ServeMux, webDir string) {

@@ -91,6 +91,14 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	return items, nil
 }
 
+func (s *Store) ClearRunHistory() error {
+	if _, err := s.db.Exec(`DELETE FROM run_history`); err != nil {
+		return fmt.Errorf("clear run history: %w", err)
+	}
+
+	return nil
+}
+
 type runHistoryScanner interface {
 	Scan(dest ...any) error
 }

@@ -1,138 +1,128 @@
 <template>
   <div class="file-manager-view" @click="hideContextMenu">
     <el-card class="page-card file-manager-card">
-      <template #header>
-        <div class="file-manager-card__header">
-          <div class="file-manager-card__breadcrumb-wrap">
-            <div class="file-manager-card__title-line">
-              <span class="file-manager-card__crumb">首页</span>
-              <span class="file-manager-card__divider">/</span>
-              <span class="file-manager-card__crumb file-manager-card__crumb--active">文件管理</span>
-            </div>
+      <div class="file-manager-card__content">
+        <el-alert
+          v-if="errorMessage"
+          class="file-manager-card__alert"
+          type="error"
+          :closable="false"
+          :title="errorMessage"
+        />
+
+        <div class="toolbar-row">
+          <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
+          <el-button type="primary" @click="triggerUpload">上传</el-button>
+          <el-button :loading="loading" @click="reloadEntries">刷新</el-button>
+          <span class="toolbar-row__split" />
+          <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
+          <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
+          <el-button type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
+          <span class="toolbar-row__split" />
+          <el-button @click="openPicker('browse')">选择目录</el-button>
+          <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
+          <el-button :loading="validating" @click="handleValidate">校验目录</el-button>
+          <el-button type="success" plain :loading="preflighting" @click="handlePreflight">执行预检</el-button>
+        </div>
+
+        <div class="path-row">
+          <div class="path-row__breadcrumbs">
+            <el-icon class="path-row__icon"><FolderOpened /></el-icon>
+            <button
+              v-for="(crumb, index) in breadcrumbItems"
+              :key="crumb.path"
+              type="button"
+              class="path-row__crumb"
+              :class="{ 'is-current': index === breadcrumbItems.length - 1 }"
+              @click.stop="openPath(crumb.path)"
+            >
+              {{ crumb.label }}
+            </button>
           </div>
         </div>
-      </template>
 
-      <el-alert
-        v-if="errorMessage"
-        class="file-manager-card__alert"
-        type="error"
-        :closable="false"
-        :title="errorMessage"
-      />
-
-      <div class="toolbar-row">
-        <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
-        <el-button type="primary" @click="triggerUpload">上传</el-button>
-        <el-button :loading="loading" @click="reloadEntries">刷新</el-button>
-        <span class="toolbar-row__split" />
-        <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
-        <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
-        <el-button type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
-        <span class="toolbar-row__split" />
-        <el-button @click="openPicker('browse')">选择目录</el-button>
-        <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
-        <el-button :loading="validating" @click="handleValidate">校验目录</el-button>
-        <el-button type="success" plain :loading="preflighting" @click="handlePreflight">执行预检</el-button>
-      </div>
-
-      <div class="path-row">
-        <div class="path-row__breadcrumbs">
-          <el-icon class="path-row__icon"><FolderOpened /></el-icon>
-          <button
-            v-for="(crumb, index) in breadcrumbItems"
-            :key="crumb.path"
-            type="button"
-            class="path-row__crumb"
-            :class="{ 'is-current': index === breadcrumbItems.length - 1 }"
-            @click.stop="openPath(crumb.path)"
-          >
-            {{ crumb.label }}
-          </button>
+        <div class="summary-row">
+          <span>当前目录：{{ currentPathDisplay }}</span>
+          <span>已选择 {{ selectedCount }} 项</span>
+          <span>{{ entries.length }} 个项目</span>
+          <span v-if="validation">{{ validation.allowed ? '目录可访问' : '目录受限' }}</span>
+          <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
         </div>
-      </div>
 
-      <div class="summary-row">
-        <span>当前目录：{{ currentPathDisplay }}</span>
-        <span>已选择 {{ selectedCount }} 项</span>
-        <span>{{ entries.length }} 个项目</span>
-        <span v-if="validation">{{ validation.allowed ? '目录可访问' : '目录受限' }}</span>
-        <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
-      </div>
-
-      <el-table
-        ref="tableRef"
-        v-loading="loading"
-        :data="entries"
-        row-key="path"
-        :row-class-name="getRowClassName"
-        @selection-change="handleSelectionChange"
-        @row-contextmenu="handleRowContextMenu"
-      >
-        <el-table-column type="selection" width="52" />
-        <el-table-column label="名称" min-width="520">
-          <template #default="scope">
-            <button
-              type="button"
-              class="entry-name"
-              :class="{ 'is-dir': scope.row.is_dir }"
-              @click.stop="handleEntryPrimaryAction(scope.row)"
-            >
-              <el-icon class="entry-name__icon">
-                <FolderOpened v-if="scope.row.is_dir" />
-                <Document v-else />
-              </el-icon>
-              <div class="entry-name__text">
-                <div class="entry-name__title">{{ scope.row.name }}</div>
-                <div class="entry-name__path">{{ scope.row.path }}</div>
+        <el-table
+          ref="tableRef"
+          v-loading="loading"
+          :data="entries"
+          row-key="path"
+          :row-class-name="getRowClassName"
+          @selection-change="handleSelectionChange"
+          @row-contextmenu="handleRowContextMenu"
+        >
+          <el-table-column type="selection" width="52" />
+          <el-table-column label="名称" min-width="520">
+            <template #default="scope">
+              <button
+                type="button"
+                class="entry-name"
+                :class="{ 'is-dir': scope.row.is_dir }"
+                @click.stop="handleEntryPrimaryAction(scope.row)"
+              >
+                <el-icon class="entry-name__icon">
+                  <FolderOpened v-if="scope.row.is_dir" />
+                  <Document v-else />
+                </el-icon>
+                <div class="entry-name__text">
+                  <div class="entry-name__title">{{ scope.row.name }}</div>
+                  <div class="entry-name__path">{{ scope.row.path }}</div>
+                </div>
+              </button>
+            </template>
+          </el-table-column>
+          <el-table-column label="大小" width="120">
+            <template #default="scope">
+              {{ scope.row.is_dir ? '—' : formatBytes(scope.row.size) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="修改时间" width="190">
+            <template #default="scope">
+              {{ formatTimestamp(scope.row.modified_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="scope">
+              <div class="entry-actions">
+                <el-tooltip v-if="scope.row.is_dir" content="打开" placement="top">
+                  <el-button link class="entry-actions__icon" @click.stop="openEntry(scope.row)">
+                    <el-icon><Folder /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="打包" placement="top">
+                  <el-button link class="entry-actions__icon entry-actions__icon--warning" @click.stop="openPackDialog(scope.row)">
+                    <el-icon><Files /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-dropdown trigger="click" @command="(command: string) => handleMoreCommand(command, scope.row)">
+                  <el-button link class="entry-actions__icon">
+                    <el-icon><MoreFilled /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                      <el-dropdown-item command="move">移动</el-dropdown-item>
+                      <el-dropdown-item command="copy">复制</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
-            </button>
-          </template>
-        </el-table-column>
-        <el-table-column label="大小" width="120">
-          <template #default="scope">
-            {{ scope.row.is_dir ? '—' : formatBytes(scope.row.size) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="修改时间" width="190">
-          <template #default="scope">
-            {{ formatTimestamp(scope.row.modified_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
-          <template #default="scope">
-            <div class="entry-actions">
-              <el-tooltip v-if="scope.row.is_dir" content="打开" placement="top">
-                <el-button link class="entry-actions__icon" @click.stop="openEntry(scope.row)">
-                  <el-icon><Folder /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="打包" placement="top">
-                <el-button link class="entry-actions__icon entry-actions__icon--warning" @click.stop="openPackDialog(scope.row)">
-                  <el-icon><Files /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-dropdown trigger="click" @command="(command: string) => handleMoreCommand(command, scope.row)">
-                <el-button link class="entry-actions__icon">
-                  <el-icon><MoreFilled /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                    <el-dropdown-item command="move">移动</el-dropdown-item>
-                    <el-dropdown-item command="copy">复制</el-dropdown-item>
-                    <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+            </template>
+          </el-table-column>
+        </el-table>
 
-      <div class="footer-count">{{ entries.length }} 个项目</div>
+        <div class="footer-count">{{ entries.length }} 个项目</div>
 
-      <input ref="uploadInputRef" type="file" multiple class="file-upload-input" @change="handleUploadSelected" />
+        <input ref="uploadInputRef" type="file" multiple class="file-upload-input" @change="handleUploadSelected" />
+      </div>
     </el-card>
 
     <div

@@ -929,8 +929,20 @@ onMounted(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
-.archive-mode-group { width: 100%; }
-.archive-mode-group :deep(.el-radio-button), .archive-mode-group :deep(.el-radio-button__inner) { width: 50%; }
+.archive-mode-group {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+}
+
+.archive-mode-group :deep(.el-radio-button) {
+  width: auto;
+}
+
+.archive-mode-group :deep(.el-radio-button__inner) {
+  min-width: 118px;
+  padding-inline: 18px;
+}
 .mode-config-panel { margin-bottom: 18px; padding: 16px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-fill-color-extra-light); }
 .mode-config-panel__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .mode-config-panel__title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }

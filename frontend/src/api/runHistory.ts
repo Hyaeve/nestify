@@ -15,7 +15,7 @@ export interface RunHistoryItem {
   finished_at?: string
 }
 
-import { getJSON } from './http'
+import { deleteJSON, getJSON } from './http'
 
 export interface RunHistoryPayload {
   items: RunHistoryItem[]
@@ -24,6 +24,10 @@ export interface RunHistoryPayload {
 
 export function fetchRunHistory() {
   return getJSON<RunHistoryPayload>('/api/v1/run-history')
+}
+
+export function clearRunHistory() {
+  return deleteJSON<null>('/api/v1/run-history')
 }
 
 export function emptyRunHistory(): RunHistoryItem[] {

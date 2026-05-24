@@ -58,6 +58,20 @@ func (s *Service) ListHistory() []model.RunHistoryItem {
 	return items
 }
 
+func (s *Service) ClearHistory() error {
+	if s.store != nil {
+		if err := s.store.ClearRunHistory(); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	s.history = make([]model.RunHistoryItem, 0)
+	s.mu.Unlock()
+
+	return nil
+}
+
 func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
 	archiveMode := strings.TrimSpace(req.ArchiveMode)
 	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" {
