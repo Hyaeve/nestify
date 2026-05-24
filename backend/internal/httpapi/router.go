@@ -98,6 +98,20 @@ func NewRouter(deps Dependencies) http.Handler {
 		}()
 	})
 
+	mux.HandleFunc("/api/v1/system/resource", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeMethodNotAllowed(w)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "System resource loaded",
+			Data:    collectSystemResourceSnapshot(),
+		})
+	})
+
 	mux.HandleFunc("/api/v1/auth/login", api.handleLogin)
 	mux.HandleFunc("/api/v1/auth/session", api.handleCurrentSession)
 	mux.HandleFunc("/api/v1/auth/logout", api.handleLogout)

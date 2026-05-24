@@ -8,7 +8,10 @@ export interface HealthPayload {
 
 export interface SystemResourcePayload {
   cpu_usage: number
+  cpu_model: string
   memory_usage: number
+  memory_used: string
+  memory_total: string
   nestify_memory: string
   uptime: string
 }

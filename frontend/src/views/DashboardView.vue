@@ -26,30 +26,6 @@
 
     <el-row :gutter="16" class="dashboard-row dashboard-row--detail">
       <el-col :span="14">
-        <el-card class="page-card dashboard-card">
-          <h3 class="page-section-title">当前任务进度</h3>
-          <el-descriptions :column="1" border>
-            <el-descriptions-item label="后端连接状态">
-              <el-tag :type="healthTagType">{{ healthStatus }}</el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="服务标识">
-              {{ healthService }}
-            </el-descriptions-item>
-            <el-descriptions-item label="最近检查时间">
-              {{ healthTime }}
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <el-alert
-            v-if="healthError"
-            style="margin-top: 16px;"
-            type="error"
-            :closable="false"
-            :title="healthError"
-          />
-        </el-card>
-      </el-col>
-      <el-col :span="10">
         <el-card class="page-card dashboard-card dashboard-card--summary">
           <h3 class="page-section-title">最近执行摘要</h3>
           <div v-if="summaryItems.length" class="summary-list">
@@ -67,40 +43,50 @@
           <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
         </el-card>
       </el-col>
-    </el-row>
+      <el-col :span="10">
+        <el-card class="page-card resource-card resource-card--vertical">
+          <h3 class="page-section-title">系统资源</h3>
 
-    <el-row :gutter="16" class="dashboard-row dashboard-row--detail">
-      <el-col :span="24">
-        <el-card class="page-card resource-card">
-          <div class="resource-card__header">
-            <h3 class="page-section-title">系统资源</h3>
-          </div>
-
-          <div class="resource-grid">
-            <div class="resource-item">
-              <div class="resource-item__label">CPU</div>
-              <div class="resource-item__value">{{ systemResource?.cpu_usage ?? '0' }}%</div>
+          <div class="resource-stack">
+            <div class="resource-line">
+              <div class="resource-line__head">
+                <span class="resource-line__title">CPU {{ formatPercentage(systemResource?.cpu_usage) }}</span>
+                <span class="resource-line__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
+              </div>
               <el-progress :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" />
             </div>
 
-            <div class="resource-item">
-              <div class="resource-item__label">内存</div>
-              <div class="resource-item__value">{{ systemResource?.memory_usage ?? '0' }}%</div>
-              <el-progress :percentage="systemResource?.memory_usage ?? 0" :show-text="false" color="#6c5ce7" />
+            <div class="resource-line">
+              <div class="resource-line__head">
+                <span class="resource-line__title">内存 {{ formatPercentage(systemResource?.memory_usage) }}</span>
+                <span class="resource-line__desc">{{ formatMemorySummary }}</span>
+              </div>
+              <el-progress :percentage="systemResource?.memory_usage ?? 0" :show-text="false" color="#409eff" />
             </div>
 
-            <div class="resource-item">
-              <div class="resource-item__label">Nestify 内存占用</div>
-              <div class="resource-item__value">{{ systemResource?.nestify_memory ?? '0 MB' }}</div>
-              <div class="resource-item__meta">应用进程内存占用</div>
+            <div class="resource-kv">
+              <span class="resource-kv__label">Nestify 内存占用</span>
+              <span class="resource-kv__value resource-kv__value--primary">{{ systemResource?.nestify_memory || '0 B' }}</span>
             </div>
 
-            <div class="resource-item">
-              <div class="resource-item__label">运行时间</div>
-              <div class="resource-item__value">{{ systemResource?.uptime ?? '0' }}</div>
-              <div class="resource-item__meta">服务启动至今</div>
+            <div class="resource-kv">
+              <span class="resource-kv__label">运行时间</span>
+              <span class="resource-kv__value">{{ systemResource?.uptime || '0分' }}</span>
+            </div>
+
+            <div class="resource-kv">
+              <span class="resource-kv__label">服务标识</span>
+              <span class="resource-kv__value">{{ healthService }}</span>
             </div>
           </div>
+
+          <el-alert
+            v-if="healthError"
+            class="resource-card__alert"
+            type="error"
+            :closable="false"
+            :title="healthError"
+          />
         </el-card>
       </el-col>
     </el-row>
@@ -131,6 +117,13 @@ const healthStatus = computed(() => {
 const healthService = computed(() => health.value?.service ?? '未知')
 const healthTime = computed(() => health.value?.time ?? '尚未获取')
 const healthTagType = computed(() => (health.value ? 'success' : loading.value ? 'warning' : 'danger'))
+const formatMemorySummary = computed(() => {
+  if (!systemResource.value) {
+    return '0 B / 0 B'
+  }
+
+  return `${systemResource.value.memory_used} / ${systemResource.value.memory_total}`
+})
 
 const totalRuleCount = computed(() => rules.value.length)
 const enabledRuleCount = computed(() => rules.value.filter((item) => item.enabled).length)
@@ -174,6 +167,14 @@ function getStatusText(status: string) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatPercentage(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '0%'
+  }
+
+  return `${value.toFixed(1)}%`
 }
 
 async function loadHealth() {
@@ -319,54 +320,67 @@ onMounted(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
 }
 
-.resource-card__header {
+.resource-card--vertical {
+  min-height: 360px;
+}
+
+.resource-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.resource-line {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resource-line__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 12px;
 }
 
-.resource-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.resource-item {
-  padding: 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  background: var(--bg-elevated);
-}
-
-.resource-item__label {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.resource-item__value {
-  margin: 10px 0 12px;
-  font-size: 28px;
+.resource-line__title {
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.resource-item__meta {
-  margin-top: 8px;
-  font-size: 12px;
+.resource-line__desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.resource-kv {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.resource-kv__label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.resource-kv__value {
+  font-size: 14px;
   color: var(--text-tertiary);
 }
 
-@media (max-width: 1200px) {
-  .resource-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.resource-kv__value--primary {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-color-primary);
 }
 
-@media (max-width: 640px) {
-  .resource-grid {
-    grid-template-columns: 1fr;
-  }
+.resource-card__alert {
+  margin-top: 16px;
 }
 
 :deep(.el-card__body) {
