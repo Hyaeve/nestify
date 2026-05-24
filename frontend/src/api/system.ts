@@ -6,8 +6,19 @@ export interface HealthPayload {
   time: string
 }
 
+export interface SystemResourcePayload {
+  cpu_usage: number
+  memory_usage: number
+  nestify_memory: string
+  uptime: string
+}
+
 export function fetchHealth() {
   return getJSON<HealthPayload>('/api/v1/health')
+}
+
+export function fetchSystemResource() {
+  return getJSON<SystemResourcePayload>('/api/v1/system/resource')
 }
 
 export async function restartSystem() {
