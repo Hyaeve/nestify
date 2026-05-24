@@ -7,7 +7,7 @@ export interface RuleItem {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect'
+  archive_mode: 'package' | 'collect' | 'cleanup'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
   target_dir: string
@@ -39,15 +39,17 @@ export interface CreateRulePayload {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect'
+  archive_mode: 'package' | 'collect' | 'cleanup'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
-  target_dir: string
+  target_dir?: string
   watch_debounce_ms?: number
   cron_expression?: string
   run_on_start?: boolean
+  options?: Record<string, boolean>
   package_options?: Record<string, boolean>
   collect_options?: Record<string, boolean>
+  filters?: string[]
 }
 
 export interface UpdateRulePayload extends CreateRulePayload {}

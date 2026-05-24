@@ -1120,14 +1120,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.Filters)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.Filters)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, filters []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1150,6 +1150,16 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" {
 		return errors.New("archive_mode must be package, collect, or cleanup")
 	}
+	if archiveMode == "cleanup" {
+		cleanupEmptyDirs := options["cleanup_empty_dirs"]
+		cleanupMatchingFiles := options["cleanup_matching_files"]
+		if !cleanupEmptyDirs && !cleanupMatchingFiles {
+			return errors.New("cleanup rule requires at least one cleanup option")
+		}
+		if cleanupMatchingFiles && len(normalizeRuleFilters(filters)) == 0 {
+			return errors.New("filters are required when cleanup_matching_files is enabled")
+		}
+	}
 
 	runMode = strings.TrimSpace(runMode)
 	if runMode != "watch" && runMode != "cron" && runMode != "once" {
@@ -1157,6 +1167,19 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	}
 
 	return nil
+}
+
+func normalizeRuleFilters(filters []string) []string {
+	items := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		trimmed := strings.TrimSpace(filter)
+		if trimmed == "" {
+			continue
+		}
+		items = append(items, trimmed)
+	}
+
+	return items
 }
 
 func parseIDFromPath(path, prefix string) (int64, error) {

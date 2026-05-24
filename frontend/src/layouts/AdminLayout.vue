@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">V0.7</div>
+          <div class="brand__version">V0.9.1</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -318,7 +318,7 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
+  width: 16px;
   min-height: 132px;
   padding: 0;
   color: var(--text-secondary);
@@ -339,7 +339,7 @@ async function handleLogout() {
   right: 0;
   z-index: 6;
   transform: translateY(-50%);
-  width: 14px;
+  width: 16px;
   background: transparent;
 }
 
@@ -354,7 +354,7 @@ async function handleLogout() {
 
 .aside-toggle__line {
   position: absolute;
-  left: 6px;
+  left: 7px;
   width: 2px;
   height: 84px;
   border-radius: 999px;

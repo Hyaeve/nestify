@@ -3,7 +3,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -130,9 +129,12 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 	if interval < 2*time.Second {
 		interval = 2 * time.Second
 	}
+	if isCompatibilityMode(rule.CompatibilityMode) && interval < 10*time.Second {
+		interval = 10 * time.Second
+	}
 
 	go func() {
-		baseline, _ := directoryFingerprint(rule.SourceDir)
+		baseline, _ := s.directoryFingerprint(rule.CompatibilityMode, rule.SourceDir)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -141,7 +143,7 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				current, err := directoryFingerprint(rule.SourceDir)
+				current, err := s.directoryFingerprint(rule.CompatibilityMode, rule.SourceDir)
 				if err != nil {
 					continue
 				}
@@ -169,13 +171,13 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 	})
 }
 
-func directoryFingerprint(root string) (string, error) {
+func (s *Service) directoryFingerprint(mode, root string) (string, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return "", nil
 	}
 
-	info, err := os.Stat(root)
+	info, err := statWithMode(mode, root)
 	if err != nil {
 		return "", err
 	}
@@ -183,22 +185,39 @@ func directoryFingerprint(root string) (string, error) {
 		return fmt.Sprintf("file:%s:%d:%d", filepath.Base(root), info.Size(), info.ModTime().UnixNano()), nil
 	}
 
-	items := make([]string, 0)
-	err = filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			return relErr
-		}
-		items = append(items, fmt.Sprintf("%s|%t|%d|%d", filepath.ToSlash(rel), info.IsDir(), info.Size(), info.ModTime().UnixNano()))
-		return nil
-	})
-	if err != nil {
+	items := []string{fmt.Sprintf(".|%t|%d|%d", info.IsDir(), info.Size(), info.ModTime().UnixNano())}
+	if err := s.collectFingerprint(mode, root, root, &items); err != nil {
 		return "", err
 	}
 
 	sort.Strings(items)
 	return strings.Join(items, "\n"), nil
+}
+
+func (s *Service) collectFingerprint(mode, root, current string, items *[]string) error {
+	entries, err := readDirWithMode(mode, current)
+	if err != nil {
+		return err
+	}
+
+	sortEntriesNaturally(entries)
+	for _, entry := range entries {
+		entryPath := filepath.Join(current, entry.Name())
+		info, infoErr := entryInfoWithMode(mode, entry)
+		if infoErr != nil {
+			return infoErr
+		}
+		rel, relErr := filepath.Rel(root, entryPath)
+		if relErr != nil {
+			return relErr
+		}
+		*items = append(*items, fmt.Sprintf("%s|%t|%d|%d", filepath.ToSlash(rel), info.IsDir(), info.Size(), info.ModTime().UnixNano()))
+		if entry.IsDir() {
+			if err := s.collectFingerprint(mode, root, entryPath, items); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

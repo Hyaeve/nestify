@@ -13,17 +13,23 @@ import (
 )
 
 type executionStats struct {
-	ProcessedFiles int
-	SuccessCount   int
-	SkipCount      int
-	FailureCount   int
-	PackedVolumes  int
-	MovedFiles     int
-	HistoryEvents  int
-	Summary        string
+	ProcessedFiles      int
+	SuccessCount        int
+	SkipCount           int
+	FailureCount        int
+	PackedVolumes       int
+	MovedFiles          int
+	CleanupRemovedFiles int
+	CleanupRemovedDirs  int
+	HistoryEvents       int
+	Summary             string
 }
 
 func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	if strings.TrimSpace(req.ArchiveMode) == "cleanup" {
+		return s.executeCleanupRule(runID, req)
+	}
+
 	stats := executionStats{}
 
 	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
@@ -35,7 +41,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		return stats, fmt.Errorf("target dir is required")
 	}
 
-	info, err := os.Stat(sourceDir)
+	info, err := statWithMode(req.CompatibilityMode, sourceDir)
 	if err != nil {
 		return stats, fmt.Errorf("stat source dir: %w", err)
 	}
@@ -46,7 +52,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		return stats, fmt.Errorf("create target dir: %w", err)
 	}
 
-	entries, err := os.ReadDir(sourceDir)
+	entries, err := readDirWithMode(req.CompatibilityMode, sourceDir)
 	if err != nil {
 		return stats, fmt.Errorf("read source dir: %w", err)
 	}
@@ -61,7 +67,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() {
-			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, packageNestedFolders, &stats); err != nil {
+			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
@@ -90,8 +96,8 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	return stats, nil
 }
 
-func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode string, packageNestedFolders bool, stats *executionStats) error {
-	entries, err := os.ReadDir(seriesPath)
+func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, seriesPath)
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
 	}
@@ -137,7 +143,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	for _, entry := range entries {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, packageNestedFolders, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
@@ -156,8 +162,8 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	return nil
 }
 
-func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode string, packageNestedFolders bool, stats *executionStats) error {
-	entries, err := os.ReadDir(volumePath)
+func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders bool, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, volumePath)
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
 	}
@@ -217,7 +223,7 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode str
 	for _, entry := range entries {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, packageNestedFolders, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))

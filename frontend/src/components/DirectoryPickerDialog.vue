@@ -9,20 +9,6 @@
     />
 
     <div class="picker-toolbar">
-      <div class="picker-roots">
-        <span class="picker-label">可浏览根目录</span>
-        <el-space wrap>
-          <el-button
-            v-for="root in roots"
-            :key="root.path"
-            size="small"
-            @click="openPath(root.path)"
-          >
-            {{ root.name }}
-          </el-button>
-        </el-space>
-      </div>
-
       <div class="picker-current">
         <span class="picker-label">当前目录</span>
         <el-tag type="info">{{ currentPath || '未选择' }}</el-tag>
@@ -37,7 +23,7 @@
         </el-input>
       </div>
 
-      <div class="picker-hint">若目录列表因权限受限无法展开，仍可直接选择当前路径继续执行。</div>
+      <div class="picker-hint">采用折叠目录树逐级展开；若因权限或挂载限制无法展开，仍可手动输入路径继续选择。</div>
 
       <div class="picker-actions">
         <el-button size="small" :disabled="!parentPath" @click="goParent">上级目录</el-button>
@@ -45,21 +31,26 @@
       </div>
     </div>
 
-    <el-table v-loading="loading" :data="entries" border>
-      <el-table-column prop="name" label="目录名" min-width="260" />
-      <el-table-column label="子目录" width="120">
-        <template #default="scope">
-          <el-tag :type="scope.row.has_children ? 'success' : 'info'">
-            {{ scope.row.has_children ? '有' : '无' }}
-          </el-tag>
+    <div v-loading="loading" class="picker-tree">
+      <el-tree
+        ref="treeRef"
+        node-key="path"
+        :data="treeData"
+        :props="treeProps"
+        lazy
+        highlight-current
+        :expand-on-click-node="false"
+        :load="loadNode"
+        @node-click="handleNodeClick"
+      >
+        <template #default="{ data }">
+          <div class="picker-tree__node">
+            <span class="picker-tree__label">{{ data.label }}</span>
+            <span class="picker-tree__path">{{ data.path }}</span>
+          </div>
         </template>
-      </el-table-column>
-      <el-table-column label="操作" width="120">
-        <template #default="scope">
-          <el-button link type="primary" @click="openPath(scope.row.path)">进入</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+      </el-tree>
+    </div>
 
     <template #footer>
       <el-button @click="visibleProxy = false">取消</el-button>
@@ -72,6 +63,13 @@
 import { computed, ref, watch } from 'vue'
 
 import { browseDirectories, fetchBrowseRoots, validateDirectory, type BrowseRoot, type DirectoryEntry } from '../api/paths'
+
+interface TreeNode {
+  label: string
+  path: string
+  leaf: boolean
+  parentPath: string
+}
 
 const props = defineProps<{
   modelValue: boolean
@@ -88,10 +86,17 @@ const loading = ref(false)
 const confirming = ref(false)
 const errorMessage = ref('')
 const roots = ref<BrowseRoot[]>([])
-const entries = ref<DirectoryEntry[]>([])
 const currentPath = ref('')
 const parentPath = ref('')
 const pathInput = ref('')
+const treeData = ref<TreeNode[]>([])
+const treeRef = ref()
+
+const treeProps = {
+  label: 'label',
+  children: 'children',
+  isLeaf: 'leaf',
+}
 
 const visibleProxy = computed({
   get: () => props.modelValue,
@@ -114,6 +119,12 @@ async function initialize() {
   try {
     const response = await fetchBrowseRoots()
     roots.value = response.data?.items ?? []
+    treeData.value = roots.value.map((root) => ({
+      label: root.name,
+      path: root.path,
+      leaf: false,
+      parentPath: '',
+    }))
 
     const startPath = props.initialPath || currentPath.value || roots.value[0]?.path || ''
     if (startPath) {
@@ -142,15 +153,48 @@ async function openPath(path: string) {
     const response = await browseDirectories(targetPath)
     currentPath.value = response.data?.current_path ?? ''
     parentPath.value = response.data?.parent_path ?? ''
-    entries.value = response.data?.entries ?? []
     pathInput.value = currentPath.value
+    treeRef.value?.setCurrentKey?.(currentPath.value)
   } catch (error) {
     parentPath.value = ''
-    entries.value = []
     errorMessage.value = error instanceof Error ? error.message : '目录浏览失败'
   } finally {
     loading.value = false
   }
+}
+
+async function loadNode(node: { level: number; data?: TreeNode }, resolve: (data: TreeNode[]) => void) {
+  if (node.level === 0) {
+    resolve(treeData.value)
+    return
+  }
+
+  const currentNode = node.data
+  if (!currentNode?.path) {
+    resolve([])
+    return
+  }
+
+  try {
+    const response = await browseDirectories(currentNode.path)
+    const children = (response.data?.entries ?? [])
+      .filter((entry: DirectoryEntry) => entry.is_dir)
+      .map((entry: DirectoryEntry) => ({
+        label: entry.name,
+        path: entry.path,
+        leaf: !entry.has_children,
+        parentPath: response.data?.current_path ?? currentNode.path,
+      }))
+    resolve(children)
+  } catch {
+    resolve([])
+  }
+}
+
+function handleNodeClick(data: TreeNode) {
+  currentPath.value = data.path
+  parentPath.value = data.parentPath
+  pathInput.value = data.path
 }
 
 async function openTypedPath() {
@@ -159,7 +203,7 @@ async function openTypedPath() {
 
 async function reloadCurrent() {
   if (!currentPath.value) return
-  await openPath(currentPath.value)
+  await initialize()
 }
 
 async function goParent() {
@@ -201,7 +245,6 @@ async function confirmSelection() {
   margin-bottom: 16px;
 }
 
-.picker-roots,
 .picker-current,
 .picker-input,
 .picker-actions {
@@ -225,5 +268,31 @@ async function confirmSelection() {
 .picker-hint {
   color: #909399;
   font-size: 13px;
+}
+
+.picker-tree {
+  min-height: 420px;
+  max-height: 520px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+}
+
+.picker-tree__node {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 0;
+}
+
+.picker-tree__label {
+  color: var(--el-text-color-primary);
+}
+
+.picker-tree__path {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

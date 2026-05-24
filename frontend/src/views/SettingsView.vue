@@ -45,7 +45,7 @@ import { ElMessage } from 'element-plus'
 import { updateAdminAccount } from '../api/auth'
 import { useAuthStore } from '../stores/auth'
 
-const appVersion = 'v0.7'
+const appVersion = 'v0.9.1'
 const authStore = useAuthStore()
 const submitting = ref(false)
 

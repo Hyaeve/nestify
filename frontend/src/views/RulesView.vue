@@ -18,7 +18,7 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="rules">
+      <el-table v-loading="loading" :data="archiveRules">
         <el-table-column prop="name" label="规则名称" min-width="140" />
         <el-table-column label="模式" width="100">
           <template #default="scope">
@@ -110,13 +110,54 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">净化规则</div>
-            <div class="mode-config-panel__description">清理自定义监控目录下的空文件夹，或清理文件名命中匹配字符的文件。</div>
+            <div class="mode-config-panel__description">清理自定义监控目录下的空文件夹，或清理文件名命中匹配规则的文件。</div>
           </div>
-          <el-button type="primary" round disabled>+ 添加净化规则</el-button>
+          <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加净化规则</el-button>
         </div>
       </template>
 
-      <el-empty description="净化规则入口已加入，下一步接入独立规则模型与执行能力" />
+      <el-table v-if="purifyRules.length" v-loading="loading" :data="purifyRules">
+        <el-table-column prop="name" label="规则名称" min-width="160" />
+        <el-table-column label="模式" width="100">
+          <template #default>
+            <el-tag type="warning" effect="plain">清理</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="执行模式" width="110">
+          <template #default="scope">
+            <el-tag :type="scope.row.compatibility_mode === 'compatibility' ? 'warning' : 'success'" effect="plain">
+              {{ scope.row.compatibility_mode === 'compatibility' ? '兼容模式' : '本地模式' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="source_dir" label="监控目录" min-width="320" show-overflow-tooltip />
+        <el-table-column label="清理项" min-width="220">
+          <template #default="scope">
+            <div class="purify-tags">
+              <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_empty_dirs" size="small" effect="plain">空文件夹</el-tag>
+              <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_matching_files" size="small" effect="plain">匹配文件</el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="监控" width="88">
+          <template #default="scope">
+            <el-tag :type="scope.row.monitor_enabled ? 'success' : 'info'" effect="plain">{{ scope.row.monitor_enabled ? '开' : '关' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="88">
+          <template #default="scope">
+            <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" fixed="right">
+          <template #default="scope">
+            <el-button link type="primary" @click="openEditPurifyDialog(scope.row.id)">编辑</el-button>
+            <el-button link type="success" @click="prepareExecution(scope.row.id)">净化</el-button>
+            <el-button link type="danger" @click="removeRule(scope.row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-else description="暂无净化规则，可添加清理模式规则" />
     </el-card>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
@@ -173,6 +214,62 @@
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
     </el-dialog>
 
+    <el-dialog v-model="createPurifyDialogVisible" title="新增净化规则" width="640px">
+      <el-form label-position="top">
+        <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则模式"><el-input value="清理模式" readonly /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="执行适配模式">
+          <el-radio-group v-model="createPurifyForm.compatibility_mode">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
+          <div class="mode-config-panel__description">净化规则同样支持兼容模式，适合挂载网盘目录；兼容模式下会限制为 1 秒最多读取 3 次。</div>
+        </el-form-item>
+        <div class="mode-config-panel">
+          <div class="mode-config-panel__header"><div><div class="mode-config-panel__title">清理模式功能</div><div class="mode-config-panel__description">按需勾选需要启用的净化动作。</div></div><el-tag type="warning">清理模式</el-tag></div>
+          <el-row :gutter="12"><el-col v-for="option in cleanupModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+        </div>
+        <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
+        <el-form-item label="监控目录"><el-input v-model="createPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="文件名匹配规则">
+          <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；仅匹配文件名。" />
+        </el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
+      </el-form>
+      <template #footer><el-button @click="createPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreatePurifyRule">创建</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="editPurifyDialogVisible" title="编辑净化规则" width="640px">
+      <el-form label-position="top">
+        <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则模式"><el-input value="清理模式" readonly /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="执行适配模式">
+          <el-radio-group v-model="editPurifyForm.compatibility_mode">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
+          <div class="mode-config-panel__description">净化规则同样支持兼容模式，适合挂载网盘目录；兼容模式下会限制为 1 秒最多读取 3 次。</div>
+        </el-form-item>
+        <div class="mode-config-panel">
+          <div class="mode-config-panel__header"><div><div class="mode-config-panel__title">清理模式功能</div><div class="mode-config-panel__description">按需勾选需要启用的净化动作。</div></div><el-tag type="warning">清理模式</el-tag></div>
+          <el-row :gutter="12"><el-col v-for="option in cleanupModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+        </div>
+        <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
+        <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="文件名匹配规则">
+          <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；仅匹配文件名。" />
+        </el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
+      </el-form>
+      <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
+    </el-dialog>
+
     <DirectoryPickerDialog v-model="directoryPickerVisible" title="选择目录" :initial-path="directoryPickerInitialPath" @selected="applyDirectorySelection" />
   </div>
 </template>
@@ -187,9 +284,12 @@ import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleIte
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 
 type ArchiveMode = 'package' | 'collect'
+type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files'
+type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
+type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | null
 
 const packageModeOptions = [
   { key: 'preserve_structure', label: '保留目录结构', description: '按源目录层级打包归档，避免目标目录结构混乱。' },
@@ -206,12 +306,23 @@ const collectModeOptions = [
   { key: 'collect_related_files', label: '收集关联文件', description: '在收集主文件时同步带上相关说明或附属文件。' },
 ] as const
 
+const cleanupModeOptions = [
+  { key: 'cleanup_empty_dirs', label: '清理空文件夹', description: '递归删除监控目录中的空文件夹。' },
+  { key: 'cleanup_matching_files', label: '清理匹配文件', description: '按文件名匹配规则删除命中的文件，支持字符串和正则。' },
+] as const
+
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
   return { preserve_structure: true, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false }
 }
+
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
   return { recursive_collect: true, deduplicate_same_name: true, keep_latest_only: false, collect_related_files: true }
 }
+
+function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
+  return { cleanup_empty_dirs: true, cleanup_matching_files: false }
+}
+
 function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefined, defaults: T): T {
   if (!raw) return { ...defaults }
   try {
@@ -225,51 +336,532 @@ function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefi
     return { ...defaults }
   }
 }
-function getModeTitle(mode: ArchiveMode) { return mode === 'package' ? '打包归档功能' : '收集归档功能' }
-function getModeDescription(mode: ArchiveMode) { return mode === 'package' ? '选择打包归档后，下面会展开当前模式专属的规则功能，可按需勾选。' : '选择收集归档后，下面会展开当前模式专属的规则功能，可按需勾选。' }
-function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'watch' | 'cron' | 'once' { if (scheduleEnabled) return 'cron'; if (monitorEnabled) return 'watch'; return 'once' }
-function formatDateTime(value: string) { return new Date(value).toLocaleString('zh-CN', { hour12: false }) }
+
+function parseFiltersText(value: string) {
+  return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
+}
+
+function parseFiltersJSON(raw?: string) {
+  if (!raw) return ''
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return ''
+    return parsed.map((item) => String(item).trim()).filter(Boolean).join('\n')
+  } catch {
+    return ''
+  }
+}
+
+function getModeTitle(mode: ArchiveMode) {
+  return mode === 'package' ? '打包归档功能' : '收集归档功能'
+}
+
+function getModeDescription(mode: ArchiveMode) {
+  return mode === 'package'
+    ? '选择打包归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
+    : '选择收集归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
+}
+
+function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'watch' | 'cron' | 'once' {
+  if (scheduleEnabled) return 'cron'
+  if (monitorEnabled) return 'watch'
+  return 'once'
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
 
 const activeTab = ref<'rules' | 'purify' | 'history'>('rules')
 const loading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
+const latestPreparedSummary = ref('')
+
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
+const createPurifyDialogVisible = ref(false)
+const editPurifyDialogVisible = ref(false)
+
 const editingRuleID = ref<number | null>(null)
+const editingPurifyRuleID = ref<number | null>(null)
+
 const directoryPickerVisible = ref(false)
 const directoryPickerInitialPath = ref('')
-const directoryPickerTarget = ref<'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | null>(null)
-const latestPreparedSummary = ref('')
+const directoryPickerTarget = ref<DirectoryPickerTarget>(null)
+
 const rules = ref<RuleItem[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
 
+const archiveRules = computed(() => rules.value.filter((item) => item.archive_mode !== 'cleanup'))
+const purifyRules = computed(() => rules.value.filter((item) => item.archive_mode === 'cleanup'))
 const successCount = computed(() => historyItems.value.filter((item) => item.status === 'success').length)
 const skipCount = computed(() => historyItems.value.filter((item) => item.status === 'skip').length)
 const failedCount = computed(() => historyItems.value.filter((item) => item.status === 'failed').length)
 
-const createForm = reactive({ name: '', description: '', enabled: true, monitor_enabled: true, schedule_enabled: false, compatibility_mode: 'local' as 'local' | 'compatibility', archive_mode: 'package' as ArchiveMode, source_dir: '', target_dir: '', cron_expression: '', watch_debounce_ms: 2000, run_on_start: true, package_options: createDefaultPackageOptions(), collect_options: createDefaultCollectOptions() })
-const editForm = reactive({ name: '', description: '', enabled: true, monitor_enabled: true, schedule_enabled: false, compatibility_mode: 'local' as 'local' | 'compatibility', archive_mode: 'package' as ArchiveMode, source_dir: '', target_dir: '', cron_expression: '', watch_debounce_ms: 2000, run_on_start: true, package_options: createDefaultPackageOptions(), collect_options: createDefaultCollectOptions() })
-createForm.compatibility_mode = 'local'
+const createForm = reactive({
+  name: '',
+  description: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: false,
+  compatibility_mode: 'local' as CompatibilityMode,
+  archive_mode: 'package' as ArchiveMode,
+  source_dir: '',
+  target_dir: '',
+  cron_expression: '',
+  watch_debounce_ms: 2000,
+  run_on_start: true,
+  package_options: createDefaultPackageOptions(),
+  collect_options: createDefaultCollectOptions(),
+})
 
-function resetCreateForm() { createForm.name = ''; createForm.description = ''; createForm.enabled = true; createForm.monitor_enabled = true; createForm.schedule_enabled = false; createForm.compatibility_mode = 'local'; createForm.archive_mode = 'package'; createForm.source_dir = ''; createForm.target_dir = ''; createForm.cron_expression = ''; createForm.watch_debounce_ms = 2000; createForm.run_on_start = true; createForm.package_options = createDefaultPackageOptions(); createForm.collect_options = createDefaultCollectOptions() }
-function resetEditForm() { editForm.name = ''; editForm.description = ''; editForm.enabled = true; editForm.monitor_enabled = true; editForm.schedule_enabled = false; editForm.compatibility_mode = 'local'; editForm.archive_mode = 'package'; editForm.source_dir = ''; editForm.target_dir = ''; editForm.cron_expression = ''; editForm.watch_debounce_ms = 2000; editForm.run_on_start = true; editForm.package_options = createDefaultPackageOptions(); editForm.collect_options = createDefaultCollectOptions() }
-function openCreateDialog() { resetCreateForm(); createDialogVisible.value = true }
-function openDirectoryPicker(form: 'create' | 'edit', field: 'source_dir' | 'target_dir') { directoryPickerTarget.value = `${form}.${field}` as 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir'; directoryPickerInitialPath.value = form === 'create' ? (field === 'source_dir' ? createForm.source_dir : createForm.target_dir) : (field === 'source_dir' ? editForm.source_dir : editForm.target_dir); directoryPickerVisible.value = true }
-function applyDirectorySelection(path: string) { if (directoryPickerTarget.value === 'create.source_dir') createForm.source_dir = path; if (directoryPickerTarget.value === 'create.target_dir') createForm.target_dir = path; if (directoryPickerTarget.value === 'edit.source_dir') editForm.source_dir = path; if (directoryPickerTarget.value === 'edit.target_dir') editForm.target_dir = path; directoryPickerVisible.value = false }
+const editForm = reactive({
+  name: '',
+  description: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: false,
+  compatibility_mode: 'local' as CompatibilityMode,
+  archive_mode: 'package' as ArchiveMode,
+  source_dir: '',
+  target_dir: '',
+  cron_expression: '',
+  watch_debounce_ms: 2000,
+  run_on_start: true,
+  package_options: createDefaultPackageOptions(),
+  collect_options: createDefaultCollectOptions(),
+})
 
-async function loadRules() { loading.value = true; errorMessage.value = ''; try { rules.value = (await fetchRules()).data?.items ?? [] } catch (error) { errorMessage.value = error instanceof Error ? error.message : '规则列表加载失败' } finally { loading.value = false } }
-async function loadHistory() { try { historyItems.value = (await fetchRunHistory()).data?.items ?? [] } catch (error) { errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败' } }
-async function submitCreateRule() { creating.value = true; errorMessage.value = ''; try { await createRule({ name: createForm.name, description: createForm.description, enabled: createForm.enabled, monitor_enabled: createForm.monitor_enabled, compatibility_mode: createForm.compatibility_mode, archive_mode: createForm.archive_mode, run_mode: resolveRunMode(createForm.monitor_enabled, createForm.schedule_enabled), source_dir: createForm.source_dir, target_dir: createForm.target_dir, watch_debounce_ms: createForm.watch_debounce_ms, cron_expression: createForm.schedule_enabled ? createForm.cron_expression : '', run_on_start: createForm.run_on_start, package_options: { ...createForm.package_options }, collect_options: { ...createForm.collect_options } }); ElMessage.success('规则创建成功'); createDialogVisible.value = false; resetCreateForm(); await loadRules() } catch (error) { errorMessage.value = error instanceof Error ? error.message : '规则创建失败' } finally { creating.value = false } }
-async function openEditDialog(id: number) { editing.value = true; errorMessage.value = ''; try { const rule = (await fetchRule(id)).data; if (!rule) throw new Error('规则详情不存在'); editingRuleID.value = rule.id; editForm.name = rule.name; editForm.description = rule.description; editForm.enabled = rule.enabled; editForm.monitor_enabled = rule.monitor_enabled; editForm.schedule_enabled = rule.run_mode === 'cron'; editForm.compatibility_mode = rule.compatibility_mode || 'local'; editForm.archive_mode = rule.archive_mode; editForm.source_dir = rule.source_dir; editForm.target_dir = rule.target_dir; editForm.cron_expression = rule.cron_expression; editForm.watch_debounce_ms = rule.watch_debounce_ms; editForm.run_on_start = rule.run_on_start; editForm.package_options = parseOptionJSON(rule.package_options_json, createDefaultPackageOptions()); editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions()); editDialogVisible.value = true } catch (error) { errorMessage.value = error instanceof Error ? error.message : '规则详情加载失败' } finally { editing.value = false } }
-async function submitUpdateRule() { if (!editingRuleID.value) { errorMessage.value = '缺少规则 ID'; return }; editing.value = true; errorMessage.value = ''; try { await updateRule(editingRuleID.value, { name: editForm.name, description: editForm.description, enabled: editForm.enabled, monitor_enabled: editForm.monitor_enabled, compatibility_mode: editForm.compatibility_mode, archive_mode: editForm.archive_mode, run_mode: resolveRunMode(editForm.monitor_enabled, editForm.schedule_enabled), source_dir: editForm.source_dir, target_dir: editForm.target_dir, watch_debounce_ms: editForm.watch_debounce_ms, cron_expression: editForm.schedule_enabled ? editForm.cron_expression : '', run_on_start: editForm.run_on_start, package_options: { ...editForm.package_options }, collect_options: { ...editForm.collect_options } }); ElMessage.success('规则更新成功'); editDialogVisible.value = false; editingRuleID.value = null; resetEditForm(); await loadRules() } catch (error) { errorMessage.value = error instanceof Error ? error.message : '规则更新失败' } finally { editing.value = false } }
-async function prepareExecution(ruleID: number) { loading.value = true; errorMessage.value = ''; try { const response = await prepareRuleExecution(ruleID, 'once'); const run = response.data?.run; latestPreparedSummary.value = response.data?.prepared?.summary ?? ''; if (run) { const logsResponse = await fetchRunLogs(run.id); const items = logsResponse.data?.items ?? []; const summary = items.map((item) => item.message).join(' | ') || latestPreparedSummary.value; historyItems.value.unshift({ id: run.id, rule_id: run.rule_id, rule_name: run.rule_name || '未知规则', trigger_mode: run.trigger_mode, archive_mode: run.archive_mode, summary, status: run.failure_count > 0 || run.status === 'failed' ? 'failed' : run.skip_count > 0 ? 'skip' : 'success', processed_files: run.processed_files, success_count: run.success_count, skip_count: run.skip_count, failure_count: run.failure_count, started_at: run.started_at, updated_at: run.updated_at, finished_at: run.finished_at }) } ElMessage.success('规则执行完成'); activeTab.value = 'history'; await loadRules(); await loadHistory() } catch (error) { errorMessage.value = error instanceof Error ? error.message : '规则执行失败' } finally { loading.value = false } }
-async function removeRule(id: number) { try { await ElMessageBox.confirm('确认删除该规则？', '删除规则', { type: 'warning' }); await deleteRule(id); ElMessage.success('规则已删除'); await loadRules() } catch (error) { if (error === 'cancel') return; errorMessage.value = error instanceof Error ? error.message : '删除规则失败' } }
-function clearHistory(status: HistoryStatus) { historyItems.value = historyItems.value.filter((item) => item.status !== status) }
-function removeHistoryItem(index: number) { historyItems.value.splice(index, 1) }
+const createPurifyForm = reactive({
+  name: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: false,
+  compatibility_mode: 'local' as CompatibilityMode,
+  source_dir: '',
+  cron_expression: '',
+  watch_debounce_ms: 2000,
+  run_on_start: true,
+  options: createDefaultCleanupOptions(),
+  filters_text: '',
+})
 
-onMounted(() => { void loadRules(); void loadHistory() })
+const editPurifyForm = reactive({
+  name: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: false,
+  compatibility_mode: 'local' as CompatibilityMode,
+  source_dir: '',
+  cron_expression: '',
+  watch_debounce_ms: 2000,
+  run_on_start: true,
+  options: createDefaultCleanupOptions(),
+  filters_text: '',
+})
+
+function resetCreateForm() {
+  createForm.name = ''
+  createForm.description = ''
+  createForm.enabled = true
+  createForm.monitor_enabled = true
+  createForm.schedule_enabled = false
+  createForm.compatibility_mode = 'local'
+  createForm.archive_mode = 'package'
+  createForm.source_dir = ''
+  createForm.target_dir = ''
+  createForm.cron_expression = ''
+  createForm.watch_debounce_ms = 2000
+  createForm.run_on_start = true
+  createForm.package_options = createDefaultPackageOptions()
+  createForm.collect_options = createDefaultCollectOptions()
+}
+
+function resetEditForm() {
+  editForm.name = ''
+  editForm.description = ''
+  editForm.enabled = true
+  editForm.monitor_enabled = true
+  editForm.schedule_enabled = false
+  editForm.compatibility_mode = 'local'
+  editForm.archive_mode = 'package'
+  editForm.source_dir = ''
+  editForm.target_dir = ''
+  editForm.cron_expression = ''
+  editForm.watch_debounce_ms = 2000
+  editForm.run_on_start = true
+  editForm.package_options = createDefaultPackageOptions()
+  editForm.collect_options = createDefaultCollectOptions()
+}
+
+function resetCreatePurifyForm() {
+  createPurifyForm.name = ''
+  createPurifyForm.enabled = true
+  createPurifyForm.monitor_enabled = true
+  createPurifyForm.schedule_enabled = false
+  createPurifyForm.compatibility_mode = 'local'
+  createPurifyForm.source_dir = ''
+  createPurifyForm.cron_expression = ''
+  createPurifyForm.watch_debounce_ms = 2000
+  createPurifyForm.run_on_start = true
+  createPurifyForm.options = createDefaultCleanupOptions()
+  createPurifyForm.filters_text = ''
+}
+
+function resetEditPurifyForm() {
+  editPurifyForm.name = ''
+  editPurifyForm.enabled = true
+  editPurifyForm.monitor_enabled = true
+  editPurifyForm.schedule_enabled = false
+  editPurifyForm.compatibility_mode = 'local'
+  editPurifyForm.source_dir = ''
+  editPurifyForm.cron_expression = ''
+  editPurifyForm.watch_debounce_ms = 2000
+  editPurifyForm.run_on_start = true
+  editPurifyForm.options = createDefaultCleanupOptions()
+  editPurifyForm.filters_text = ''
+}
+
+function openCreateDialog() {
+  resetCreateForm()
+  createDialogVisible.value = true
+}
+
+function openCreatePurifyDialog() {
+  resetCreatePurifyForm()
+  createPurifyDialogVisible.value = true
+}
+
+function resolveInitialDirectory(form: Exclude<DirectoryPickerTarget, null>) {
+  switch (form) {
+    case 'create.source_dir':
+      return createForm.source_dir
+    case 'create.target_dir':
+      return createForm.target_dir
+    case 'edit.source_dir':
+      return editForm.source_dir
+    case 'edit.target_dir':
+      return editForm.target_dir
+    case 'createPurify.source_dir':
+      return createPurifyForm.source_dir
+    case 'editPurify.source_dir':
+      return editPurifyForm.source_dir
+  }
+}
+
+function openDirectoryPicker(form: 'create' | 'edit' | 'createPurify' | 'editPurify', field: 'source_dir' | 'target_dir') {
+  const target = `${form}.${field}` as DirectoryPickerTarget
+  directoryPickerTarget.value = target
+  directoryPickerInitialPath.value = target ? resolveInitialDirectory(target as Exclude<DirectoryPickerTarget, null>) : ''
+  directoryPickerVisible.value = true
+}
+
+function applyDirectorySelection(path: string) {
+  switch (directoryPickerTarget.value) {
+    case 'create.source_dir':
+      createForm.source_dir = path
+      break
+    case 'create.target_dir':
+      createForm.target_dir = path
+      break
+    case 'edit.source_dir':
+      editForm.source_dir = path
+      break
+    case 'edit.target_dir':
+      editForm.target_dir = path
+      break
+    case 'createPurify.source_dir':
+      createPurifyForm.source_dir = path
+      break
+    case 'editPurify.source_dir':
+      editPurifyForm.source_dir = path
+      break
+  }
+
+  directoryPickerVisible.value = false
+}
+
+async function loadRules() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    rules.value = (await fetchRules()).data?.items ?? []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '规则列表加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadHistory() {
+  try {
+    historyItems.value = (await fetchRunHistory()).data?.items ?? []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败'
+  }
+}
+
+async function submitCreateRule() {
+  creating.value = true
+  errorMessage.value = ''
+  try {
+    await createRule({
+      name: createForm.name,
+      description: createForm.description,
+      enabled: createForm.enabled,
+      monitor_enabled: createForm.monitor_enabled,
+      compatibility_mode: createForm.compatibility_mode,
+      archive_mode: createForm.archive_mode,
+      run_mode: resolveRunMode(createForm.monitor_enabled, createForm.schedule_enabled),
+      source_dir: createForm.source_dir,
+      target_dir: createForm.target_dir,
+      watch_debounce_ms: createForm.watch_debounce_ms,
+      cron_expression: createForm.schedule_enabled ? createForm.cron_expression : '',
+      run_on_start: createForm.run_on_start,
+      package_options: { ...createForm.package_options },
+      collect_options: { ...createForm.collect_options },
+    })
+    ElMessage.success('规则创建成功')
+    createDialogVisible.value = false
+    resetCreateForm()
+    await loadRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '规则创建失败'
+  } finally {
+    creating.value = false
+  }
+}
+
+async function openEditDialog(id: number) {
+  editing.value = true
+  errorMessage.value = ''
+  try {
+    const rule = (await fetchRule(id)).data
+    if (!rule) throw new Error('规则详情不存在')
+
+    editingRuleID.value = rule.id
+    editForm.name = rule.name
+    editForm.description = rule.description
+    editForm.enabled = rule.enabled
+    editForm.monitor_enabled = rule.monitor_enabled
+    editForm.schedule_enabled = rule.run_mode === 'cron'
+    editForm.compatibility_mode = rule.compatibility_mode || 'local'
+    editForm.archive_mode = rule.archive_mode === 'collect' ? 'collect' : 'package'
+    editForm.source_dir = rule.source_dir
+    editForm.target_dir = rule.target_dir
+    editForm.cron_expression = rule.cron_expression
+    editForm.watch_debounce_ms = rule.watch_debounce_ms
+    editForm.run_on_start = rule.run_on_start
+    editForm.package_options = parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
+    editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
+    editDialogVisible.value = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '规则详情加载失败'
+  } finally {
+    editing.value = false
+  }
+}
+
+async function submitUpdateRule() {
+  if (!editingRuleID.value) {
+    errorMessage.value = '缺少规则 ID'
+    return
+  }
+
+  editing.value = true
+  errorMessage.value = ''
+  try {
+    await updateRule(editingRuleID.value, {
+      name: editForm.name,
+      description: editForm.description,
+      enabled: editForm.enabled,
+      monitor_enabled: editForm.monitor_enabled,
+      compatibility_mode: editForm.compatibility_mode,
+      archive_mode: editForm.archive_mode,
+      run_mode: resolveRunMode(editForm.monitor_enabled, editForm.schedule_enabled),
+      source_dir: editForm.source_dir,
+      target_dir: editForm.target_dir,
+      watch_debounce_ms: editForm.watch_debounce_ms,
+      cron_expression: editForm.schedule_enabled ? editForm.cron_expression : '',
+      run_on_start: editForm.run_on_start,
+      package_options: { ...editForm.package_options },
+      collect_options: { ...editForm.collect_options },
+    })
+    ElMessage.success('规则更新成功')
+    editDialogVisible.value = false
+    editingRuleID.value = null
+    resetEditForm()
+    await loadRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '规则更新失败'
+  } finally {
+    editing.value = false
+  }
+}
+
+async function openEditPurifyDialog(id: number) {
+  editing.value = true
+  errorMessage.value = ''
+  try {
+    const rule = (await fetchRule(id)).data
+    if (!rule) throw new Error('规则详情不存在')
+    if (rule.archive_mode !== 'cleanup') throw new Error('当前规则不是净化规则')
+
+    editingPurifyRuleID.value = rule.id
+    editPurifyForm.name = rule.name
+    editPurifyForm.enabled = rule.enabled
+    editPurifyForm.monitor_enabled = rule.monitor_enabled
+    editPurifyForm.schedule_enabled = rule.run_mode === 'cron'
+    editPurifyForm.compatibility_mode = rule.compatibility_mode || 'local'
+    editPurifyForm.source_dir = rule.source_dir
+    editPurifyForm.cron_expression = rule.cron_expression
+    editPurifyForm.watch_debounce_ms = rule.watch_debounce_ms
+    editPurifyForm.run_on_start = rule.run_on_start
+    editPurifyForm.options = parseOptionJSON(rule.options_json, createDefaultCleanupOptions())
+    editPurifyForm.filters_text = parseFiltersJSON(rule.filters_json)
+    editPurifyDialogVisible.value = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '净化规则详情加载失败'
+  } finally {
+    editing.value = false
+  }
+}
+
+async function submitCreatePurifyRule() {
+  creating.value = true
+  errorMessage.value = ''
+  try {
+    await createRule({
+      name: createPurifyForm.name,
+      description: '',
+      enabled: createPurifyForm.enabled,
+      monitor_enabled: createPurifyForm.monitor_enabled,
+      compatibility_mode: createPurifyForm.compatibility_mode,
+      archive_mode: 'cleanup',
+      run_mode: resolveRunMode(createPurifyForm.monitor_enabled, createPurifyForm.schedule_enabled),
+      source_dir: createPurifyForm.source_dir,
+      target_dir: '',
+      watch_debounce_ms: createPurifyForm.watch_debounce_ms,
+      cron_expression: createPurifyForm.schedule_enabled ? createPurifyForm.cron_expression : '',
+      run_on_start: createPurifyForm.run_on_start,
+      options: { ...createPurifyForm.options },
+      filters: parseFiltersText(createPurifyForm.filters_text),
+    })
+    ElMessage.success('净化规则创建成功')
+    createPurifyDialogVisible.value = false
+    resetCreatePurifyForm()
+    await loadRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '净化规则创建失败'
+  } finally {
+    creating.value = false
+  }
+}
+
+async function submitUpdatePurifyRule() {
+  if (!editingPurifyRuleID.value) {
+    errorMessage.value = '缺少净化规则 ID'
+    return
+  }
+
+  editing.value = true
+  errorMessage.value = ''
+  try {
+    await updateRule(editingPurifyRuleID.value, {
+      name: editPurifyForm.name,
+      description: '',
+      enabled: editPurifyForm.enabled,
+      monitor_enabled: editPurifyForm.monitor_enabled,
+      compatibility_mode: editPurifyForm.compatibility_mode,
+      archive_mode: 'cleanup',
+      run_mode: resolveRunMode(editPurifyForm.monitor_enabled, editPurifyForm.schedule_enabled),
+      source_dir: editPurifyForm.source_dir,
+      target_dir: '',
+      watch_debounce_ms: editPurifyForm.watch_debounce_ms,
+      cron_expression: editPurifyForm.schedule_enabled ? editPurifyForm.cron_expression : '',
+      run_on_start: editPurifyForm.run_on_start,
+      options: { ...editPurifyForm.options },
+      filters: parseFiltersText(editPurifyForm.filters_text),
+    })
+    ElMessage.success('净化规则更新成功')
+    editPurifyDialogVisible.value = false
+    editingPurifyRuleID.value = null
+    resetEditPurifyForm()
+    await loadRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '净化规则更新失败'
+  } finally {
+    editing.value = false
+  }
+}
+
+async function prepareExecution(ruleID: number) {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await prepareRuleExecution(ruleID, 'once')
+    const run = response.data?.run
+    latestPreparedSummary.value = response.data?.prepared?.summary ?? ''
+
+    if (run) {
+      const logsResponse = await fetchRunLogs(run.id)
+      const items = logsResponse.data?.items ?? []
+      const summary = items.map((item) => item.message).join(' | ') || latestPreparedSummary.value
+      historyItems.value.unshift({
+        id: run.id,
+        rule_id: run.rule_id,
+        rule_name: run.rule_name || '未知规则',
+        trigger_mode: run.trigger_mode,
+        archive_mode: run.archive_mode,
+        summary,
+        status: run.failure_count > 0 || run.status === 'failed' ? 'failed' : run.skip_count > 0 ? 'skip' : 'success',
+        processed_files: run.processed_files,
+        success_count: run.success_count,
+        skip_count: run.skip_count,
+        failure_count: run.failure_count,
+        started_at: run.started_at,
+        updated_at: run.updated_at,
+        finished_at: run.finished_at,
+      })
+    }
+
+    ElMessage.success('规则执行完成')
+    activeTab.value = 'history'
+    await loadRules()
+    await loadHistory()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '规则执行失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function removeRule(id: number) {
+  try {
+    await ElMessageBox.confirm('确认删除该规则？', '删除规则', { type: 'warning' })
+    await deleteRule(id)
+    ElMessage.success('规则已删除')
+    await loadRules()
+  } catch (error) {
+    if (error === 'cancel') return
+    errorMessage.value = error instanceof Error ? error.message : '删除规则失败'
+  }
+}
+
+function clearHistory(status: HistoryStatus) {
+  historyItems.value = historyItems.value.filter((item) => item.status !== status)
+}
+
+function removeHistoryItem(index: number) {
+  historyItems.value.splice(index, 1)
+}
+
+onMounted(() => {
+  void loadRules()
+  void loadHistory()
+})
 </script>
 
 <style scoped>
@@ -299,4 +891,5 @@ onMounted(() => { void loadRules(); void loadHistory() })
 .mode-option-card { display: flex; flex-direction: column; gap: 6px; min-height: 92px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); cursor: pointer; }
 .mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
 .mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
+.purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>
