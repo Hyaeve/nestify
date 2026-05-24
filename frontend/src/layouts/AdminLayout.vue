@@ -375,6 +375,7 @@ async function handleLogout() {
   color: rgba(148, 163, 184, 0.78);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.86);
+  --aside-toggle-chevron-transform: scaleY(4.25);
   transition:
     color 0.2s ease,
     opacity 0.18s ease,
@@ -407,12 +408,8 @@ async function handleLogout() {
 .aside-toggle :deep(.el-icon svg) {
   width: 18px;
   height: 18px;
-  transform: scaleY(4.25);
+  transform: var(--aside-toggle-chevron-transform);
   transform-origin: center;
-}
-
-.aside-toggle__chevron.is-collapsed :deep(.el-icon svg) {
-  transform: scaleX(-1);
 }
 
 .admin-layout__aside.is-collapsed .brand {
