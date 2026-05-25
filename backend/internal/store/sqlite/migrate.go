@@ -22,6 +22,8 @@ func (s *Store) migrate() error {
 			monitor_enabled INTEGER NOT NULL DEFAULT 1,
 			compatibility_mode TEXT NOT NULL DEFAULT 'local',
 			archive_mode TEXT NOT NULL,
+			rule_type TEXT NOT NULL DEFAULT 'archive',
+			link_mode TEXT NOT NULL DEFAULT '',
 			run_mode TEXT NOT NULL,
 			source_dir TEXT NOT NULL,
 			target_dir TEXT NOT NULL,
@@ -80,6 +82,14 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	if err := s.ensureRuleTypeColumn(); err != nil {
+		return err
+	}
+
+	if err := s.ensureRuleLinkModeColumn(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -107,6 +117,64 @@ func (s *Store) ensureRuleCompatibilityModeColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN compatibility_mode TEXT NOT NULL DEFAULT 'local';`); err != nil {
 		return fmt.Errorf("add compatibility_mode column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleTypeColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "rule_type") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN rule_type TEXT NOT NULL DEFAULT 'archive';`); err != nil {
+		return fmt.Errorf("add rule_type column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleLinkModeColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "link_mode") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
+		return fmt.Errorf("add link_mode column: %w", err)
 	}
 
 	return nil

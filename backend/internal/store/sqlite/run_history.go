@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"nestify/backend/internal/model"
@@ -91,12 +92,128 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	return items, nil
 }
 
+func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode string) ([]model.RunHistoryItem, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 25
+	}
+
+	whereClause, args := buildRunHistoryWhereClause(keyword, status, archiveMode)
+
+	countQuery := `SELECT COUNT(*) FROM run_history` + whereClause
+	var total int
+	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count run history: %w", err)
+	}
+
+	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := s.db.Query(`
+		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, status,
+		       processed_files, success_count, skip_count, failure_count,
+		       summary, started_at, updated_at, finished_at
+		FROM run_history`+whereClause+`
+		ORDER BY started_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list run history page: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]model.RunHistoryItem, 0, pageSize)
+	for rows.Next() {
+		item, scanErr := scanRunHistory(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate run history page: %w", err)
+	}
+
+	return items, total, nil
+}
+
+func (s *Store) GetRunHistorySummary() (model.RunHistorySummary, error) {
+	var summary model.RunHistorySummary
+	err := s.db.QueryRow(`
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN date(started_at, 'localtime') = date('now', 'localtime') THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status = 'skip' THEN 1 ELSE 0 END), 0)
+		FROM run_history
+	`).Scan(&summary.Total, &summary.Today, &summary.Success, &summary.Failed, &summary.Skipped)
+	if err != nil {
+		return model.RunHistorySummary{}, fmt.Errorf("get run history summary: %w", err)
+	}
+
+	return summary, nil
+}
+
+func (s *Store) DeleteRunHistoryByID(id string) error {
+	if _, err := s.db.Exec(`DELETE FROM run_history WHERE id = ?`, strings.TrimSpace(id)); err != nil {
+		return fmt.Errorf("delete run history by id: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteRunHistoryByStatus(status string) error {
+	if _, err := s.db.Exec(`DELETE FROM run_history WHERE status = ?`, strings.TrimSpace(status)); err != nil {
+		return fmt.Errorf("delete run history by status: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) ClearRunHistory() error {
 	if _, err := s.db.Exec(`DELETE FROM run_history`); err != nil {
 		return fmt.Errorf("clear run history: %w", err)
 	}
 
 	return nil
+}
+
+func buildRunHistoryWhereClause(keyword, status, archiveMode string) (string, []any) {
+	clauses := make([]string, 0, 3)
+	args := make([]any, 0, 7)
+
+	trimmedStatus := strings.TrimSpace(status)
+	if trimmedStatus != "" {
+		clauses = append(clauses, `status = ?`)
+		args = append(args, trimmedStatus)
+	}
+
+	trimmedArchiveMode := strings.TrimSpace(archiveMode)
+	if trimmedArchiveMode != "" {
+		clauses = append(clauses, `archive_mode = ?`)
+		args = append(args, trimmedArchiveMode)
+	}
+
+	trimmedKeyword := strings.ToLower(strings.TrimSpace(keyword))
+	if trimmedKeyword != "" {
+		like := "%" + trimmedKeyword + "%"
+		clauses = append(clauses, `(
+			LOWER(COALESCE(rule_name, '')) LIKE ? OR
+			LOWER(COALESCE(summary, '')) LIKE ? OR
+			LOWER(COALESCE(status, '')) LIKE ? OR
+			LOWER(COALESCE(trigger_mode, '')) LIKE ? OR
+			LOWER(COALESCE(archive_mode, '')) LIKE ?
+		)`)
+		args = append(args, like, like, like, like, like)
+	}
+
+	if len(clauses) == 0 {
+		return "", nil
+	}
+
+	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
 type runHistoryScanner interface {

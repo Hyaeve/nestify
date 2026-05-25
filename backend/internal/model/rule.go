@@ -10,6 +10,8 @@ type Rule struct {
 	MonitorEnabled     bool      `json:"monitor_enabled"`
 	CompatibilityMode  string    `json:"compatibility_mode"`
 	ArchiveMode        string    `json:"archive_mode"`
+	RuleType           string    `json:"rule_type"`
+	LinkMode           string    `json:"link_mode"`
 	RunMode            string    `json:"run_mode"`
 	SourceDir          string    `json:"source_dir"`
 	TargetDir          string    `json:"target_dir"`
@@ -35,6 +37,8 @@ type CreateRuleInput struct {
 	MonitorEnabled    *bool           `json:"monitor_enabled"`
 	CompatibilityMode string          `json:"compatibility_mode"`
 	ArchiveMode       string          `json:"archive_mode"`
+	RuleType          string          `json:"rule_type"`
+	LinkMode          string          `json:"link_mode"`
 	RunMode           string          `json:"run_mode"`
 	SourceDir         string          `json:"source_dir"`
 	TargetDir         string          `json:"target_dir"`
@@ -54,6 +58,8 @@ type UpdateRuleInput struct {
 	MonitorEnabled    *bool           `json:"monitor_enabled"`
 	CompatibilityMode string          `json:"compatibility_mode"`
 	ArchiveMode       string          `json:"archive_mode"`
+	RuleType          string          `json:"rule_type"`
+	LinkMode          string          `json:"link_mode"`
 	RunMode           string          `json:"run_mode"`
 	SourceDir         string          `json:"source_dir"`
 	TargetDir         string          `json:"target_dir"`

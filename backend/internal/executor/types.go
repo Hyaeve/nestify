@@ -4,6 +4,8 @@ type ExecuteRuleRequest struct {
 	RuleID            int64
 	RuleName          string
 	ArchiveMode       string
+	RuleType          string
+	LinkMode          string
 	TriggerMode       string
 	CompatibilityMode string
 	SourceDir         string
@@ -16,6 +18,7 @@ type ExecuteRuleRequest struct {
 
 type PreparedMode struct {
 	ArchiveMode string
+	RuleType    string
 	SourceDir   string
 	TargetDir   string
 	Summary     string

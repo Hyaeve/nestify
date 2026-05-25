@@ -17,17 +17,77 @@ export interface RunHistoryItem {
 
 import { deleteJSON, getJSON } from './http'
 
+export type RunHistoryStatus = 'success' | 'failed' | 'skip'
+export type RunHistoryArchiveMode = 'package' | 'collect' | 'cleanup'
+
+export interface RunHistorySummary {
+  total: number
+  today: number
+  success: number
+  failed: number
+  skipped: number
+}
+
 export interface RunHistoryPayload {
   items: RunHistoryItem[]
   total: number
+  page: number
+  page_size: number
+  summary?: RunHistorySummary
 }
 
-export function fetchRunHistory() {
-  return getJSON<RunHistoryPayload>('/api/v1/run-history')
+export interface FetchRunHistoryParams {
+  page?: number
+  page_size?: number
+  keyword?: string
+  status?: RunHistoryStatus
+  archive_mode?: RunHistoryArchiveMode
 }
 
-export function clearRunHistory() {
-  return deleteJSON<null>('/api/v1/run-history')
+function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
+  const query = new URLSearchParams()
+
+  if (typeof params.page === 'number' && params.page > 0) {
+    query.set('page', String(params.page))
+  }
+
+  if (typeof params.page_size === 'number' && params.page_size > 0) {
+    query.set('page_size', String(params.page_size))
+  }
+
+  if (params.keyword?.trim()) {
+    query.set('keyword', params.keyword.trim())
+  }
+
+  if (params.status) {
+    query.set('status', params.status)
+  }
+
+  if (params.archive_mode) {
+    query.set('archive_mode', params.archive_mode)
+  }
+
+  const queryString = query.toString()
+  return queryString ? `/api/v1/run-history?${queryString}` : '/api/v1/run-history'
+}
+
+export function fetchRunHistory(params: FetchRunHistoryParams = {}) {
+  return getJSON<RunHistoryPayload>(buildRunHistoryURL(params))
+}
+
+export function clearRunHistory(status?: RunHistoryStatus) {
+  const query = new URLSearchParams()
+  if (status) {
+    query.set('status', status)
+  }
+
+  const queryString = query.toString()
+  const url = queryString ? `/api/v1/run-history?${queryString}` : '/api/v1/run-history'
+  return deleteJSON<null>(url)
+}
+
+export function deleteRunHistoryItem(id: string) {
+  return deleteJSON<null>(`/api/v1/run-history?id=${encodeURIComponent(id)}`)
 }
 
 export function emptyRunHistory(): RunHistoryItem[] {

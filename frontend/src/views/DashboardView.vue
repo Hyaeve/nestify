@@ -464,6 +464,7 @@ onMounted(() => {
 }
 
 .task-preview-card {
+  flex: 0 0 auto;
   min-height: 220px;
 }
 

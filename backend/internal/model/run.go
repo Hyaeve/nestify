@@ -69,6 +69,14 @@ type RunHistoryItem struct {
 	FinishedAt     *time.Time `json:"finished_at,omitempty"`
 }
 
+type RunHistorySummary struct {
+	Total   int `json:"total"`
+	Today   int `json:"today"`
+	Success int `json:"success"`
+	Failed  int `json:"failed"`
+	Skipped int `json:"skipped"`
+}
+
 type ManualPreflightRequest struct {
 	SourceDir string `json:"source_dir"`
 	OutputDir string `json:"output_dir,omitempty"`

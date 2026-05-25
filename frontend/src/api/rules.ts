@@ -33,6 +33,12 @@ export interface RulesListPayload {
   page_size: number
 }
 
+export interface FetchRulesParams {
+  page?: number
+  page_size?: number
+  rule_type?: 'archive' | 'cleanup'
+}
+
 export interface CreateRulePayload {
   name: string
   description: string
@@ -54,8 +60,27 @@ export interface CreateRulePayload {
 
 export interface UpdateRulePayload extends CreateRulePayload {}
 
-export function fetchRules() {
-  return getJSON<RulesListPayload>('/api/v1/rules')
+function buildRulesURL(params: FetchRulesParams = {}) {
+  const query = new URLSearchParams()
+
+  if (typeof params.page === 'number' && params.page > 0) {
+    query.set('page', String(params.page))
+  }
+
+  if (typeof params.page_size === 'number' && params.page_size > 0) {
+    query.set('page_size', String(params.page_size))
+  }
+
+  if (params.rule_type) {
+    query.set('rule_type', params.rule_type)
+  }
+
+  const queryString = query.toString()
+  return queryString ? `/api/v1/rules?${queryString}` : '/api/v1/rules'
+}
+
+export function fetchRules(params: FetchRulesParams = {}) {
+  return getJSON<RulesListPayload>(buildRulesURL(params))
 }
 
 export function fetchRule(id: number) {

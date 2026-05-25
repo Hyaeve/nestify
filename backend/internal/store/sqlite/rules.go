@@ -12,7 +12,7 @@ import (
 
 func (s *Store) ListRules() ([]model.Rule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
+		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 		       options_json, package_options_json, collect_options_json, filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
@@ -41,9 +41,70 @@ func (s *Store) ListRules() ([]model.Rule, error) {
 	return items, nil
 }
 
+func (s *Store) ListRulesPage(page, pageSize int, ruleType string) ([]model.Rule, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 25
+	}
+
+	whereClause, args := buildRuleTypeWhereClause(ruleType)
+
+	countQuery := `SELECT COUNT(*) FROM rules` + whereClause
+	var total int
+	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count rules: %w", err)
+	}
+
+	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := s.db.Query(`
+		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
+		       options_json, package_options_json, collect_options_json, filters_json,
+		       last_run_status, last_success_count, last_skip_count, last_failure_count,
+		       created_at, updated_at
+		FROM rules`+whereClause+`
+		ORDER BY id DESC
+		LIMIT ? OFFSET ?
+	`, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list rules page: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]model.Rule, 0, pageSize)
+	for rows.Next() {
+		rule, scanErr := scanRule(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		items = append(items, rule)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate rules page: %w", err)
+	}
+
+	return items, total, nil
+}
+
+func buildRuleTypeWhereClause(ruleType string) (string, []any) {
+	switch strings.TrimSpace(ruleType) {
+	case "archive":
+		return ` WHERE rule_type = ?`, []any{"archive"}
+	case "cleanup":
+		return ` WHERE rule_type = ?`, []any{"cleanup"}
+	case "link":
+		return ` WHERE rule_type = ?`, []any{"link"}
+	default:
+		return "", nil
+	}
+}
+
 func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 	row := s.db.QueryRow(`
-		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
+		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 		       options_json, package_options_json, collect_options_json, filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
@@ -66,6 +127,8 @@ func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 	now := time.Now().UTC()
 	archiveMode := strings.TrimSpace(input.ArchiveMode)
+	ruleType := defaultString(strings.TrimSpace(input.RuleType), deriveRuleType(archiveMode))
+	linkMode := strings.TrimSpace(input.LinkMode)
 	compatibilityMode := strings.TrimSpace(input.CompatibilityMode)
 	if compatibilityMode == "" {
 		compatibilityMode = "local"
@@ -74,11 +137,11 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 
 	result, err := s.db.Exec(`
 		INSERT INTO rules (
-			name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, run_mode,
+			name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
 			options_json, package_options_json, collect_options_json, filters_json,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		strings.TrimSpace(input.Name),
 		strings.TrimSpace(input.Description),
@@ -86,6 +149,8 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		boolToInt(defaultBool(input.MonitorEnabled, true)),
 		compatibilityMode,
 		archiveMode,
+		ruleType,
+		linkMode,
 		runMode,
 		strings.TrimSpace(input.SourceDir),
 		strings.TrimSpace(input.TargetDir),
@@ -121,6 +186,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    monitor_enabled = ?,
 		    compatibility_mode = ?,
 		    archive_mode = ?,
+		    rule_type = ?,
+		    link_mode = ?,
 		    run_mode = ?,
 		    source_dir = ?,
 		    target_dir = ?,
@@ -140,6 +207,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		boolToInt(defaultBool(input.MonitorEnabled, true)),
 		defaultString(strings.TrimSpace(input.CompatibilityMode), "local"),
 		strings.TrimSpace(input.ArchiveMode),
+		defaultString(strings.TrimSpace(input.RuleType), deriveRuleType(strings.TrimSpace(input.ArchiveMode))),
+		strings.TrimSpace(input.LinkMode),
 		strings.TrimSpace(input.RunMode),
 		strings.TrimSpace(input.SourceDir),
 		strings.TrimSpace(input.TargetDir),
@@ -219,6 +288,17 @@ func defaultString(value string, fallback string) string {
 	return value
 }
 
+func deriveRuleType(archiveMode string) string {
+	switch strings.TrimSpace(archiveMode) {
+	case "cleanup":
+		return "cleanup"
+	case "link":
+		return "link"
+	default:
+		return "archive"
+	}
+}
+
 func marshalBoolMap(value map[string]bool) string {
 	if len(value) == 0 {
 		return `{}`
@@ -274,6 +354,8 @@ func scanRule(s scanner) (model.Rule, error) {
 		&monitorEnabled,
 		&rule.CompatibilityMode,
 		&rule.ArchiveMode,
+		&rule.RuleType,
+		&rule.LinkMode,
 		&rule.RunMode,
 		&rule.SourceDir,
 		&rule.TargetDir,
@@ -299,6 +381,9 @@ func scanRule(s scanner) (model.Rule, error) {
 	rule.MonitorEnabled = intToBool(monitorEnabled)
 	if strings.TrimSpace(rule.CompatibilityMode) == "" {
 		rule.CompatibilityMode = "local"
+	}
+	if strings.TrimSpace(rule.RuleType) == "" {
+		rule.RuleType = deriveRuleType(rule.ArchiveMode)
 	}
 	rule.RunOnStart = intToBool(runOnStart)
 	rule.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)

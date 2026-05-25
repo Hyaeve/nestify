@@ -1,9 +1,9 @@
 <template>
   <div class="rules-page">
     <div class="rules-tabs">
-      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="activeTab = 'rules'">归档规则</button>
-      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="activeTab = 'purify'">净化规则</button>
-      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="activeTab = 'history'">归巢历史</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="switchTab('rules')">归档规则</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="switchTab('purify')">净化规则</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
     <el-alert v-if="errorMessage" :closable="false" type="error" :title="errorMessage" class="rules-error" />
@@ -13,12 +13,13 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">归档规则</div>
+            <div class="mode-config-panel__description">共 {{ archiveRulesTotal }} 条规则，默认每页 25 条，可切换为 50 条。</div>
           </div>
           <el-button type="primary" round @click="openCreateDialog">+ 添加规则</el-button>
         </div>
       </template>
 
-        <el-table v-loading="loading" :data="archiveRules">
+      <el-table v-if="archiveRules.length" v-loading="archiveLoading" :data="archiveRules">
         <el-table-column prop="name" label="规则名称" min-width="140" />
         <el-table-column label="模式" width="100">
           <template #default="scope">
@@ -58,7 +59,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id)">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'archive')">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -66,6 +67,21 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
+
+      <div v-if="archiveRulesTotal > 0" class="history-pagination">
+        <el-pagination
+          v-model:current-page="archiveRulesCurrentPage"
+          v-model:page-size="archiveRulesPageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="pageSizeOptions"
+          :total="archiveRulesTotal"
+          @current-change="handleArchiveRulesPageChange"
+          @size-change="handleArchiveRulesPageSizeChange"
+        />
+      </div>
     </el-card>
 
     <el-card v-show="activeTab === 'history'" class="page-card history-card">
@@ -82,6 +98,8 @@
 
       <div class="history-toolbar">
         <div class="history-summary">
+          <span>累计 {{ historySummary.total }}</span>
+          <span>今日 {{ historySummary.today }}</span>
           <span>成功 {{ successCount }}</span>
           <span>跳过 {{ skipCount }}</span>
           <span>失败 {{ failedCount }}</span>
@@ -98,12 +116,12 @@
         </div>
       </div>
 
-      <el-table :data="pagedHistoryItems">
+      <el-table v-loading="historyLoading" :data="historyItems">
         <el-table-column label="规则 / 摘要" min-width="360">
           <template #default="scope">
             <div class="history-rule">
               <div class="history-rule__title">{{ scope.row.rule_name || '未知规则' }}</div>
-              <div class="history-rule__desc">{{ scope.row.summary || latestPreparedSummary }}</div>
+              <div class="history-rule__desc">{{ scope.row.summary || '—' }}</div>
             </div>
           </template>
         </el-table-column>
@@ -125,13 +143,16 @@
         </el-table-column>
       </el-table>
 
-      <div v-if="filteredHistoryItems.length > historyPageSize" class="history-pagination">
+      <div v-if="historyTotal > 0" class="history-pagination">
         <el-pagination
           v-model:current-page="historyCurrentPage"
+          v-model:page-size="historyPageSize"
           background
-          layout="prev, pager, next"
-          :page-size="historyPageSize"
-          :total="filteredHistoryItems.length"
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="pageSizeOptions"
+          :total="historyTotal"
+          @current-change="handleHistoryPageChange"
+          @size-change="handleHistoryPageSizeChange"
         />
       </div>
     </el-card>
@@ -141,13 +162,13 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">净化规则</div>
-            <div class="mode-config-panel__description">清理自定义监控目录下的空文件夹，或清理文件名命中匹配规则的文件。</div>
+            <div class="mode-config-panel__description">共 {{ purifyRulesTotal }} 条规则，清理自定义监控目录下的空文件夹，或清理文件名命中匹配规则的文件。</div>
           </div>
           <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加净化规则</el-button>
         </div>
       </template>
 
-        <el-table v-if="purifyRules.length" v-loading="loading" :data="purifyRules">
+      <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="100">
           <template #default>
@@ -194,7 +215,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id)">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'cleanup')">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -202,6 +223,20 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div v-if="purifyRulesTotal > 0" class="history-pagination">
+        <el-pagination
+          v-model:current-page="purifyRulesCurrentPage"
+          v-model:page-size="purifyRulesPageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="pageSizeOptions"
+          :total="purifyRulesTotal"
+          @current-change="handlePurifyRulesPageChange"
+          @size-change="handlePurifyRulesPageSizeChange"
+        />
+      </div>
+
       <el-empty v-else description="暂无净化规则，可添加清理模式规则" />
     </el-card>
 
@@ -345,9 +380,16 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
-import { fetchRunLogs, prepareRuleExecution } from '../api/executions'
+import { prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleItem } from '../api/rules'
-import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
+import {
+  clearRunHistory,
+  deleteRunHistoryItem,
+  emptyRunHistory,
+  fetchRunHistory,
+  type RunHistoryItem,
+  type RunHistorySummary,
+} from '../api/runHistory'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
@@ -356,8 +398,11 @@ type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_la
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | null
+type TabKey = 'rules' | 'purify' | 'history'
+type RuleListType = 'archive' | 'cleanup'
 
 const defaultCronExpression = '0 8 * * *'
+const pageSizeOptions = [25, 50]
 
 const packageModeOptions = [
   { key: 'preserve_structure', label: '保留目录结构', description: '按源目录层级打包归档，避免目标目录结构混乱。' },
@@ -390,6 +435,16 @@ function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
   return { cleanup_empty_dirs: true, cleanup_matching_files: false }
+}
+
+function createDefaultHistorySummary(): RunHistorySummary {
+  return {
+    total: 0,
+    today: 0,
+    success: 0,
+    failed: 0,
+    skipped: 0,
+  }
 }
 
 function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefined, defaults: T): T {
@@ -441,12 +496,20 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
-const activeTab = ref<'rules' | 'purify' | 'history'>('rules')
+function historyStatusText(status: HistoryStatus) {
+  if (status === 'success') return '成功'
+  if (status === 'skip') return '跳过'
+  return '失败'
+}
+
+const activeTab = ref<TabKey>('rules')
 const loading = ref(false)
+const archiveLoading = ref(false)
+const purifyLoading = ref(false)
+const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
-const latestPreparedSummary = ref('')
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -463,52 +526,27 @@ const editingPurifyRuleID = ref<number | null>(null)
 const directoryPickerVisible = ref(false)
 const directoryPickerInitialPath = ref('')
 const directoryPickerTarget = ref<DirectoryPickerTarget>(null)
-const historyPageSize = 50
+
+const archiveRulesCurrentPage = ref(1)
+const archiveRulesPageSize = ref(25)
+const archiveRulesTotal = ref(0)
+const purifyRulesCurrentPage = ref(1)
+const purifyRulesPageSize = ref(25)
+const purifyRulesTotal = ref(0)
+const historyPageSize = ref(25)
 const historyCurrentPage = ref(1)
+const historyTotal = ref(0)
 const historyKeywordInput = ref('')
 const historyKeyword = ref('')
 
-const rules = ref<RuleItem[]>([])
+const archiveRules = ref<RuleItem[]>([])
+const purifyRules = ref<RuleItem[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
+const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
 
-const archiveRules = computed(() => rules.value.filter((item) => item.archive_mode !== 'cleanup'))
-const purifyRules = computed(() => rules.value.filter((item) => item.archive_mode === 'cleanup'))
-const successCount = computed(() => historyItems.value.filter((item) => item.status === 'success').length)
-const skipCount = computed(() => historyItems.value.filter((item) => item.status === 'skip').length)
-const failedCount = computed(() => historyItems.value.filter((item) => item.status === 'failed').length)
-const filteredHistoryItems = computed(() => {
-  const keyword = historyKeyword.value.trim().toLowerCase()
-  if (!keyword) {
-    return historyItems.value
-  }
-
-  return historyItems.value.filter((item) => {
-    const searchableText = [item.rule_name, item.summary, item.status, item.archive_mode, item.trigger_mode]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-
-    return searchableText.includes(keyword)
-  })
-})
-const pagedHistoryItems = computed(() => {
-  const start = (historyCurrentPage.value - 1) * historyPageSize
-  return filteredHistoryItems.value.slice(start, start + historyPageSize)
-})
-
-watch(
-  () => filteredHistoryItems.value.length,
-  (length) => {
-    const maxPage = Math.max(1, Math.ceil(length / historyPageSize))
-    if (historyCurrentPage.value > maxPage) {
-      historyCurrentPage.value = maxPage
-    }
-  },
-)
-
-watch(historyKeyword, () => {
-  historyCurrentPage.value = 1
-})
+const successCount = computed(() => historySummary.value.success)
+const skipCount = computed(() => historySummary.value.skipped)
+const failedCount = computed(() => historySummary.value.failed)
 
 const createForm = reactive({
   name: '',
@@ -635,7 +673,7 @@ function resetEditPurifyForm() {
 }
 
 function applyDefaultCronOnEnable(enabled: boolean, cronExpression: string) {
-	return enabled && !cronExpression.trim() ? defaultCronExpression : cronExpression
+  return enabled && !cronExpression.trim() ? defaultCronExpression : cronExpression
 }
 
 watch(() => createForm.schedule_enabled, (enabled) => {
@@ -713,35 +751,121 @@ function applyDirectorySelection(path: string) {
   directoryPickerVisible.value = false
 }
 
-async function loadRules() {
-  loading.value = true
+async function loadArchiveRules() {
+  archiveLoading.value = true
   errorMessage.value = ''
   try {
-    rules.value = (await fetchRules()).data?.items ?? []
+    const response = await fetchRules({
+      page: archiveRulesCurrentPage.value,
+      page_size: archiveRulesPageSize.value,
+      rule_type: 'archive',
+    })
+    archiveRules.value = response.data?.items ?? []
+    archiveRulesTotal.value = response.data?.total ?? 0
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '规则列表加载失败'
+    errorMessage.value = error instanceof Error ? error.message : '归档规则加载失败'
   } finally {
-    loading.value = false
+    archiveLoading.value = false
+  }
+}
+
+async function loadPurifyRules() {
+  purifyLoading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await fetchRules({
+      page: purifyRulesCurrentPage.value,
+      page_size: purifyRulesPageSize.value,
+      rule_type: 'cleanup',
+    })
+    purifyRules.value = response.data?.items ?? []
+    purifyRulesTotal.value = response.data?.total ?? 0
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '净化规则加载失败'
+  } finally {
+    purifyLoading.value = false
   }
 }
 
 async function loadHistory() {
+  historyLoading.value = true
+  errorMessage.value = ''
   try {
-    historyItems.value = (await fetchRunHistory()).data?.items ?? []
-    historyCurrentPage.value = 1
+    const response = await fetchRunHistory({
+      page: historyCurrentPage.value,
+      page_size: historyPageSize.value,
+      keyword: historyKeyword.value || undefined,
+    })
+    historyItems.value = response.data?.items ?? []
+    historyTotal.value = response.data?.total ?? 0
+    historySummary.value = response.data?.summary ?? createDefaultHistorySummary()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败'
+  } finally {
+    historyLoading.value = false
   }
+}
+
+async function switchTab(tab: TabKey) {
+  activeTab.value = tab
+
+  if (tab === 'rules') {
+    await loadArchiveRules()
+    return
+  }
+
+  if (tab === 'purify') {
+    await loadPurifyRules()
+    return
+  }
+
+  await loadHistory()
+}
+
+function handleArchiveRulesPageChange(page: number) {
+  archiveRulesCurrentPage.value = page
+  void loadArchiveRules()
+}
+
+function handleArchiveRulesPageSizeChange(pageSize: number) {
+  archiveRulesPageSize.value = pageSize
+  archiveRulesCurrentPage.value = 1
+  void loadArchiveRules()
+}
+
+function handlePurifyRulesPageChange(page: number) {
+  purifyRulesCurrentPage.value = page
+  void loadPurifyRules()
+}
+
+function handlePurifyRulesPageSizeChange(pageSize: number) {
+  purifyRulesPageSize.value = pageSize
+  purifyRulesCurrentPage.value = 1
+  void loadPurifyRules()
+}
+
+function handleHistoryPageChange(page: number) {
+  historyCurrentPage.value = page
+  void loadHistory()
+}
+
+function handleHistoryPageSizeChange(pageSize: number) {
+  historyPageSize.value = pageSize
+  historyCurrentPage.value = 1
+  void loadHistory()
 }
 
 function handleHistorySearch() {
   historyKeyword.value = historyKeywordInput.value.trim()
+  historyCurrentPage.value = 1
+  void loadHistory()
 }
 
 function resetHistorySearch() {
   historyKeywordInput.value = ''
   historyKeyword.value = ''
   historyCurrentPage.value = 1
+  void loadHistory()
 }
 
 async function submitCreateRule() {
@@ -767,7 +891,7 @@ async function submitCreateRule() {
     ElMessage.success('规则创建成功')
     createDialogVisible.value = false
     resetCreateForm()
-    await loadRules()
+    await loadArchiveRules()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则创建失败'
   } finally {
@@ -834,7 +958,7 @@ async function submitUpdateRule() {
     editDialogVisible.value = false
     editingRuleID.value = null
     resetEditForm()
-    await loadRules()
+    await loadArchiveRules()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则更新失败'
   } finally {
@@ -893,7 +1017,7 @@ async function submitCreatePurifyRule() {
     ElMessage.success('净化规则创建成功')
     createPurifyDialogVisible.value = false
     resetCreatePurifyForm()
-    await loadRules()
+    await loadPurifyRules()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '净化规则创建失败'
   } finally {
@@ -930,7 +1054,7 @@ async function submitUpdatePurifyRule() {
     editPurifyDialogVisible.value = false
     editingPurifyRuleID.value = null
     resetEditPurifyForm()
-    await loadRules()
+    await loadPurifyRules()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '净化规则更新失败'
   } finally {
@@ -942,37 +1066,12 @@ async function prepareExecution(ruleID: number) {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await prepareRuleExecution(ruleID, 'once')
-    const run = response.data?.run
-    latestPreparedSummary.value = response.data?.prepared?.summary ?? ''
-
-    if (run) {
-      const logsResponse = await fetchRunLogs(run.id)
-      const items = logsResponse.data?.items ?? []
-      const summary = items.map((item) => item.message).join(' | ') || latestPreparedSummary.value
-      historyItems.value.unshift({
-        id: run.id,
-        rule_id: run.rule_id,
-        rule_name: run.rule_name || '未知规则',
-        trigger_mode: run.trigger_mode,
-        archive_mode: run.archive_mode,
-        summary,
-        status: run.failure_count > 0 || run.status === 'failed' ? 'failed' : run.skip_count > 0 ? 'skip' : 'success',
-        processed_files: run.processed_files,
-        success_count: run.success_count,
-        skip_count: run.skip_count,
-        failure_count: run.failure_count,
-        started_at: run.started_at,
-        updated_at: run.updated_at,
-        finished_at: run.finished_at,
-      })
-      historyCurrentPage.value = 1
-    }
-
-    ElMessage.success('规则执行完成')
-    activeTab.value = 'history'
-    await loadRules()
-    await loadHistory()
+    await prepareRuleExecution(ruleID, 'once')
+    ElMessage.success('规则执行已启动')
+    await loadArchiveRules()
+    await loadPurifyRules()
+    historyCurrentPage.value = 1
+    await switchTab('history')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则执行失败'
   } finally {
@@ -980,30 +1079,47 @@ async function prepareExecution(ruleID: number) {
   }
 }
 
-async function removeRule(id: number) {
+async function removeRule(id: number, type: RuleListType) {
   try {
     await ElMessageBox.confirm('确认删除该规则？', '删除规则', { type: 'warning' })
     await deleteRule(id)
     ElMessage.success('规则已删除')
-    await loadRules()
+    if (type === 'archive') {
+      await loadArchiveRules()
+    } else {
+      await loadPurifyRules()
+    }
   } catch (error) {
-    if (error === 'cancel') return
+    if (error === 'cancel' || error === 'close') return
     errorMessage.value = error instanceof Error ? error.message : '删除规则失败'
   }
 }
 
-function clearHistory(status: HistoryStatus) {
-  historyItems.value = historyItems.value.filter((item) => item.status !== status)
-  historyCurrentPage.value = 1
+async function clearHistory(status: HistoryStatus) {
+  try {
+    await ElMessageBox.confirm(`确认删除全部${historyStatusText(status)}记录吗？`, '删除历史', { type: 'warning' })
+    await clearRunHistory(status)
+    historyCurrentPage.value = 1
+    await loadHistory()
+    ElMessage.success(`已删除${historyStatusText(status)}记录`)
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    errorMessage.value = error instanceof Error ? error.message : '删除历史记录失败'
+  }
 }
 
-function removeHistoryItem(id: string) {
-  historyItems.value = historyItems.value.filter((item) => item.id !== id)
+async function removeHistoryItem(id: string) {
+  try {
+    await deleteRunHistoryItem(id)
+    await loadHistory()
+    ElMessage.success('历史记录已删除')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '删除历史记录失败'
+  }
 }
 
 onMounted(() => {
-  void loadRules()
-  void loadHistory()
+  void loadArchiveRules()
 })
 </script>
 

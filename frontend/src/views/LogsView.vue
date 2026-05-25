@@ -26,14 +26,14 @@
     <el-card class="page-card logs-card">
       <div class="logs-card__content">
         <div class="logs-toolbar">
-          <el-select v-model="statusFilter" class="logs-toolbar__select" placeholder="状态">
+          <el-select v-model="statusFilter" class="logs-toolbar__select" placeholder="状态" @change="handleFiltersChange">
             <el-option label="全部状态" value="all" />
             <el-option label="成功" value="success" />
             <el-option label="错误" value="failed" />
             <el-option label="跳过" value="skip" />
           </el-select>
 
-          <el-select v-model="modeFilter" class="logs-toolbar__select" placeholder="类型">
+          <el-select v-model="modeFilter" class="logs-toolbar__select" placeholder="类型" @change="handleFiltersChange">
             <el-option label="全部类型" value="all" />
             <el-option label="打包归档" value="package" />
             <el-option label="收集归档" value="collect" />
@@ -55,11 +55,11 @@
         </div>
 
         <div class="logs-summary">
-          <span>共 {{ filteredItems.length }} 条结果</span>
+          <span>共 {{ filteredTotal }} 条结果</span>
           <span v-if="searchKeyword">关键字：{{ searchKeyword }}</span>
         </div>
 
-        <el-table v-loading="loading" :data="pagedFilteredItems" border stripe class="logs-table" empty-text="暂无任务日志">
+        <el-table v-loading="loading" :data="historyItems" border stripe class="logs-table" empty-text="暂无任务日志">
           <el-table-column label="时间" min-width="180">
             <template #default="scope">
               {{ formatDateTime(scope.row.started_at) }}
@@ -111,13 +111,16 @@
           </el-table-column>
         </el-table>
 
-        <div v-if="filteredItems.length > logsPageSize" class="logs-pagination">
+        <div v-if="filteredTotal > 0" class="logs-pagination">
           <el-pagination
             v-model:current-page="logsCurrentPage"
+            v-model:page-size="logsPageSize"
             background
-            layout="prev, pager, next"
-            :page-size="logsPageSize"
-            :total="filteredItems.length"
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="logsPageSizeOptions"
+            :total="filteredTotal"
+            @current-change="handlePageChange"
+            @size-change="handlePageSizeChange"
           />
         </div>
       </div>
@@ -126,94 +129,52 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { clearRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
+import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+
+function createDefaultHistorySummary(): RunHistorySummary {
+  return {
+    total: 0,
+    today: 0,
+    success: 0,
+    failed: 0,
+    skipped: 0,
+  }
+}
 
 const loading = ref(false)
 const historyItems = ref<RunHistoryItem[]>([])
+const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
+const filteredTotal = ref(0)
 const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const modeFilter = ref<'all' | 'package' | 'collect' | 'cleanup'>('all')
-const logsPageSize = 50
+const logsPageSizeOptions = [25, 50]
+const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
 
-const totalLogs = computed(() => historyItems.value.length)
-
-const todayLogs = computed(() => {
-  const today = new Date()
-  const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
-
-  return historyItems.value.filter((item) => {
-    const date = new Date(item.started_at)
-    const itemKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    return itemKey === todayKey
-  }).length
-})
-
-const successLogs = computed(() => historyItems.value.filter((item) => item.status === 'success').length)
-const failedLogs = computed(() => historyItems.value.filter((item) => item.status === 'failed').length)
-const skippedLogs = computed(() => historyItems.value.filter((item) => item.status === 'skip').length)
-
-const filteredItems = computed(() => {
-  const keyword = searchKeyword.value.trim().toLowerCase()
-
-  return historyItems.value.filter((item) => {
-    if (statusFilter.value !== 'all' && item.status !== statusFilter.value) {
-      return false
-    }
-
-    const archiveMode = (item.archive_mode || '').trim().toLowerCase()
-    if (modeFilter.value !== 'all' && archiveMode !== modeFilter.value) {
-      return false
-    }
-
-    if (!keyword) {
-      return true
-    }
-
-    const searchableText = [
-      item.rule_name,
-      item.summary,
-      item.status,
-      item.trigger_mode,
-      item.archive_mode,
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-
-    return searchableText.includes(keyword)
-  })
-})
-
-const pagedFilteredItems = computed(() => {
-  const start = (logsCurrentPage.value - 1) * logsPageSize
-  return filteredItems.value.slice(start, start + logsPageSize)
-})
-
-watch([statusFilter, modeFilter, searchKeyword], () => {
-  logsCurrentPage.value = 1
-})
-
-watch(
-  () => filteredItems.value.length,
-  (length) => {
-    const maxPage = Math.max(1, Math.ceil(length / logsPageSize))
-    if (logsCurrentPage.value > maxPage) {
-      logsCurrentPage.value = maxPage
-    }
-  },
-)
+const totalLogs = computed(() => historySummary.value.total)
+const todayLogs = computed(() => historySummary.value.today)
+const successLogs = computed(() => historySummary.value.success)
+const failedLogs = computed(() => historySummary.value.failed)
+const skippedLogs = computed(() => historySummary.value.skipped)
 
 async function loadHistory() {
   loading.value = true
   try {
-    const response = await fetchRunHistory()
+    const response = await fetchRunHistory({
+      page: logsCurrentPage.value,
+      page_size: logsPageSize.value,
+      keyword: searchKeyword.value || undefined,
+      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
+      archive_mode: modeFilter.value !== 'all' ? modeFilter.value : undefined,
+    })
     historyItems.value = response.data?.items ?? []
-    logsCurrentPage.value = 1
+    filteredTotal.value = response.data?.total ?? 0
+    historySummary.value = response.data?.summary ?? createDefaultHistorySummary()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '任务日志加载失败')
   } finally {
@@ -223,6 +184,13 @@ async function loadHistory() {
 
 function handleSearch() {
   searchKeyword.value = keywordInput.value.trim()
+  logsCurrentPage.value = 1
+  void loadHistory()
+}
+
+function handleFiltersChange() {
+  logsCurrentPage.value = 1
+  void loadHistory()
 }
 
 function resetFilters() {
@@ -231,6 +199,18 @@ function resetFilters() {
   statusFilter.value = 'all'
   modeFilter.value = 'all'
   logsCurrentPage.value = 1
+  void loadHistory()
+}
+
+function handlePageChange(page: number) {
+  logsCurrentPage.value = page
+  void loadHistory()
+}
+
+function handlePageSizeChange(pageSize: number) {
+  logsPageSize.value = pageSize
+  logsCurrentPage.value = 1
+  void loadHistory()
 }
 
 async function handleClearHistory() {
@@ -243,6 +223,8 @@ async function handleClearHistory() {
 
     await clearRunHistory()
     historyItems.value = []
+    filteredTotal.value = 0
+    historySummary.value = createDefaultHistorySummary()
     resetFilters()
     logsCurrentPage.value = 1
     ElMessage.success('任务日志已清空')

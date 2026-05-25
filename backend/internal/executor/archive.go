@@ -64,7 +64,12 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 	sortEntriesNaturally(entries)
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
-	cleanupSourceAfterArchive := req.PackageOptions["cleanup_source_after_archive"] || req.CollectOptions["cleanup_source_after_archive"]
+	cleanupSourceAfterArchive := false
+	if req.ArchiveMode == "package" {
+		cleanupSourceAfterArchive = req.PackageOptions["cleanup_source_after_archive"]
+	} else if req.ArchiveMode == "collect" {
+		cleanupSourceAfterArchive = req.CollectOptions["cleanup_source_after_archive"]
+	}
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() {

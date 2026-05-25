@@ -10,6 +10,7 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 	case "package":
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
+			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
 			Summary:     "package mode skeleton prepared",
@@ -17,6 +18,7 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 	case "collect":
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
+			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
 			Summary:     "collect mode skeleton prepared",
@@ -35,9 +37,22 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 		}
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
+			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
 			Summary:     summary,
+		}, nil
+	case "link":
+		modeLabel := "软链"
+		if strings.TrimSpace(req.LinkMode) == "hard" {
+			modeLabel = "硬链"
+		}
+		return &PreparedMode{
+			ArchiveMode: req.ArchiveMode,
+			RuleType:    req.RuleType,
+			SourceDir:   req.SourceDir,
+			TargetDir:   req.TargetDir,
+			Summary:     fmt.Sprintf("%s模式链路规则已准备", modeLabel),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported archive mode: %s", req.ArchiveMode)

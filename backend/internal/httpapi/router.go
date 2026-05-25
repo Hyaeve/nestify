@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -760,17 +761,100 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+		status := strings.TrimSpace(r.URL.Query().Get("status"))
+		archiveMode := strings.TrimSpace(r.URL.Query().Get("archive_mode"))
+
+		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, jsonResponse{
+				Success: false,
+				Code:    "INVALID_PAGINATION",
+				Message: err.Error(),
+			})
+			return
+		}
+
+		if paged {
+			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode)
+			if err != nil {
+				writeInternalError(w, err)
+				return
+			}
+
+			summary, err := a.store.GetRunHistorySummary()
+			if err != nil {
+				writeInternalError(w, err)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, jsonResponse{
+				Success: true,
+				Code:    "OK",
+				Message: "Run history loaded",
+				Data: map[string]any{
+					"items":     items,
+					"total":     total,
+					"page":      page,
+					"page_size": pageSize,
+					"summary":   summary,
+				},
+			})
+			return
+		}
+
 		items := a.executor.ListHistory()
+		summary := summarizeRunHistoryItems(items)
 		writeJSON(w, http.StatusOK, jsonResponse{
 			Success: true,
 			Code:    "OK",
 			Message: "Run history loaded",
 			Data: map[string]any{
-				"items": items,
-				"total": len(items),
+				"items":     items,
+				"total":     len(items),
+				"page":      1,
+				"page_size": len(items),
+				"summary":   summary,
 			},
 		})
 	case http.MethodDelete:
+		if id := strings.TrimSpace(r.URL.Query().Get("id")); id != "" {
+			if err := a.store.DeleteRunHistoryByID(id); err != nil {
+				writeInternalError(w, err)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, jsonResponse{
+				Success: true,
+				Code:    "OK",
+				Message: "Run history entry deleted",
+			})
+			return
+		}
+
+		if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+			if status != "success" && status != "failed" && status != "skip" {
+				writeJSON(w, http.StatusBadRequest, jsonResponse{
+					Success: false,
+					Code:    "INVALID_STATUS",
+					Message: "unsupported history status",
+				})
+				return
+			}
+
+			if err := a.store.DeleteRunHistoryByStatus(status); err != nil {
+				writeInternalError(w, err)
+				return
+			}
+
+			writeJSON(w, http.StatusOK, jsonResponse{
+				Success: true,
+				Code:    "OK",
+				Message: "Run history entries deleted",
+			})
+			return
+		}
+
 		if err := a.executor.ClearHistory(); err != nil {
 			writeInternalError(w, err)
 			return
@@ -1089,6 +1173,38 @@ func (a *apiHandler) handleUpdateRule(w http.ResponseWriter, r *http.Request, id
 }
 
 func (a *apiHandler) handleListRules(w http.ResponseWriter, r *http.Request) {
+	ruleType := strings.TrimSpace(r.URL.Query().Get("rule_type"))
+	page, pageSize, paged, err := parsePaginationQuery(r, 25, "rule_type")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_PAGINATION",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	if paged {
+		rules, total, err := a.store.ListRulesPage(page, pageSize, ruleType)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Rules loaded",
+			Data: map[string]any{
+				"items":     rules,
+				"total":     total,
+				"page":      page,
+				"page_size": pageSize,
+			},
+		})
+		return
+	}
+
 	rules, err := a.store.ListRules()
 	if err != nil {
 		writeInternalError(w, err)
@@ -1106,6 +1222,76 @@ func (a *apiHandler) handleListRules(w http.ResponseWriter, r *http.Request) {
 			"page_size": len(rules),
 		},
 	})
+}
+
+func parsePaginationQuery(r *http.Request, defaultPageSize int, triggerKeys ...string) (int, int, bool, error) {
+	query := r.URL.Query()
+	pageRaw := strings.TrimSpace(query.Get("page"))
+	pageSizeRaw := strings.TrimSpace(query.Get("page_size"))
+	paged := pageRaw != "" || pageSizeRaw != ""
+
+	if !paged {
+		for _, key := range triggerKeys {
+			if strings.TrimSpace(query.Get(key)) != "" {
+				paged = true
+				break
+			}
+		}
+	}
+
+	if !paged {
+		return 1, 0, false, nil
+	}
+
+	page := 1
+	pageSize := defaultPageSize
+
+	if pageRaw != "" {
+		value, err := strconv.Atoi(pageRaw)
+		if err != nil || value < 1 {
+			return 0, 0, false, errors.New("page must be a positive integer")
+		}
+		page = value
+	}
+
+	if pageSizeRaw != "" {
+		value, err := strconv.Atoi(pageSizeRaw)
+		if err != nil || value < 1 {
+			return 0, 0, false, errors.New("page_size must be a positive integer")
+		}
+		pageSize = value
+	}
+
+	if pageSize > 200 {
+		pageSize = 200
+	}
+
+	return page, pageSize, true, nil
+}
+
+func summarizeRunHistoryItems(items []model.RunHistoryItem) model.RunHistorySummary {
+	summary := model.RunHistorySummary{Total: len(items)}
+	now := time.Now()
+	todayKey := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), now.Day())
+
+	for _, item := range items {
+		startedAt := item.StartedAt.Local()
+		itemKey := fmt.Sprintf("%04d-%02d-%02d", startedAt.Year(), startedAt.Month(), startedAt.Day())
+		if itemKey == todayKey {
+			summary.Today++
+		}
+
+		switch item.Status {
+		case "success":
+			summary.Success++
+		case "failed":
+			summary.Failed++
+		case "skip":
+			summary.Skipped++
+		}
+	}
+
+	return summary
 }
 
 func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
