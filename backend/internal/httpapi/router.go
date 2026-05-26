@@ -173,6 +173,11 @@ type updateAdminAccountRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type updateSettingsRequest struct {
+	LogRetentionDays       int `json:"log_retention_days"`
+	LogRetentionMaxRecords int `json:"log_retention_max_records"`
+}
+
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeMethodNotAllowed(w)
@@ -904,12 +909,68 @@ func registerStaticRoutes(mux *http.ServeMux, webDir string) {
 }
 
 func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method == http.MethodGet {
+		settings, err := a.store.GetSettings()
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Settings loaded",
+			Data:    settings,
+		})
+		return
+	}
+
+	if r.Method != http.MethodPut {
 		writeMethodNotAllowed(w)
 		return
 	}
 
-	settings, err := a.store.GetSettings()
+	if _, ok := a.sessionFromRequest(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, jsonResponse{
+			Success: false,
+			Code:    "UNAUTHORIZED",
+			Message: "未登录",
+		})
+		return
+	}
+
+	var input updateSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_JSON",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if input.LogRetentionDays < 1 {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_LOG_RETENTION_DAYS",
+			Message: "日志保留天数不能小于 1 天",
+		})
+		return
+	}
+
+	if input.LogRetentionMaxRecords < 1 {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_LOG_RETENTION_MAX_RECORDS",
+			Message: "最大日志条数不能小于 1",
+		})
+		return
+	}
+
+	settings, err := a.store.UpdateSettings(model.UpdateSettingsInput{
+		LogRetentionDays:       input.LogRetentionDays,
+		LogRetentionMaxRecords: input.LogRetentionMaxRecords,
+	})
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -918,7 +979,7 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, jsonResponse{
 		Success: true,
 		Code:    "OK",
-		Message: "Settings loaded",
+		Message: "Settings updated",
 		Data:    settings,
 	})
 }

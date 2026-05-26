@@ -16,12 +16,50 @@ export interface SystemResourcePayload {
   uptime: string
 }
 
+export interface SettingsPayload {
+  id: number
+  timezone: string
+  log_level: string
+  log_retention_days: number
+  log_retention_max_records: number
+  created_at: string
+  updated_at: string
+}
+
+export interface UpdateSettingsPayload {
+  log_retention_days: number
+  log_retention_max_records: number
+}
+
 export function fetchHealth() {
   return getJSON<HealthPayload>('/api/v1/health')
 }
 
 export function fetchSystemResource() {
   return getJSON<SystemResourcePayload>('/api/v1/system/resource')
+}
+
+export function fetchSettings() {
+  return getJSON<SettingsPayload>('/api/v1/settings')
+}
+
+export async function updateSettings(payload: UpdateSettingsPayload) {
+  const response = await fetch('/api/v1/settings', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  })
+
+  const result = (await response.json()) as ApiResponse<SettingsPayload>
+  if (!response.ok) {
+    throw new Error(result.message || '保存系统设置失败')
+  }
+
+  return result
 }
 
 export async function restartSystem() {

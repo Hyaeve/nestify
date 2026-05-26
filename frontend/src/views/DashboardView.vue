@@ -297,11 +297,11 @@ onMounted(() => {
 }
 
 .dashboard-row--detail {
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .dashboard-row--detail :deep(.el-col) {
-  display: block;
+  display: flex;
 }
 
 .metric-card {
@@ -339,6 +339,7 @@ onMounted(() => {
 .dashboard-card--summary {
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
 .dashboard-side-stack {
@@ -346,6 +347,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 16px;
   width: 100%;
+  height: 100%;
 }
 
 .summary-list {

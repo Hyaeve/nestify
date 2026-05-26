@@ -60,6 +60,42 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		return fmt.Errorf("upsert run history: %w", err)
 	}
 
+	if err := s.applyRunHistoryRetentionPolicy(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) applyRunHistoryRetentionPolicy() error {
+	settings, err := s.GetSettings()
+	if err != nil {
+		return fmt.Errorf("load settings for run history retention: %w", err)
+	}
+	if settings == nil {
+		return nil
+	}
+
+	if settings.LogRetentionDays > 0 {
+		cutoff := time.Now().UTC().AddDate(0, 0, -settings.LogRetentionDays).Format(time.RFC3339)
+		if _, err := s.db.Exec(`DELETE FROM run_history WHERE started_at < ?`, cutoff); err != nil {
+			return fmt.Errorf("delete expired run history: %w", err)
+		}
+	}
+
+	if settings.LogRetentionMaxRecords > 0 {
+		if _, err := s.db.Exec(`
+			DELETE FROM run_history
+			WHERE id NOT IN (
+				SELECT id FROM run_history
+				ORDER BY started_at DESC, id DESC
+				LIMIT ?
+			)
+		`, settings.LogRetentionMaxRecords); err != nil {
+			return fmt.Errorf("trim run history by max records: %w", err)
+		}
+	}
+
 	return nil
 }
 

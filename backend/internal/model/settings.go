@@ -11,3 +11,8 @@ type Settings struct {
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
+
+type UpdateSettingsInput struct {
+	LogRetentionDays       int `json:"log_retention_days"`
+	LogRetentionMaxRecords int `json:"log_retention_max_records"`
+}

@@ -23,7 +23,7 @@ func (s *Store) ensureDefaultSettings() error {
 		INSERT INTO settings (
 			id, timezone, log_level, log_retention_days, log_retention_max_records, created_at, updated_at
 		) VALUES (1, ?, ?, ?, ?, ?, ?)
-	`, "Asia/Shanghai", "info", 30, 5000, now, now); err != nil {
+	`, "Asia/Shanghai", "info", 5, 10000, now, now); err != nil {
 		return fmt.Errorf("insert default settings: %w", err)
 	}
 
@@ -59,4 +59,28 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 	item.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 
 	return &item, nil
+}
+
+func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.Exec(`
+		UPDATE settings
+		SET log_retention_days = ?,
+		    log_retention_max_records = ?,
+		    updated_at = ?
+		WHERE id = 1
+	`, input.LogRetentionDays, input.LogRetentionMaxRecords, now)
+	if err != nil {
+		return nil, fmt.Errorf("update settings: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("settings rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return nil, nil
+	}
+
+	return s.GetSettings()
 }

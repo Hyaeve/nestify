@@ -740,6 +740,7 @@ const createLinkForm = reactive({
   watch_debounce_ms: 2000,
   run_on_start: false,
   link_mode: 'soft' as 'soft' | 'hard',
+  filters_text: '',
 })
 
 const editLinkForm = reactive({
@@ -753,6 +754,7 @@ const editLinkForm = reactive({
   watch_debounce_ms: 2000,
   run_on_start: false,
   link_mode: 'soft' as 'soft' | 'hard',
+  filters_text: '',
 })
 
 function resetCreateForm() {
@@ -1346,7 +1348,7 @@ async function submitCreateLinkRule() {
       options: {},
       package_options: {},
       collect_options: {},
-      filters: [],
+      filters: parseFiltersText(createLinkForm.filters_text),
     })
     ElMessage.success('链路规则创建成功')
     createLinkDialogVisible.value = false
@@ -1386,7 +1388,7 @@ async function submitUpdateLinkRule() {
       options: {},
       package_options: {},
       collect_options: {},
-      filters: [],
+      filters: parseFiltersText(editLinkForm.filters_text),
     })
     ElMessage.success('链路规则更新成功')
     editLinkDialogVisible.value = false

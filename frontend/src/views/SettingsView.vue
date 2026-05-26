@@ -8,11 +8,16 @@
       <section class="settings-panel">
         <div class="settings-panel__title">基础设置</div>
         <el-form label-position="top">
-          <el-form-item label="系统版本">
-            <el-input :value="appVersion" readonly />
-          </el-form-item>
           <el-form-item label="日志保留天数">
-            <el-input value="30" />
+            <el-input-number v-model="settingsForm.logRetentionDays" :min="1" :max="3650" />
+            <div class="settings-help">默认保留 5 天，超过 {{ settingsForm.logRetentionDays || 5 }} 天的日志会自动清理。</div>
+          </el-form-item>
+          <el-form-item label="最大日志条数">
+            <el-input-number v-model="settingsForm.logRetentionMaxRecords" :min="1" :max="1000000" />
+            <div class="settings-help">默认保留 10000 条，超过上限后会自动删除更早的日志。</div>
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </el-form-item>
         </el-form>
       </section>
@@ -43,11 +48,12 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { updateAdminAccount } from '../api/auth'
+import { fetchSettings, updateSettings } from '../api/system'
 import { useAuthStore } from '../stores/auth'
 
-const appVersion = 'v1.1'
 const authStore = useAuthStore()
 const submitting = ref(false)
+const settingsSubmitting = ref(false)
 
 const adminForm = reactive({
   username: authStore.user?.username ?? '',
@@ -55,9 +61,42 @@ const adminForm = reactive({
   newPassword: '',
 })
 
+const settingsForm = reactive({
+  logRetentionDays: 5,
+  logRetentionMaxRecords: 10000,
+})
+
 onMounted(() => {
   adminForm.username = authStore.user?.username ?? ''
+  void loadSettings()
 })
+
+async function loadSettings() {
+  try {
+    const response = await fetchSettings()
+    if (response.data) {
+      settingsForm.logRetentionDays = response.data.log_retention_days || 5
+      settingsForm.logRetentionMaxRecords = response.data.log_retention_max_records || 10000
+    }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '系统设置加载失败')
+  }
+}
+
+async function submitSettings() {
+  settingsSubmitting.value = true
+  try {
+    await updateSettings({
+      log_retention_days: settingsForm.logRetentionDays,
+      log_retention_max_records: settingsForm.logRetentionMaxRecords,
+    })
+    ElMessage.success('系统设置已保存')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '系统设置保存失败')
+  } finally {
+    settingsSubmitting.value = false
+  }
+}
 
 async function submitAdminChange() {
   submitting.value = true
@@ -100,5 +139,12 @@ async function submitAdminChange() {
   margin-bottom: 12px;
   font-size: 16px;
   font-weight: 600;
+}
+
+.settings-help {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
 }
 </style>
