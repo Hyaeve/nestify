@@ -635,6 +635,8 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		RuleID:            rule.ID,
 		RuleName:          rule.Name,
 		ArchiveMode:       rule.ArchiveMode,
+		RuleType:          rule.RuleType,
+		LinkMode:          rule.LinkMode,
 		TriggerMode:       input.TriggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
@@ -657,6 +659,8 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		RuleID:            rule.ID,
 		RuleName:          rule.Name,
 		ArchiveMode:       rule.ArchiveMode,
+		RuleType:          rule.RuleType,
+		LinkMode:          rule.LinkMode,
 		TriggerMode:       input.TriggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
@@ -1421,8 +1425,8 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		return errors.New("compatibility_mode must be local or compatibility")
 	}
 
-	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" {
-		return errors.New("archive_mode must be package, collect, or cleanup")
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" {
+		return errors.New("archive_mode must be package, collect, cleanup, or link")
 	}
 	if archiveMode == "cleanup" {
 		cleanupEmptyDirs := options["cleanup_empty_dirs"]

@@ -29,6 +29,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	if strings.TrimSpace(req.ArchiveMode) == "cleanup" {
 		return s.executeCleanupRule(runID, req)
 	}
+	if strings.TrimSpace(req.ArchiveMode) == "link" {
+		return s.executeLinkRule(runID, req)
+	}
 
 	stats := executionStats{}
 
@@ -104,6 +107,134 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 
 	return stats, nil
+}
+
+func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	stats := executionStats{}
+
+	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
+	targetDir := filepath.Clean(strings.TrimSpace(req.TargetDir))
+	if sourceDir == "" || sourceDir == "." {
+		return stats, fmt.Errorf("source dir is required")
+	}
+	if targetDir == "" || targetDir == "." {
+		return stats, fmt.Errorf("target dir is required")
+	}
+
+	info, err := statWithMode(req.CompatibilityMode, sourceDir)
+	if err != nil {
+		return stats, fmt.Errorf("stat source dir: %w", err)
+	}
+	if !info.IsDir() {
+		return stats, fmt.Errorf("source dir must be a directory")
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return stats, fmt.Errorf("create target dir: %w", err)
+	}
+
+	matchers := buildFileNameMatchers(req.Filters)
+	if err := s.linkDirectory(runID, sourceDir, sourceDir, targetDir, req.LinkMode, req.CompatibilityMode, matchers, &stats); err != nil {
+		return stats, err
+	}
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "no linkable files found"
+	} else {
+		modeLabel := "soft"
+		if strings.EqualFold(strings.TrimSpace(req.LinkMode), "hard") {
+			modeLabel = "hard"
+		}
+		stats.Summary = fmt.Sprintf("created %d %s links, skipped %d, failed %d", stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
+	}
+
+	if stats.FailureCount > 0 {
+		return stats, fmt.Errorf("link execution finished with %d failures", stats.FailureCount)
+	}
+
+	return stats, nil
+}
+
+func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMode, compatibilityMode string, matchers []fileNameMatcher, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		return fmt.Errorf("read link directory %s: %w", currentPath, err)
+	}
+
+	sortEntriesNaturally(entries)
+	for _, entry := range entries {
+		sourcePath := filepath.Join(currentPath, entry.Name())
+		relPath, relErr := filepath.Rel(rootPath, sourcePath)
+		if relErr != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("resolve relative path for %s failed: %v", sourcePath, relErr))
+			continue
+		}
+		if relPath == "." {
+			continue
+		}
+
+		targetPath := filepath.Join(targetRoot, relPath)
+		if entry.IsDir() {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				stats.FailureCount++
+				s.appendLog(runID, "error", fmt.Sprintf("create link target directory %s failed: %v", targetPath, err))
+				continue
+			}
+			if err := s.linkDirectory(runID, rootPath, sourcePath, targetRoot, linkMode, compatibilityMode, matchers, stats); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if matchesFileName(entry.Name(), matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted file %s", sourcePath))
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create link parent directory %s failed: %v", filepath.Dir(targetPath), err))
+			continue
+		}
+
+		if _, err := os.Lstat(targetPath); err == nil {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing link target %s", targetPath))
+			continue
+		} else if !os.IsNotExist(err) {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("inspect link target %s failed: %v", targetPath, err))
+			continue
+		}
+
+		if err := createFileLink(sourcePath, targetPath, linkMode); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create link %s -> %s failed: %v", targetPath, sourcePath, err))
+			continue
+		}
+
+		stats.ProcessedFiles++
+		stats.SuccessCount++
+		s.appendLog(runID, "info", fmt.Sprintf("created link %s -> %s", targetPath, sourcePath))
+	}
+
+	return nil
+}
+
+func createFileLink(sourcePath, targetPath, linkMode string) error {
+	if strings.EqualFold(strings.TrimSpace(linkMode), "hard") {
+		if err := os.Link(sourcePath, targetPath); err != nil {
+			return fmt.Errorf("create hard link: %w", err)
+		}
+		return nil
+	}
+
+	if err := os.Symlink(sourcePath, targetPath); err != nil {
+		return fmt.Errorf("create soft link: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, stats *executionStats) error {

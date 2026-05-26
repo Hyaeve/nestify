@@ -161,6 +161,8 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		RuleID:            rule.ID,
 		RuleName:          rule.Name,
 		ArchiveMode:       rule.ArchiveMode,
+		RuleType:          rule.RuleType,
+		LinkMode:          rule.LinkMode,
 		TriggerMode:       triggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
