@@ -3,6 +3,7 @@
     <div class="rules-tabs">
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="switchTab('rules')">归档规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="switchTab('purify')">净化规则</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'link' }" @click="switchTab('link')">链路规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
@@ -240,6 +241,85 @@
       <el-empty v-else description="暂无净化规则，可添加清理模式规则" />
     </el-card>
 
+    <el-card v-show="activeTab === 'link'" class="page-card rules-card">
+      <template #header>
+        <div class="rules-card__header">
+          <div>
+            <div class="rules-card__title">链路规则</div>
+            <div class="mode-config-panel__description">共 {{ linkRulesTotal }} 条规则，可监控新文件实时创建硬链或软链，也可计划全量执行。</div>
+          </div>
+          <el-button type="primary" round @click="openCreateLinkDialog">+ 添加链路规则</el-button>
+        </div>
+      </template>
+
+      <el-table v-if="linkRules.length" v-loading="linkLoading" :data="linkRules">
+        <el-table-column prop="name" label="规则名称" min-width="160" />
+        <el-table-column label="模式" width="110">
+          <template #default="scope">
+            <el-tag :type="scope.row.link_mode === 'hard' ? 'danger' : 'primary'" effect="plain">
+              {{ scope.row.link_mode === 'hard' ? '硬链模式' : '软链模式' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="source_dir" label="监控目录" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="target_dir" label="链路目录" min-width="260" show-overflow-tooltip />
+        <el-table-column label="监控" width="88">
+          <template #default="scope">
+            <el-tag :type="scope.row.monitor_enabled ? 'success' : 'info'" effect="plain">{{ scope.row.monitor_enabled ? '开' : '关' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="计划" width="88">
+          <template #default="scope">
+            <el-tag :type="scope.row.run_mode === 'cron' ? 'warning' : 'info'" effect="plain">{{ scope.row.run_mode === 'cron' ? '开' : '关' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Cron" min-width="140">
+          <template #default="scope">{{ scope.row.cron_expression || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="88">
+          <template #default="scope">
+            <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" fixed="right" align="center">
+          <template #default="scope">
+            <div class="rule-actions">
+              <el-tooltip content="编辑" placement="top">
+                <el-button link class="rule-action rule-action--primary" @click="openEditLinkDialog(scope.row.id)">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="执行" placement="top">
+                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
+                  <el-icon><Operation /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'link')">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <div v-if="linkRulesTotal > 0" class="history-pagination">
+        <el-pagination
+          v-model:current-page="linkRulesCurrentPage"
+          v-model:page-size="linkRulesPageSize"
+          background
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="pageSizeOptions"
+          :total="linkRulesTotal"
+          @current-change="handleLinkRulesPageChange"
+          @size-change="handleLinkRulesPageSizeChange"
+        />
+      </div>
+
+      <el-empty v-else description="暂无链路规则，可添加软链或硬链规则" />
+    </el-card>
+
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
@@ -370,6 +450,36 @@
       <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
     </el-dialog>
 
+    <el-dialog v-model="createLinkDialogVisible" title="新增链路规则" width="640px">
+      <el-form label-position="top">
+        <el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+        </el-row>
+        <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
+        <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
+      </el-form>
+      <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="editLinkDialogVisible" title="编辑链路规则" width="640px">
+      <el-form label-position="top">
+        <el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+        </el-row>
+        <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
+        <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
+      </el-form>
+      <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
+    </el-dialog>
+
     <DirectoryPickerDialog v-model="directoryPickerVisible" title="选择目录" :initial-path="directoryPickerInitialPath" @selected="applyDirectorySelection" />
   </div>
 </template>
@@ -397,9 +507,9 @@ type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_afte
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
-type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | null
-type TabKey = 'rules' | 'purify' | 'history'
-type RuleListType = 'archive' | 'cleanup'
+type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
+type TabKey = 'rules' | 'purify' | 'link' | 'history'
+type RuleListType = 'archive' | 'cleanup' | 'link'
 
 const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
@@ -506,6 +616,7 @@ const activeTab = ref<TabKey>('rules')
 const loading = ref(false)
 const archiveLoading = ref(false)
 const purifyLoading = ref(false)
+const linkLoading = ref(false)
 const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
@@ -515,6 +626,8 @@ const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
 const createPurifyDialogVisible = ref(false)
 const editPurifyDialogVisible = ref(false)
+const createLinkDialogVisible = ref(false)
+const editLinkDialogVisible = ref(false)
 const createArchiveOptionsExpanded = ref(false)
 const editArchiveOptionsExpanded = ref(false)
 const createPurifyOptionsExpanded = ref(false)
@@ -522,6 +635,7 @@ const editPurifyOptionsExpanded = ref(false)
 
 const editingRuleID = ref<number | null>(null)
 const editingPurifyRuleID = ref<number | null>(null)
+const editingLinkRuleID = ref<number | null>(null)
 
 const directoryPickerVisible = ref(false)
 const directoryPickerInitialPath = ref('')
@@ -532,7 +646,9 @@ const archiveRulesPageSize = ref(25)
 const archiveRulesTotal = ref(0)
 const purifyRulesCurrentPage = ref(1)
 const purifyRulesPageSize = ref(25)
-const purifyRulesTotal = ref(0)
+const linkRulesCurrentPage = ref(1)
+const linkRulesPageSize = ref(25)
+const linkRulesTotal = ref(0)
 const historyPageSize = ref(25)
 const historyCurrentPage = ref(1)
 const historyTotal = ref(0)
@@ -541,12 +657,15 @@ const historyKeyword = ref('')
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
+const linkRules = ref<RuleItem[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
 
 const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
+
+const purifyRulesTotal = ref(0)
 
 const createForm = reactive({
   name: '',
@@ -608,6 +727,32 @@ const editPurifyForm = reactive({
   run_on_start: true,
   options: createDefaultCleanupOptions(),
   filters_text: '',
+})
+
+const createLinkForm = reactive({
+  name: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: true,
+  source_dir: '',
+  target_dir: '',
+  cron_expression: '30 4 * * *',
+  watch_debounce_ms: 2000,
+  run_on_start: false,
+  link_mode: 'soft' as 'soft' | 'hard',
+})
+
+const editLinkForm = reactive({
+  name: '',
+  enabled: true,
+  monitor_enabled: true,
+  schedule_enabled: true,
+  source_dir: '',
+  target_dir: '',
+  cron_expression: '30 4 * * *',
+  watch_debounce_ms: 2000,
+  run_on_start: false,
+  link_mode: 'soft' as 'soft' | 'hard',
 })
 
 function resetCreateForm() {
@@ -672,6 +817,32 @@ function resetEditPurifyForm() {
   editPurifyForm.filters_text = ''
 }
 
+function resetCreateLinkForm() {
+  createLinkForm.name = ''
+  createLinkForm.enabled = true
+  createLinkForm.monitor_enabled = true
+  createLinkForm.schedule_enabled = true
+  createLinkForm.source_dir = ''
+  createLinkForm.target_dir = ''
+  createLinkForm.cron_expression = '30 4 * * *'
+  createLinkForm.watch_debounce_ms = 2000
+  createLinkForm.run_on_start = false
+  createLinkForm.link_mode = 'soft'
+}
+
+function resetEditLinkForm() {
+  editLinkForm.name = ''
+  editLinkForm.enabled = true
+  editLinkForm.monitor_enabled = true
+  editLinkForm.schedule_enabled = true
+  editLinkForm.source_dir = ''
+  editLinkForm.target_dir = ''
+  editLinkForm.cron_expression = '30 4 * * *'
+  editLinkForm.watch_debounce_ms = 2000
+  editLinkForm.run_on_start = false
+  editLinkForm.link_mode = 'soft'
+}
+
 function applyDefaultCronOnEnable(enabled: boolean, cronExpression: string) {
   return enabled && !cronExpression.trim() ? defaultCronExpression : cronExpression
 }
@@ -692,6 +863,14 @@ watch(() => editPurifyForm.schedule_enabled, (enabled) => {
   editPurifyForm.cron_expression = applyDefaultCronOnEnable(enabled, editPurifyForm.cron_expression)
 })
 
+watch(() => createLinkForm.schedule_enabled, (enabled) => {
+  createLinkForm.cron_expression = enabled && !createLinkForm.cron_expression.trim() ? '30 4 * * *' : createLinkForm.cron_expression
+})
+
+watch(() => editLinkForm.schedule_enabled, (enabled) => {
+  editLinkForm.cron_expression = enabled && !editLinkForm.cron_expression.trim() ? '30 4 * * *' : editLinkForm.cron_expression
+})
+
 function openCreateDialog() {
   resetCreateForm()
   createDialogVisible.value = true
@@ -700,6 +879,35 @@ function openCreateDialog() {
 function openCreatePurifyDialog() {
   resetCreatePurifyForm()
   createPurifyDialogVisible.value = true
+}
+
+function openCreateLinkDialog() {
+  resetCreateLinkForm()
+  createLinkDialogVisible.value = true
+}
+
+async function openEditLinkDialog(id: number) {
+  try {
+    const response = await fetchRule(id)
+    const rule = response.data
+    if (!rule) {
+      throw new Error('规则不存在')
+    }
+    editingLinkRuleID.value = rule.id
+    editLinkForm.name = rule.name
+    editLinkForm.enabled = rule.enabled
+    editLinkForm.monitor_enabled = rule.monitor_enabled
+    editLinkForm.schedule_enabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
+    editLinkForm.source_dir = rule.source_dir
+    editLinkForm.target_dir = rule.target_dir
+    editLinkForm.cron_expression = rule.cron_expression || '30 4 * * *'
+    editLinkForm.watch_debounce_ms = rule.watch_debounce_ms
+    editLinkForm.run_on_start = rule.run_on_start
+    editLinkForm.link_mode = rule.link_mode === 'hard' ? 'hard' : 'soft'
+    editLinkDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '链路规则加载失败')
+  }
 }
 
 function resolveInitialDirectory(form: Exclude<DirectoryPickerTarget, null>) {
@@ -716,10 +924,18 @@ function resolveInitialDirectory(form: Exclude<DirectoryPickerTarget, null>) {
       return createPurifyForm.source_dir
     case 'editPurify.source_dir':
       return editPurifyForm.source_dir
+    case 'createLink.source_dir':
+      return createLinkForm.source_dir
+    case 'createLink.target_dir':
+      return createLinkForm.target_dir
+    case 'editLink.source_dir':
+      return editLinkForm.source_dir
+    case 'editLink.target_dir':
+      return editLinkForm.target_dir
   }
 }
 
-function openDirectoryPicker(form: 'create' | 'edit' | 'createPurify' | 'editPurify', field: 'source_dir' | 'target_dir') {
+function openDirectoryPicker(form: 'create' | 'edit' | 'createPurify' | 'editPurify' | 'createLink' | 'editLink', field: 'source_dir' | 'target_dir') {
   const target = `${form}.${field}` as DirectoryPickerTarget
   directoryPickerTarget.value = target
   directoryPickerInitialPath.value = target ? resolveInitialDirectory(target as Exclude<DirectoryPickerTarget, null>) : ''
@@ -745,6 +961,18 @@ function applyDirectorySelection(path: string) {
       break
     case 'editPurify.source_dir':
       editPurifyForm.source_dir = path
+      break
+    case 'createLink.source_dir':
+      createLinkForm.source_dir = path
+      break
+    case 'createLink.target_dir':
+      createLinkForm.target_dir = path
+      break
+    case 'editLink.source_dir':
+      editLinkForm.source_dir = path
+      break
+    case 'editLink.target_dir':
+      editLinkForm.target_dir = path
       break
   }
 
@@ -787,6 +1015,24 @@ async function loadPurifyRules() {
   }
 }
 
+async function loadLinkRules() {
+  linkLoading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await fetchRules({
+      page: linkRulesCurrentPage.value,
+      page_size: linkRulesPageSize.value,
+      rule_type: 'link',
+    })
+    linkRules.value = response.data?.items ?? []
+    linkRulesTotal.value = response.data?.total ?? 0
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '链路规则加载失败'
+  } finally {
+    linkLoading.value = false
+  }
+}
+
 async function loadHistory() {
   historyLoading.value = true
   errorMessage.value = ''
@@ -819,7 +1065,23 @@ async function switchTab(tab: TabKey) {
     return
   }
 
+  if (tab === 'link') {
+    await loadLinkRules()
+    return
+  }
+
   await loadHistory()
+}
+
+function handleLinkRulesPageChange(page: number) {
+  linkRulesCurrentPage.value = page
+  void loadLinkRules()
+}
+
+function handleLinkRulesPageSizeChange(size: number) {
+  linkRulesPageSize.value = size
+  linkRulesCurrentPage.value = 1
+  void loadLinkRules()
 }
 
 function handleArchiveRulesPageChange(page: number) {
@@ -1062,6 +1324,82 @@ async function submitUpdatePurifyRule() {
   }
 }
 
+async function submitCreateLinkRule() {
+  creating.value = true
+  errorMessage.value = ''
+  try {
+    await createRule({
+      name: createLinkForm.name,
+      description: '',
+      enabled: createLinkForm.enabled,
+      monitor_enabled: createLinkForm.monitor_enabled,
+      compatibility_mode: 'local',
+      archive_mode: 'link',
+      rule_type: 'link',
+      link_mode: createLinkForm.link_mode,
+      run_mode: resolveRunMode(createLinkForm.monitor_enabled, createLinkForm.schedule_enabled),
+      source_dir: createLinkForm.source_dir,
+      target_dir: createLinkForm.target_dir,
+      watch_debounce_ms: createLinkForm.watch_debounce_ms,
+      cron_expression: createLinkForm.schedule_enabled ? createLinkForm.cron_expression : '',
+      run_on_start: createLinkForm.run_on_start,
+      options: {},
+      package_options: {},
+      collect_options: {},
+      filters: [],
+    })
+    ElMessage.success('链路规则创建成功')
+    createLinkDialogVisible.value = false
+    resetCreateLinkForm()
+    await loadLinkRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '链路规则创建失败'
+  } finally {
+    creating.value = false
+  }
+}
+
+async function submitUpdateLinkRule() {
+  if (!editingLinkRuleID.value) {
+    errorMessage.value = '缺少链路规则 ID'
+    return
+  }
+
+  editing.value = true
+  errorMessage.value = ''
+  try {
+    await updateRule(editingLinkRuleID.value, {
+      name: editLinkForm.name,
+      description: '',
+      enabled: editLinkForm.enabled,
+      monitor_enabled: editLinkForm.monitor_enabled,
+      compatibility_mode: 'local',
+      archive_mode: 'link',
+      rule_type: 'link',
+      link_mode: editLinkForm.link_mode,
+      run_mode: resolveRunMode(editLinkForm.monitor_enabled, editLinkForm.schedule_enabled),
+      source_dir: editLinkForm.source_dir,
+      target_dir: editLinkForm.target_dir,
+      watch_debounce_ms: editLinkForm.watch_debounce_ms,
+      cron_expression: editLinkForm.schedule_enabled ? editLinkForm.cron_expression : '',
+      run_on_start: editLinkForm.run_on_start,
+      options: {},
+      package_options: {},
+      collect_options: {},
+      filters: [],
+    })
+    ElMessage.success('链路规则更新成功')
+    editLinkDialogVisible.value = false
+    editingLinkRuleID.value = null
+    resetEditLinkForm()
+    await loadLinkRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '链路规则更新失败'
+  } finally {
+    editing.value = false
+  }
+}
+
 async function prepareExecution(ruleID: number) {
   loading.value = true
   errorMessage.value = ''
@@ -1070,6 +1408,7 @@ async function prepareExecution(ruleID: number) {
     ElMessage.success('规则执行已启动')
     await loadArchiveRules()
     await loadPurifyRules()
+    await loadLinkRules()
     historyCurrentPage.value = 1
     await switchTab('history')
   } catch (error) {
@@ -1086,6 +1425,8 @@ async function removeRule(id: number, type: RuleListType) {
     ElMessage.success('规则已删除')
     if (type === 'archive') {
       await loadArchiveRules()
+    } else if (type === 'link') {
+      await loadLinkRules()
     } else {
       await loadPurifyRules()
     }

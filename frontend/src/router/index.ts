@@ -5,7 +5,6 @@ import AdminLayout from '../layouts/AdminLayout.vue'
 import DashboardView from '../views/DashboardView.vue'
 import LoginView from '../views/LoginView.vue'
 import LogsView from '../views/LogsView.vue'
-import LinkRulesView from '../views/LinkRulesView.vue'
 import ManualPackView from '../views/ManualPackView.vue'
 import RulesView from '../views/RulesView.vue'
 import SettingsView from '../views/SettingsView.vue'
@@ -32,11 +31,6 @@ const router = createRouter({
           path: 'rules',
           name: 'rules',
           component: RulesView,
-        },
-        {
-          path: 'link-rules',
-          name: 'link-rules',
-          component: LinkRulesView,
         },
         {
           path: 'manual-pack',
