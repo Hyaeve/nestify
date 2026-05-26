@@ -117,23 +117,70 @@ async function initialize() {
   try {
     const response = await fetchBrowseRoots()
     roots.value = response.data?.items ?? []
-    treeData.value = roots.value.map((root) => ({
-      label: root.name,
-      path: root.path,
-      leaf: false,
-      parentPath: '',
-    }))
 
     const startPath = props.initialPath || currentPath.value || roots.value[0]?.path || ''
     if (startPath) {
+      await populateRootLevel(startPath)
       pathInput.value = startPath
       await openPath(startPath)
+    } else {
+      treeData.value = roots.value.map((root) => ({
+        label: root.name,
+        path: root.path,
+        leaf: false,
+        parentPath: '',
+      }))
     }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '目录根路径加载失败'
   } finally {
     loading.value = false
   }
+}
+
+function mapDirectoryEntries(entries: DirectoryEntry[], parentPath: string) {
+  return entries
+    .filter((entry: DirectoryEntry) => entry.is_dir)
+    .map((entry: DirectoryEntry) => ({
+      label: entry.name,
+      path: entry.path,
+      leaf: !entry.has_children,
+      parentPath,
+    }))
+}
+
+function findRootPath(path: string) {
+  const targetPath = path.trim()
+  if (!targetPath) {
+    return ''
+  }
+
+  const directRoot = roots.value.find((root) => root.path === targetPath)
+  if (directRoot) {
+    return directRoot.path
+  }
+
+  if (roots.value.length === 1) {
+    return roots.value[0]?.path ?? ''
+  }
+
+  return ''
+}
+
+async function populateRootLevel(path: string) {
+  const rootPath = findRootPath(path)
+  if (!rootPath) {
+    treeData.value = roots.value.map((root) => ({
+      label: root.name,
+      path: root.path,
+      leaf: false,
+      parentPath: '',
+    }))
+    return
+  }
+
+  const response = await browseDirectories(rootPath)
+  treeData.value = mapDirectoryEntries(response.data?.entries ?? [], response.data?.current_path ?? rootPath)
 }
 
 async function openPath(path: string) {
@@ -148,6 +195,7 @@ async function openPath(path: string) {
   pathInput.value = targetPath
 
   try {
+    await populateRootLevel(targetPath)
     const response = await browseDirectories(targetPath)
     currentPath.value = response.data?.current_path ?? ''
     parentPath.value = response.data?.parent_path ?? ''
@@ -175,14 +223,7 @@ async function loadNode(node: { level: number; data?: TreeNode }, resolve: (data
 
   try {
     const response = await browseDirectories(currentNode.path)
-    const children = (response.data?.entries ?? [])
-      .filter((entry: DirectoryEntry) => entry.is_dir)
-      .map((entry: DirectoryEntry) => ({
-        label: entry.name,
-        path: entry.path,
-        leaf: !entry.has_children,
-        parentPath: response.data?.current_path ?? currentNode.path,
-      }))
+    const children = mapDirectoryEntries(response.data?.entries ?? [], response.data?.current_path ?? currentNode.path)
     resolve(children)
   } catch {
     resolve([])

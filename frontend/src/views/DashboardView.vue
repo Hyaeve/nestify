@@ -297,11 +297,11 @@ onMounted(() => {
 }
 
 .dashboard-row--detail {
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 .dashboard-row--detail :deep(.el-col) {
-  display: flex;
+  display: block;
 }
 
 .metric-card {
@@ -334,10 +334,6 @@ onMounted(() => {
   min-height: 360px;
   border: 1px solid var(--border-color);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
-}
-
-.dashboard-row--detail .page-card {
-  flex: 1;
 }
 
 .dashboard-card--summary {
@@ -401,7 +397,7 @@ onMounted(() => {
 }
 
 .resource-card--compact {
-  min-height: 280px;
+  min-height: auto;
 }
 
 .resource-stack {
@@ -464,8 +460,8 @@ onMounted(() => {
 }
 
 .task-preview-card {
-  flex: 0 0 auto;
-  min-height: 220px;
+  flex: none;
+  min-height: auto;
 }
 
 .task-preview-card__header {
@@ -529,7 +525,7 @@ onMounted(() => {
 }
 
 .task-preview-empty {
-  min-height: 180px;
+  min-height: 120px;
 }
 
 @media (max-width: 1280px) {
