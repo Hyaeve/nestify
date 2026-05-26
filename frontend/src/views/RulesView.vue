@@ -14,7 +14,6 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">归档规则</div>
-            <div class="mode-config-panel__description">共 {{ archiveRulesTotal }} 条规则，默认每页 25 条，可切换为 50 条。</div>
           </div>
           <el-button type="primary" round @click="openCreateDialog">+ 添加规则</el-button>
         </div>
@@ -163,7 +162,6 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">净化规则</div>
-            <div class="mode-config-panel__description">共 {{ purifyRulesTotal }} 条规则，清理自定义监控目录下的空文件夹，或清理文件名命中匹配规则的文件。</div>
           </div>
           <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加净化规则</el-button>
         </div>
@@ -246,7 +244,6 @@
         <div class="rules-card__header">
           <div>
             <div class="rules-card__title">链路规则</div>
-            <div class="mode-config-panel__description">共 {{ linkRulesTotal }} 条规则，可监控新文件实时创建硬链或软链，也可计划全量执行。</div>
           </div>
           <el-button type="primary" round @click="openCreateLinkDialog">+ 添加链路规则</el-button>
         </div>

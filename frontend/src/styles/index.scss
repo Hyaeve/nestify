@@ -36,6 +36,25 @@
   --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.45);
 }
 
+:root[data-theme='appletv'] {
+  color-scheme: light;
+  --bg-app: linear-gradient(180deg, #d6eefc 0%, #edf6fb 28%, #f6f7f9 100%);
+  --bg-app-overlay: none;
+  --bg-app-base: #eaf3f8;
+  --bg-panel: rgba(255, 255, 255, 0.76);
+  --bg-panel-strong: rgba(255, 255, 255, 0.88);
+  --bg-elevated: rgba(255, 255, 255, 0.94);
+  --bg-sidebar: rgba(255, 255, 255, 0.72);
+  --bg-header: rgba(255, 255, 255, 0.7);
+  --text-primary: #253241;
+  --text-secondary: #7a8ca3;
+  --text-tertiary: #96a6b8;
+  --border-color: rgba(148, 163, 184, 0.22);
+  --accent-color: #66b5ff;
+  --accent-soft: rgba(102, 181, 255, 0.14);
+  --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -44,6 +63,7 @@ body {
   margin: 0;
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
   background: var(--bg-app);
+  background-attachment: fixed;
   color: var(--text-primary);
   transition: background-color 0.25s ease, color 0.25s ease;
 }

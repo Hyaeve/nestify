@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v1.4</div>
+          <div class="brand__version">v2.0</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -56,8 +56,9 @@
         <div class="header-actions">
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
+              <Apple v-if="isAppleTVTheme" />
               <Sunny v-if="!isDark" />
-              <MoonNight v-else />
+              <MoonNight v-else-if="!isAppleTVTheme" />
             </el-icon>
           </el-button>
           <el-dropdown trigger="click" placement="bottom-end" popper-class="header-user-dropdown" @command="handleHeaderCommand">
@@ -90,6 +91,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
+  Apple,
   ArrowLeftBold,
   ArrowRightBold,
   Document,
@@ -117,7 +119,9 @@ const route = useRoute()
 const isCollapsed = ref(typeof window !== 'undefined' && window.localStorage.getItem('nestify-sidebar-collapsed') === '1')
 const themeMode = ref<ThemeMode>(getStoredTheme())
 
+const themeCycle: ThemeMode[] = ['light', 'dark', 'appletv']
 const isDark = computed(() => themeMode.value === 'dark')
+const isAppleTVTheme = computed(() => themeMode.value === 'appletv')
 const currentSectionLabel = computed(() => {
   const pageTitleMap: Record<string, string> = {
     '/dashboard': '仪表盘',
@@ -138,7 +142,8 @@ function toggleAside() {
 }
 
 function toggleTheme() {
-  themeMode.value = themeMode.value === 'dark' ? 'light' : 'dark'
+  const currentIndex = themeCycle.indexOf(themeMode.value)
+  themeMode.value = themeCycle[(currentIndex + 1) % themeCycle.length]
   setTheme(themeMode.value)
 }
 
