@@ -18,6 +18,10 @@
             <el-icon><Operation /></el-icon>
             <span>规则管理</span>
           </el-menu-item>
+          <el-menu-item index="/link-rules">
+            <el-icon><Operation /></el-icon>
+            <span>链路规则</span>
+          </el-menu-item>
           <el-menu-item index="/manual-pack">
             <el-icon><FolderOpened /></el-icon>
             <span>文件管理</span>
@@ -122,6 +126,7 @@ const currentSectionLabel = computed(() => {
   const pageTitleMap: Record<string, string> = {
     '/dashboard': '仪表盘',
     '/rules': '规则管理',
+    '/link-rules': '链路规则',
     '/manual-pack': '文件管理',
     '/logs': '任务日志',
     '/settings': '系统设置',

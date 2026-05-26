@@ -7,7 +7,9 @@ export interface RuleItem {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'link'
+  rule_type?: 'archive' | 'cleanup' | 'link'
+  link_mode?: 'soft' | 'hard'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
   target_dir: string
@@ -36,7 +38,7 @@ export interface RulesListPayload {
 export interface FetchRulesParams {
   page?: number
   page_size?: number
-  rule_type?: 'archive' | 'cleanup'
+  rule_type?: 'archive' | 'cleanup' | 'link'
 }
 
 export interface CreateRulePayload {
@@ -45,7 +47,9 @@ export interface CreateRulePayload {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'link'
+  rule_type?: 'archive' | 'cleanup' | 'link'
+  link_mode?: 'soft' | 'hard'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
   target_dir?: string
