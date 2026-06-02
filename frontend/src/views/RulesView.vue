@@ -42,7 +42,14 @@
         </el-table-column>
         <el-table-column label="状态" width="88">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              @change="toggleRuleEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right" align="center">
@@ -197,7 +204,14 @@
         </el-table-column>
         <el-table-column label="状态" width="88">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              @change="toggleRuleEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right" align="center">
@@ -275,7 +289,14 @@
         </el-table-column>
         <el-table-column label="状态" width="88">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'success' : 'info'">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              @change="toggleRuleEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right" align="center">
@@ -490,7 +511,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { prepareRuleExecution } from '../api/executions'
-import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleItem } from '../api/rules'
+import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
   deleteRunHistoryItem,
@@ -611,6 +632,42 @@ function historyStatusText(status: HistoryStatus) {
   return '失败'
 }
 
+function normalizeRuleType(rule: RuleItem): RuleListType {
+  if (rule.rule_type === 'cleanup' || rule.archive_mode === 'cleanup') return 'cleanup'
+  if (rule.rule_type === 'link' || rule.archive_mode === 'link') return 'link'
+  return 'archive'
+}
+
+function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePayload {
+  const ruleType = normalizeRuleType(rule)
+  const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
+
+  return {
+    name: rule.name,
+    description: rule.description ?? '',
+    enabled,
+    monitor_enabled: rule.monitor_enabled,
+    compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
+    archive_mode: rule.archive_mode,
+    rule_type: ruleType,
+    link_mode: ruleType === 'link' ? (rule.link_mode === 'hard' ? 'hard' : 'soft') : undefined,
+    run_mode: resolveRunMode(rule.monitor_enabled, scheduleEnabled),
+    source_dir: rule.source_dir,
+    target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
+    watch_debounce_ms: rule.watch_debounce_ms,
+    cron_expression: scheduleEnabled ? rule.cron_expression : '',
+    run_on_start: rule.run_on_start,
+    options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultCleanupOptions()) : {},
+    package_options: ruleType === 'archive' && rule.archive_mode === 'package'
+      ? parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
+      : {},
+    collect_options: ruleType === 'archive' && rule.archive_mode === 'collect'
+      ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
+      : {},
+    filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+  }
+}
+
 const activeTab = ref<TabKey>('rules')
 const loading = ref(false)
 const archiveLoading = ref(false)
@@ -620,6 +677,7 @@ const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
+const togglingRuleIds = ref(new Set<number>())
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -1416,6 +1474,44 @@ async function prepareExecution(ruleID: number) {
     errorMessage.value = error instanceof Error ? error.message : '规则执行失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function refreshRuleList(type: RuleListType) {
+  if (type === 'archive') {
+    await loadArchiveRules()
+    return
+  }
+
+  if (type === 'cleanup') {
+    await loadPurifyRules()
+    return
+  }
+
+  await loadLinkRules()
+}
+
+async function toggleRuleEnabled(rule: RuleItem, enabled: boolean | string | number) {
+  const nextEnabled = Boolean(enabled)
+  const ruleType = normalizeRuleType(rule)
+  const loadingSet = new Set(togglingRuleIds.value)
+
+  loadingSet.add(rule.id)
+  togglingRuleIds.value = loadingSet
+  errorMessage.value = ''
+
+  try {
+    await updateRule(rule.id, buildRuleUpdatePayload(rule, nextEnabled))
+    rule.enabled = nextEnabled
+    ElMessage.success(`规则已${nextEnabled ? '启用' : '停用'}`)
+    await refreshRuleList(ruleType)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : `规则${nextEnabled ? '启用' : '停用'}失败`)
+    await refreshRuleList(ruleType)
+  } finally {
+    const nextLoadingSet = new Set(togglingRuleIds.value)
+    nextLoadingSet.delete(rule.id)
+    togglingRuleIds.value = nextLoadingSet
   }
 }
 

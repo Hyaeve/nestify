@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v2.0</div>
+          <div class="brand__version">v2.1</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -57,8 +57,8 @@
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
               <Apple v-if="isAppleTVTheme" />
-              <Sunny v-if="!isDark" />
-              <MoonNight v-else-if="!isAppleTVTheme" />
+              <Sunny v-else-if="!isDark" />
+              <MoonNight v-else />
             </el-icon>
           </el-button>
           <el-dropdown trigger="click" placement="bottom-end" popper-class="header-user-dropdown" @command="handleHeaderCommand">

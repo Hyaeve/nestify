@@ -17,11 +17,11 @@
           <span class="toolbar-row__split" />
           <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
           <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
+          <el-button :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" @click="extractSelectedArchives()">解压</el-button>
           <el-button type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
           <span class="toolbar-row__split" />
           <el-button @click="openPicker('browse')">选择目录</el-button>
           <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
-          <el-button :loading="validating" @click="handleValidate">校验目录</el-button>
           <el-button type="success" plain :loading="preflighting" @click="handlePreflight">执行预检</el-button>
         </div>
 
@@ -45,7 +45,6 @@
           <span>当前目录：{{ currentPathDisplay }}</span>
           <span>已选择 {{ selectedCount }} 项</span>
           <span>{{ entries.length }} 个项目</span>
-          <span v-if="validation">{{ validation.allowed ? '目录可访问' : '目录受限' }}</span>
           <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
         </div>
 
@@ -110,6 +109,7 @@
                       <el-dropdown-item command="rename">重命名</el-dropdown-item>
                       <el-dropdown-item command="move">移动</el-dropdown-item>
                       <el-dropdown-item command="copy">复制</el-dropdown-item>
+                      <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract">解压到当前目录</el-dropdown-item>
                       <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
@@ -263,15 +263,14 @@ import {
   copyItems,
   createFolder,
   deleteItems,
+  extractArchives,
   fetchBrowseRoots,
   moveItems,
   packItemsAsCBZ,
   renameItem,
   uploadFiles,
-  validateDirectory,
   type BrowseRoot,
   type DirectoryEntry,
-  type ValidatePathPayload,
 } from '../api/paths'
 
 interface FileManagerEntry extends DirectoryEntry {}
@@ -287,10 +286,9 @@ const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
 const pickerMode = ref<PickerMode>('browse')
 const loading = ref(false)
-const validating = ref(false)
 const preflighting = ref(false)
+const extracting = ref(false)
 const errorMessage = ref('')
-const validation = ref<ValidatePathPayload | null>(null)
 const preflightResult = ref<ManualPreflightResult | null>(null)
 const latestRun = ref<RunInstance | null>(null)
 const latestLogs = ref<RunLogEntry[]>([])
@@ -331,6 +329,7 @@ const contextMenu = ref<{ visible: boolean; x: number; y: number; entry: FileMan
 const selectedCount = computed(() => selectedRows.value.length)
 const currentPathDisplay = computed(() => directoryPath.value || '未选择')
 const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => item.path)))
+const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
 
 const pickerInitialPath = computed(() => {
   switch (pickerMode.value) {
@@ -428,6 +427,11 @@ function formatTimestamp(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function isArchiveEntry(entry: FileManagerEntry) {
+  if (entry.is_dir) return false
+  return /\.(zip|cbz)$/i.test(entry.name)
 }
 
 function getRowClassName({ row }: { row: FileManagerEntry }) {
@@ -556,6 +560,10 @@ function handleMoreCommand(command: string, entry: FileManagerEntry) {
   }
   if (command === 'copy') {
     openCopyDialog(entry)
+    return
+  }
+  if (command === 'extract') {
+    void extractSelectedArchives(entry)
     return
   }
   if (command === 'delete') {
@@ -741,6 +749,33 @@ async function submitPackCBZ() {
   }
 }
 
+async function extractSelectedArchives(entry?: FileManagerEntry) {
+  const items = getSelection(entry)
+  if (items.length === 0) {
+    ElMessage.warning('请先选择压缩包')
+    return
+  }
+
+  const invalidItem = items.find((item) => !isArchiveEntry(item))
+  if (invalidItem) {
+    ElMessage.warning('仅支持批量解压 zip 或 cbz 压缩包')
+    return
+  }
+
+  extracting.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await extractArchives(items.map((item) => item.path), directoryPath.value)
+    ElMessage.success(`已解压 ${response.data?.total ?? items.length} 个压缩包`)
+    await openCurrentPath()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '解压失败'
+  } finally {
+    extracting.value = false
+  }
+}
+
 async function removeItems(entry?: FileManagerEntry) {
   const items = getSelection(entry)
   if (items.length === 0) {
@@ -761,27 +796,6 @@ async function removeItems(entry?: FileManagerEntry) {
     if (error instanceof Error && error.message) {
       errorMessage.value = error.message
     }
-  }
-}
-
-async function handleValidate() {
-  if (!directoryPath.value) {
-    errorMessage.value = '请先选择目录'
-    return
-  }
-
-  validating.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await validateDirectory(directoryPath.value)
-    validation.value = response.data ?? null
-    ElMessage.success('目录校验完成')
-  } catch (error) {
-    validation.value = null
-    errorMessage.value = error instanceof Error ? error.message : '目录校验失败'
-  } finally {
-    validating.value = false
   }
 }
 
@@ -994,11 +1008,14 @@ onBeforeUnmount(() => {
 .entry-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .entry-actions__icon {
   font-size: 16px;
+  min-width: 20px;
+  padding: 0;
 }
 
 .entry-actions__icon--warning {

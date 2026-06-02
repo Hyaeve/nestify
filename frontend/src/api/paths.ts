@@ -115,6 +115,13 @@ export function packItemsAsCBZ(paths: string[], outputDir?: string, archiveName?
   })
 }
 
+export function extractArchives(paths: string[], outputDir?: string) {
+  return postJSON<FileMutationResult>('/api/v1/files/extract', {
+    paths,
+    output_dir: outputDir || '',
+  })
+}
+
 export async function uploadFiles(destinationPath: string, files: File[]): Promise<ApiResponse<FileMutationResult>> {
   const formData = new FormData()
   formData.append('destination_path', destinationPath)

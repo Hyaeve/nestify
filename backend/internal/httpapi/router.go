@@ -126,6 +126,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/files/move", api.handleMoveItems)
 	mux.HandleFunc("/api/v1/files/delete", api.handleDeleteItems)
 	mux.HandleFunc("/api/v1/files/pack-cbz", api.handlePackCBZ)
+	mux.HandleFunc("/api/v1/files/extract", api.handleExtractArchives)
 	mux.HandleFunc("/api/v1/manual/preflight", api.handleManualPreflight)
 	mux.HandleFunc("/api/v1/executions/prepare-rule", api.handlePrepareRuleExecution)
 	mux.HandleFunc("/api/v1/runs/", api.handleRuns)
@@ -553,6 +554,31 @@ func (a *apiHandler) handlePackCBZ(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "CBZ archive created", Data: model.FileItemsMutationResponse{Total: len(input.Paths), OutputPath: outputPath}})
+}
+
+func (a *apiHandler) handleExtractArchives(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	items, err := a.pathBrowse.ExtractArchives(input.Paths, input.OutputDir)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "EXTRACT_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Archives extracted", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
 }
 
 func (a *apiHandler) handleManualPreflight(w http.ResponseWriter, r *http.Request) {

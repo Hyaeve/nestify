@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+var supportedArchiveExtensions = map[string]struct{}{
+	".zip": {},
+	".cbz": {},
+}
+
 func (s *Service) CreateDirectory(parentPath, name string) (string, error) {
 	parentPath, err := s.resolveAllowedPath(parentPath)
 	if err != nil {
@@ -272,6 +277,61 @@ func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string) 
 	return archivePath, nil
 }
 
+func (s *Service) ExtractArchives(paths []string, outputDir string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("paths are required")
+	}
+
+	resolvedPaths := make([]string, 0, len(paths))
+	for _, itemPath := range paths {
+		resolved, err := s.resolveAllowedPath(itemPath)
+		if err != nil {
+			return nil, err
+		}
+		resolvedPaths = append(resolvedPaths, resolved)
+	}
+
+	if strings.TrimSpace(outputDir) == "" {
+		outputDir = filepath.Dir(resolvedPaths[0])
+	}
+
+	resolvedOutputDir, err := s.resolveAllowedPath(outputDir)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := os.Stat(resolvedOutputDir)
+	if err != nil {
+		return nil, fmt.Errorf("stat output directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("output path must be a directory")
+	}
+
+	extractedPaths := make([]string, 0, len(resolvedPaths))
+	for _, archivePath := range resolvedPaths {
+		archiveInfo, err := os.Stat(archivePath)
+		if err != nil {
+			return nil, fmt.Errorf("stat archive: %w", err)
+		}
+		if archiveInfo.IsDir() {
+			return nil, fmt.Errorf("%s 不是压缩文件", filepath.Base(archivePath))
+		}
+		if !isSupportedArchiveFile(archivePath) {
+			return nil, fmt.Errorf("%s 不是支持的压缩包，仅支持 zip/cbz", filepath.Base(archivePath))
+		}
+
+		targetDir := uniqueDestinationPath(resolvedOutputDir, archiveBaseName(archivePath))
+		if err := extractZipArchive(archivePath, targetDir); err != nil {
+			_ = os.RemoveAll(targetDir)
+			return nil, err
+		}
+		extractedPaths = append(extractedPaths, targetDir)
+	}
+
+	return extractedPaths, nil
+}
+
 func (s *Service) resolveAllowedPath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -309,6 +369,73 @@ func uniqueDestinationPath(dir, name string) string {
 			return candidate
 		}
 	}
+}
+
+func archiveBaseName(path string) string {
+	baseName := filepath.Base(path)
+	ext := filepath.Ext(baseName)
+	return strings.TrimSuffix(baseName, ext)
+}
+
+func isSupportedArchiveFile(path string) bool {
+	_, ok := supportedArchiveExtensions[strings.ToLower(filepath.Ext(path))]
+	return ok
+}
+
+func extractZipArchive(archivePath, outputDir string) error {
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("open archive: %w", err)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+
+	rootPath := filepath.Clean(outputDir)
+	for _, file := range reader.File {
+		targetPath := filepath.Join(rootPath, file.Name)
+		cleanTargetPath := filepath.Clean(targetPath)
+		if cleanTargetPath != rootPath && !strings.HasPrefix(cleanTargetPath, rootPath+string(filepath.Separator)) {
+			return fmt.Errorf("archive contains invalid entry: %s", file.Name)
+		}
+
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(cleanTargetPath, file.Mode()); err != nil {
+				return fmt.Errorf("create extracted directory: %w", err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(cleanTargetPath), 0o755); err != nil {
+			return fmt.Errorf("create extracted parent directory: %w", err)
+		}
+
+		sourceFile, err := file.Open()
+		if err != nil {
+			return fmt.Errorf("open archived file: %w", err)
+		}
+
+		targetFile, err := os.OpenFile(cleanTargetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, file.Mode())
+		if err != nil {
+			_ = sourceFile.Close()
+			return fmt.Errorf("create extracted file: %w", err)
+		}
+
+		if _, err := io.Copy(targetFile, sourceFile); err != nil {
+			_ = targetFile.Close()
+			_ = sourceFile.Close()
+			return fmt.Errorf("write extracted file: %w", err)
+		}
+
+		_ = targetFile.Close()
+		_ = sourceFile.Close()
+	}
+
+	return nil
 }
 
 func copyPathContents(sourcePath, targetPath string) error {
