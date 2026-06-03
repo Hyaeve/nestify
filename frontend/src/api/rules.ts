@@ -21,6 +21,7 @@ export interface RuleItem {
   package_options_json?: string
   collect_options_json?: string
   filters_json?: string
+  whitelist_json?: string
   match_filters_json?: string
   nest_filters_json?: string
   transform_rules_json?: string
@@ -64,6 +65,7 @@ export interface CreateRulePayload {
   package_options?: Record<string, boolean>
   collect_options?: Record<string, boolean>
   filters?: string[]
+  whitelist?: string[]
   match_filters?: string[]
   nest_filters?: string[]
   transform_rules?: string[]

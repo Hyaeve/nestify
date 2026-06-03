@@ -23,6 +23,7 @@ type Rule struct {
 	PackageOptionsJSON string    `json:"package_options_json"`
 	CollectOptionsJSON string    `json:"collect_options_json"`
 	FiltersJSON        string    `json:"filters_json"`
+	WhitelistJSON      string    `json:"whitelist_json"`
 	MatchFiltersJSON   string    `json:"match_filters_json"`
 	NestFiltersJSON    string    `json:"nest_filters_json"`
 	TransformRulesJSON string    `json:"transform_rules_json"`
@@ -58,6 +59,7 @@ type CreateRuleInput struct {
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
+	Whitelist         []string        `json:"whitelist"`
 	MatchFilters      []string        `json:"match_filters"`
 	NestFilters       []string        `json:"nest_filters"`
 	TransformRules    []string        `json:"transform_rules"`
@@ -82,6 +84,7 @@ type UpdateRuleInput struct {
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
+	Whitelist         []string        `json:"whitelist"`
 	MatchFilters      []string        `json:"match_filters"`
 	NestFilters       []string        `json:"nest_filters"`
 	TransformRules    []string        `json:"transform_rules"`

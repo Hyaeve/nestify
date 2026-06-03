@@ -679,6 +679,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		Whitelist:         executor.ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
@@ -706,6 +707,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		Whitelist:         executor.ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
@@ -1231,6 +1233,7 @@ func (a *apiHandler) handleImportRulesBackup(w http.ResponseWriter, r *http.Requ
 			PackageOptions:    parseBoolMapJSON(rule.PackageOptionsJSON),
 			CollectOptions:    parseBoolMapJSON(rule.CollectOptionsJSON),
 			Filters:           normalizeRuleFilters(parseStringArrayJSON(rule.FiltersJSON)),
+			Whitelist:         normalizeRuleFilters(parseStringArrayJSON(rule.WhitelistJSON)),
 			MatchFilters:      normalizeRuleFilters(parseStringArrayJSON(rule.MatchFiltersJSON)),
 			NestFilters:       normalizeRuleFilters(parseStringArrayJSON(rule.NestFiltersJSON)),
 			TransformRules:    normalizeRuleFilters(parseStringArrayJSON(rule.TransformRulesJSON)),
@@ -1600,14 +1603,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.NestFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.NestFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, matchFilters []string, nestFilters []string, transformRules []string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1638,6 +1641,13 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		}
 		if cleanupMatchingFiles && len(normalizeRuleFilters(filters)) == 0 {
 			return errors.New("filters are required when cleanup_matching_files is enabled")
+		}
+		if len(normalizeRuleFilters(whitelist)) > 0 {
+			for _, item := range normalizeRuleFilters(whitelist) {
+				if strings.Contains(item, "/") || strings.Contains(item, `\\`) {
+					return errors.New("whitelist only supports exact folder names")
+				}
+			}
 		}
 	}
 	if archiveMode == "transform" {

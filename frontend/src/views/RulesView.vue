@@ -513,6 +513,9 @@
         <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup'" label="匹配规则">
           <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；同时匹配文件名和文件夹名。" />
         </el-form-item>
+        <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
+          <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+        </el-form-item>
         <el-form-item v-if="createPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
           <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
         </el-form-item>
@@ -547,6 +550,9 @@
         <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup'" label="匹配规则">
           <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；同时匹配文件名和文件夹名。" />
+        </el-form-item>
+        <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
+          <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
         </el-form-item>
         <el-form-item v-if="editPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
           <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
@@ -773,6 +779,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
       ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
       : {},
     filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+    whitelist: parseFiltersText(parseFiltersJSON(rule.whitelist_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
     nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
     ...overrides,
@@ -899,6 +906,7 @@ const createPurifyForm = reactive({
   run_on_start: true,
   options: createDefaultPurifyOptions(),
   filters_text: '',
+  whitelist_text: '',
   transform_rules_text: '',
 })
 
@@ -915,6 +923,7 @@ const editPurifyForm = reactive({
   run_on_start: true,
   options: createDefaultPurifyOptions(),
   filters_text: '',
+  whitelist_text: '',
   transform_rules_text: '',
 })
 
@@ -999,6 +1008,7 @@ function resetCreatePurifyForm() {
   createPurifyForm.run_on_start = true
   createPurifyForm.options = createDefaultPurifyOptions()
   createPurifyForm.filters_text = ''
+  createPurifyForm.whitelist_text = ''
   createPurifyForm.transform_rules_text = ''
 }
 
@@ -1015,6 +1025,7 @@ function resetEditPurifyForm() {
   editPurifyForm.run_on_start = true
   editPurifyForm.options = createDefaultPurifyOptions()
   editPurifyForm.filters_text = ''
+  editPurifyForm.whitelist_text = ''
   editPurifyForm.transform_rules_text = ''
 }
 
@@ -1560,6 +1571,7 @@ async function openEditPurifyDialog(id: number) {
     editPurifyForm.archive_mode = rule.archive_mode === 'transform' ? 'transform' : 'cleanup'
     editPurifyForm.options = parseOptionJSON(rule.options_json, createDefaultPurifyOptions())
     editPurifyForm.filters_text = parseFiltersJSON(rule.filters_json)
+    editPurifyForm.whitelist_text = parseFiltersJSON(rule.whitelist_json)
     editPurifyForm.transform_rules_text = parseFiltersJSON(rule.transform_rules_json)
     editPurifyDialogVisible.value = true
   } catch (error) {
@@ -1588,6 +1600,7 @@ async function submitCreatePurifyRule() {
       run_on_start: createPurifyForm.run_on_start,
       options: { ...createPurifyForm.options },
       filters: createPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(createPurifyForm.filters_text) : [],
+      whitelist: createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(createPurifyForm.whitelist_text) : [],
       transform_rules: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_rules_text) : [],
     })
     ElMessage.success('净化规则创建成功')
@@ -1625,6 +1638,7 @@ async function submitUpdatePurifyRule() {
       run_on_start: editPurifyForm.run_on_start,
       options: { ...editPurifyForm.options },
       filters: editPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(editPurifyForm.filters_text) : [],
+      whitelist: editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(editPurifyForm.whitelist_text) : [],
       transform_rules: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_rules_text) : [],
     })
     ElMessage.success('净化规则更新成功')

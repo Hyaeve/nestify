@@ -37,13 +37,14 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	}
 
 	matchers := buildFileNameMatchers(req.Filters)
+	whitelist := buildDirectoryWhitelist(req.Whitelist)
 	if cleanupMatchingFiles && len(matchers) == 0 {
 		stats.SkipCount = 1
 		stats.Summary = "cleanup_matching_files enabled but no valid matchers provided"
 		return stats, nil
 	}
 
-	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, &stats)
+	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -59,7 +60,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	return stats, nil
 }
 
-func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles bool, matchers []fileNameMatcher, stats *executionStats) {
+func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles bool, matchers []fileNameMatcher, whitelist map[string]struct{}, stats *executionStats) {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
@@ -72,8 +73,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 	for _, entry := range entries {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, stats)
-			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) {
+			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, stats)
+			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), whitelist) {
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
 				if removeErr != nil {
 					stats.FailureCount++
@@ -150,6 +151,27 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 	}
 
 	return items
+}
+
+func buildDirectoryWhitelist(filters []string) map[string]struct{} {
+	items := make(map[string]struct{}, len(filters))
+	for _, filter := range filters {
+		value := strings.ToLower(strings.TrimSpace(filter))
+		if value == "" {
+			continue
+		}
+		items[value] = struct{}{}
+	}
+
+	return items
+}
+
+func isWhitelistedDirectoryName(name string, whitelist map[string]struct{}) bool {
+	if len(whitelist) == 0 {
+		return false
+	}
+	_, ok := whitelist[strings.ToLower(strings.TrimSpace(name))]
+	return ok
 }
 
 func looksLikeRegexPattern(value string) bool {

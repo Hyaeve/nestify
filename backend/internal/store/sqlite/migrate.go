@@ -36,6 +36,7 @@ func (s *Store) migrate() error {
 			package_options_json TEXT NOT NULL DEFAULT '{}',
 			collect_options_json TEXT NOT NULL DEFAULT '{}',
 			filters_json TEXT NOT NULL DEFAULT '[]',
+			whitelist_json TEXT NOT NULL DEFAULT '[]',
 			match_filters_json TEXT NOT NULL DEFAULT '[]',
 			nest_filters_json TEXT NOT NULL DEFAULT '[]',
 			transform_rules_json TEXT NOT NULL DEFAULT '[]',
@@ -115,6 +116,12 @@ func (s *Store) migrate() error {
 	log.Printf("sqlite:migrate: ensure match_filters column")
 	if err := s.ensureRuleMatchFiltersColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure match_filters column failed: %v", err)
+		return err
+	}
+
+	log.Printf("sqlite:migrate: ensure whitelist column")
+	if err := s.ensureRuleWhitelistColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure whitelist column failed: %v", err)
 		return err
 	}
 
@@ -221,6 +228,35 @@ func (s *Store) ensureRuleMatchFiltersColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN match_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
 		return fmt.Errorf("add match_filters_json column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleWhitelistColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "whitelist_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN whitelist_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add whitelist_json column: %w", err)
 	}
 
 	return nil
