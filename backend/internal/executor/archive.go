@@ -82,9 +82,14 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
-		if matchesFileName(entry.Name(), matchers) {
-			stats.SkipCount++
-			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+		if !entry.IsDir() && matchesFileName(entry.Name(), matchers) {
+			if err := s.removeFilteredArchiveFile(runID, entryPath, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
 			continue
 		}
 		if matchArchiveEnabled && !entry.IsDir() && matchesArchiveDirectly(entry.Name(), directMatchers) {
@@ -303,8 +308,10 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if err != nil {
 			return err
 		}
-		if err := removePackedSourceFiles(seriesPath, files); err != nil {
-			return fmt.Errorf("remove packed source files: %w", err)
+		if cleanupSourceAfterArchive {
+			if err := removePackedSourceFiles(seriesPath, files); err != nil {
+				return fmt.Errorf("remove packed source files: %w", err)
+			}
 		}
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
@@ -332,9 +339,14 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(seriesPath, entry.Name())
-		if matchesFileName(entry.Name(), matchers) {
-			stats.SkipCount++
-			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+		if !entry.IsDir() && matchesFileName(entry.Name(), matchers) {
+			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
 			continue
 		}
 		if entry.IsDir() {
@@ -401,8 +413,10 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		if err != nil {
 			return err
 		}
-		if err := removePackedSourceFiles(volumePath, files); err != nil {
-			return fmt.Errorf("remove packed source files: %w", err)
+		if cleanupSourceAfterArchive {
+			if err := removePackedSourceFiles(volumePath, files); err != nil {
+				return fmt.Errorf("remove packed source files: %w", err)
+			}
 		}
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
@@ -444,9 +458,14 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(volumePath, entry.Name())
-		if matchesFileName(entry.Name(), matchers) {
-			stats.SkipCount++
-			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+		if !entry.IsDir() && matchesFileName(entry.Name(), matchers) {
+			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
 			continue
 		}
 		if entry.IsDir() {
@@ -486,6 +505,18 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir string, stats *exec
 	stats.MovedFiles++
 	s.persistRunHistory(runID, fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath))
+	return nil
+}
+
+func (s *Service) removeFilteredArchiveFile(runID, sourcePath string, stats *executionStats) error {
+	if err := os.Remove(sourcePath); err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	stats.CleanupRemovedFiles++
+	s.persistRunHistory(runID, fmt.Sprintf("removed filtered archive file %s", sourcePath), stats)
+	s.appendLog(runID, "info", fmt.Sprintf("removed filtered archive file %s", sourcePath))
 	return nil
 }
 

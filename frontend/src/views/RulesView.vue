@@ -375,7 +375,7 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createForm.compatibility_mode">
+          <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
             <el-radio-button value="local">本地模式</el-radio-button>
             <el-radio-button value="compatibility">兼容模式</el-radio-button>
           </el-radio-group>
@@ -399,7 +399,7 @@
         <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
         </el-form-item>
-        <el-form-item label="匹配黑名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，同时匹配文件名和文件夹名。" /></el-form-item>
+        <el-form-item label="过滤名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中文件名后将直接清理该文件。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateRule">创建</el-button></template>
@@ -413,7 +413,7 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editForm.compatibility_mode">
+          <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
             <el-radio-button value="local">本地模式</el-radio-button>
             <el-radio-button value="compatibility">兼容模式</el-radio-button>
           </el-radio-group>
@@ -437,7 +437,7 @@
         <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
         </el-form-item>
-        <el-form-item label="匹配黑名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，同时匹配文件名和文件夹名。" /></el-form-item>
+        <el-form-item label="过滤名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中文件名后将直接清理该文件。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
@@ -451,7 +451,7 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createPurifyForm.compatibility_mode">
+          <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
             <el-radio-button value="local">本地模式</el-radio-button>
             <el-radio-button value="compatibility">兼容模式</el-radio-button>
           </el-radio-group>
@@ -486,7 +486,7 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editPurifyForm.compatibility_mode">
+          <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
             <el-radio-button value="local">本地模式</el-radio-button>
             <el-radio-button value="compatibility">兼容模式</el-radio-button>
           </el-radio-group>
@@ -669,11 +669,11 @@ function parseFiltersJSON(raw?: string) {
 }
 
 function getModeTitle(mode: ArchiveMode) {
-  return mode === 'package' ? '打包归档功能' : '收集归档功能'
+  return mode === 'package' ? '功能模块' : '功能模块'
 }
 
 function getPurifyModeTitle(mode: PurifyArchiveMode) {
-  return mode === 'transform' ? '转换模式功能' : '清理模式功能'
+  return mode === 'transform' ? '功能模块' : '功能模块'
 }
 
 function getPurifyModeOptions(mode: PurifyArchiveMode) {
@@ -1775,18 +1775,25 @@ onMounted(() => {
 .rules-page :deep(.rules-table .el-switch__label.is-inactive) {
   min-width: auto;
 }
-.archive-mode-group {
+.archive-mode-group,
+.uniform-mode-group {
   display: inline-flex;
   width: auto;
   max-width: 100%;
 }
 
-.archive-mode-group :deep(.el-radio-button) {
-  width: auto;
+.archive-mode-group :deep(.el-radio-button),
+.uniform-mode-group :deep(.el-radio-button) {
+  flex: 1 1 0;
 }
 
-.archive-mode-group :deep(.el-radio-button__inner) {
+.archive-mode-group :deep(.el-radio-button__inner),
+.uniform-mode-group :deep(.el-radio-button__inner) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 118px;
+  width: 100%;
   padding-inline: 18px;
 }
 
