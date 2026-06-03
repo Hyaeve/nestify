@@ -64,7 +64,14 @@
         </el-table-column>
         <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              :loading="isRuleStatusUpdating(scope.row.id)"
+              @change="toggleRuleEnabled(scope.row)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -238,7 +245,14 @@
         </el-table-column>
         <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              :loading="isRuleStatusUpdating(scope.row.id)"
+              @change="toggleRuleEnabled(scope.row)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -335,7 +349,14 @@
         </el-table-column>
         <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.enabled"
+              inline-prompt
+              active-text="启用"
+              inactive-text="停用"
+              :loading="isRuleStatusUpdating(scope.row.id)"
+              @change="toggleRuleEnabled(scope.row)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -768,6 +789,7 @@ const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
 const savingCronRuleIds = ref(new Set<number>())
+const updatingRuleStatusIds = ref(new Set<number>())
 const archiveTableRef = ref()
 const purifyTableRef = ref()
 const linkTableRef = ref()
@@ -1774,6 +1796,35 @@ async function saveInlineCron(rule: RuleItem) {
   }
 }
 
+function isRuleStatusUpdating(ruleId: number) {
+  return updatingRuleStatusIds.value.has(ruleId)
+}
+
+async function toggleRuleEnabled(rule: RuleItem) {
+  const ruleType = normalizeRuleType(rule)
+  const nextEnabled = !rule.enabled
+  const loadingSet = new Set(updatingRuleStatusIds.value)
+
+  loadingSet.add(rule.id)
+  updatingRuleStatusIds.value = loadingSet
+  errorMessage.value = ''
+
+  try {
+    await updateRule(rule.id, buildRuleUpdatePayload(rule, {
+      enabled: nextEnabled,
+    }))
+    ElMessage.success(nextEnabled ? '规则已启用' : '规则已停用')
+    await refreshRuleList(ruleType)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '状态更新失败')
+    await refreshRuleList(ruleType)
+  } finally {
+    const nextLoadingSet = new Set(updatingRuleStatusIds.value)
+    nextLoadingSet.delete(rule.id)
+    updatingRuleStatusIds.value = nextLoadingSet
+  }
+}
+
 async function removeRule(id: number, type: RuleListType) {
   try {
     await ElMessageBox.confirm('确认删除该规则？', '删除规则', { type: 'warning' })
@@ -1909,7 +1960,7 @@ onMounted(() => {
 .uniform-mode-group {
   display: inline-flex;
   width: 100%;
-  max-width: 420px;
+  max-width: 360px;
 }
 
 .archive-mode-group :deep(.el-radio-button),

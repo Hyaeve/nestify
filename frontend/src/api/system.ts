@@ -31,6 +31,12 @@ export interface UpdateSettingsPayload {
   log_retention_max_records: number
 }
 
+export interface RuleBackupPayload {
+  version: string
+  exported_at: string
+  rules: Array<Record<string, unknown>>
+}
+
 export function fetchHealth() {
   return getJSON<HealthPayload>('/api/v1/health')
 }
@@ -77,5 +83,41 @@ export async function restartSystem() {
   }
 
   return payload
+}
+
+export async function exportRulesBackup() {
+  const response = await fetch('/api/v1/settings/rules-backup', {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+  })
+
+  if (!response.ok) {
+    const payload = (await response.json()) as ApiResponse<null>
+    throw new Error(payload.message || '导出规则备份失败')
+  }
+
+  return response.blob()
+}
+
+export async function importRulesBackup(payload: RuleBackupPayload) {
+  const response = await fetch('/api/v1/settings/rules-backup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  })
+
+  const result = (await response.json()) as ApiResponse<{ count: number }>
+  if (!response.ok) {
+    throw new Error(result.message || '导入规则备份失败')
+  }
+
+  return result
 }
 

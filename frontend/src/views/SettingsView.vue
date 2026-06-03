@@ -39,21 +39,40 @@
           </el-form-item>
         </el-form>
       </section>
+
+      <section class="settings-panel">
+        <div class="settings-panel__title">规则备份</div>
+        <div class="settings-help">可导出当前全部规则配置为备份文件，也可导入此前导出的备份以覆盖恢复现有规则。</div>
+        <div class="settings-actions">
+          <el-button type="primary" :loading="exportingRules" @click="handleExportRulesBackup">导出规则</el-button>
+          <el-upload
+            :show-file-list="false"
+            accept="application/json,.json"
+            :auto-upload="false"
+            :on-change="handleBackupFileChange"
+          >
+            <el-button :loading="importingRules">导入规则备份</el-button>
+          </el-upload>
+        </div>
+      </section>
     </div>
   </el-card>
 </template>
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 
 import { updateAdminAccount } from '../api/auth'
-import { fetchSettings, updateSettings } from '../api/system'
+import { exportRulesBackup, fetchSettings, importRulesBackup, updateSettings } from '../api/system'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
 const submitting = ref(false)
 const settingsSubmitting = ref(false)
+const exportingRules = ref(false)
+const importingRules = ref(false)
 
 const adminForm = reactive({
   username: authStore.user?.username ?? '',
@@ -119,6 +138,48 @@ async function submitAdminChange() {
     submitting.value = false
   }
 }
+
+async function handleExportRulesBackup() {
+  exportingRules.value = true
+  try {
+    const blob = await exportRulesBackup()
+    const fileName = `nestify-rules-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('规则备份已导出')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '导出规则备份失败')
+  } finally {
+    exportingRules.value = false
+  }
+}
+
+async function handleBackupFileChange(file: UploadFile) {
+  if (!file.raw) {
+    ElMessage.error('未选择有效备份文件')
+    return
+  }
+
+  importingRules.value = true
+  try {
+    await ElMessageBox.confirm('导入备份将覆盖当前全部规则配置，是否继续？', '导入规则备份', { type: 'warning' })
+    const text = await file.raw.text()
+    const payload = JSON.parse(text) as { version: string; exported_at: string; rules: Array<Record<string, unknown>> }
+    const response = await importRulesBackup(payload)
+    ElMessage.success(`规则备份已导入，共恢复 ${response.data?.count || 0} 条规则`)
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error instanceof Error ? error.message : '导入规则备份失败')
+  } finally {
+    importingRules.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -146,5 +207,12 @@ async function submitAdminChange() {
   font-size: 12px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+.settings-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 </style>

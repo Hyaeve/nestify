@@ -133,6 +133,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/run-history", api.handleRunHistory)
 	mux.HandleFunc("/api/v1/settings", api.handleSettings)
 	mux.HandleFunc("/api/v1/settings/admin-account", api.handleUpdateAdminAccount)
+	mux.HandleFunc("/api/v1/settings/rules-backup", api.handleRulesBackup)
 	mux.HandleFunc("/api/v1/rules", api.handleRules)
 	mux.HandleFunc("/api/v1/rules/reorder", api.handleReorderRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
@@ -1153,6 +1154,133 @@ func (a *apiHandler) handleRules(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+func (a *apiHandler) handleRulesBackup(w http.ResponseWriter, r *http.Request) {
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		a.handleExportRulesBackup(w, r)
+	case http.MethodPost:
+		a.handleImportRulesBackup(w, r)
+	default:
+		writeMethodNotAllowed(w)
+	}
+}
+
+func (a *apiHandler) handleExportRulesBackup(w http.ResponseWriter, r *http.Request) {
+	rules, err := a.store.ListRules()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	backup := model.RuleBackup{
+		Version:    "v1",
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+		Rules:      rules,
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=rules-backup-%s.json", time.Now().UTC().Format("20060102-150405")))
+	if err := json.NewEncoder(w).Encode(backup); err != nil {
+		writeInternalError(w, err)
+	}
+}
+
+func (a *apiHandler) handleImportRulesBackup(w http.ResponseWriter, r *http.Request) {
+	var backup model.RuleBackup
+	if err := json.NewDecoder(r.Body).Decode(&backup); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_JSON",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if len(backup.Rules) == 0 {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_RULE_BACKUP",
+			Message: "Backup rules cannot be empty",
+		})
+		return
+	}
+
+	for _, rule := range backup.Rules {
+		input := model.UpdateRuleInput{
+			Name:              rule.Name,
+			Description:       rule.Description,
+			Enabled:           &rule.Enabled,
+			MonitorEnabled:    &rule.MonitorEnabled,
+			CompatibilityMode: rule.CompatibilityMode,
+			ArchiveMode:       rule.ArchiveMode,
+			RuleType:          rule.RuleType,
+			LinkMode:          rule.LinkMode,
+			RunMode:           rule.RunMode,
+			SourceDir:         rule.SourceDir,
+			TargetDir:         rule.TargetDir,
+			WatchDebounceMS:   rule.WatchDebounceMS,
+			CronExpression:    rule.CronExpression,
+			RunOnStart:        &rule.RunOnStart,
+			Options:           parseBoolMapJSON(rule.OptionsJSON),
+			PackageOptions:    parseBoolMapJSON(rule.PackageOptionsJSON),
+			CollectOptions:    parseBoolMapJSON(rule.CollectOptionsJSON),
+			Filters:           normalizeRuleFilters(parseStringArrayJSON(rule.FiltersJSON)),
+			MatchFilters:      normalizeRuleFilters(parseStringArrayJSON(rule.MatchFiltersJSON)),
+			NestFilters:       normalizeRuleFilters(parseStringArrayJSON(rule.NestFiltersJSON)),
+			TransformRules:    normalizeRuleFilters(parseStringArrayJSON(rule.TransformRulesJSON)),
+		}
+
+		if err := validateUpdateRuleInput(input); err != nil {
+			writeJSON(w, http.StatusBadRequest, jsonResponse{
+				Success: false,
+				Code:    "INVALID_RULE_BACKUP",
+				Message: err.Error(),
+			})
+			return
+		}
+	}
+
+	if err := a.store.ReplaceRules(backup.Rules); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if err := a.executor.ReloadAutomation(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Rules backup imported",
+		Data: map[string]any{
+			"count": len(backup.Rules),
+		},
+	})
+}
+
+func parseBoolMapJSON(raw string) map[string]bool {
+	result := make(map[string]bool)
+	if strings.TrimSpace(raw) == "" {
+		return result
+	}
+	_ = json.Unmarshal([]byte(raw), &result)
+	return result
+}
+
+func parseStringArrayJSON(raw string) []string {
+	items := make([]string, 0)
+	if strings.TrimSpace(raw) == "" {
+		return items
+	}
+	_ = json.Unmarshal([]byte(raw), &items)
+	return items
 }
 
 func (a *apiHandler) handleReorderRules(w http.ResponseWriter, r *http.Request) {

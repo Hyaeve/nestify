@@ -86,3 +86,9 @@ type UpdateRuleInput struct {
 	NestFilters       []string        `json:"nest_filters"`
 	TransformRules    []string        `json:"transform_rules"`
 }
+
+type RuleBackup struct {
+	Version    string `json:"version"`
+	ExportedAt string `json:"exported_at"`
+	Rules      []Rule `json:"rules"`
+}

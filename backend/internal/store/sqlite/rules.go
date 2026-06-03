@@ -293,6 +293,91 @@ func (s *Store) ReorderRules(items []model.RuleReorderItem) error {
 	return nil
 }
 
+func (s *Store) ReplaceRules(items []model.Rule) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin replace rules transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM rules`); err != nil {
+		return fmt.Errorf("delete existing rules: %w", err)
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO rules (
+			sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
+			options_json, package_options_json, collect_options_json, filters_json, match_filters_json, nest_filters_json, transform_rules_json,
+			last_run_status, last_success_count, last_skip_count, last_failure_count,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare replace rules statement: %w", err)
+	}
+	defer stmt.Close()
+
+	for index, item := range items {
+		sortOrder := item.SortOrder
+		if sortOrder <= 0 {
+			sortOrder = index + 1
+		}
+
+		createdAt := item.CreatedAt
+		if createdAt.IsZero() {
+			createdAt = time.Now().UTC()
+		}
+		updatedAt := item.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = createdAt
+		}
+
+		if _, err := stmt.Exec(
+			sortOrder,
+			strings.TrimSpace(item.Name),
+			item.Description,
+			boolToInt(item.Enabled),
+			boolToInt(item.MonitorEnabled),
+			defaultString(strings.TrimSpace(item.CompatibilityMode), "local"),
+			strings.TrimSpace(item.ArchiveMode),
+			defaultString(strings.TrimSpace(item.RuleType), deriveRuleType(strings.TrimSpace(item.ArchiveMode))),
+			strings.TrimSpace(item.LinkMode),
+			strings.TrimSpace(item.RunMode),
+			item.SourceDir,
+			item.TargetDir,
+			item.WatchDebounceMS,
+			item.CronExpression,
+			boolToInt(item.RunOnStart),
+			defaultRuleJSONText(item.OptionsJSON, `{}`),
+			defaultRuleJSONText(item.PackageOptionsJSON, `{}`),
+			defaultRuleJSONText(item.CollectOptionsJSON, `{}`),
+			defaultRuleJSONText(item.FiltersJSON, `[]`),
+			defaultRuleJSONText(item.MatchFiltersJSON, `[]`),
+			defaultRuleJSONText(item.NestFiltersJSON, `[]`),
+			defaultRuleJSONText(item.TransformRulesJSON, `[]`),
+			item.LastRunStatus,
+			item.LastSuccessCount,
+			item.LastSkipCount,
+			item.LastFailureCount,
+			createdAt.UTC().Format(time.RFC3339),
+			updatedAt.UTC().Format(time.RFC3339),
+		); err != nil {
+			return fmt.Errorf("insert replacement rule %q: %w", item.Name, err)
+		}
+	}
+
+	if _, err := tx.Exec(`DELETE FROM sqlite_sequence WHERE name = 'rules'`); err != nil {
+		return fmt.Errorf("reset rules sqlite sequence: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit replace rules transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (s *Store) UpdateRuleExecutionStats(id int64, status string, successCount, skipCount, failureCount int) error {
 	_, err := s.db.Exec(`
 		UPDATE rules
@@ -327,6 +412,14 @@ func defaultInt(value int, fallback int) int {
 }
 
 func defaultString(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+
+	return value
+}
+
+func defaultRuleJSONText(value string, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
 	}
