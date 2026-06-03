@@ -134,10 +134,6 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		}
 	}
 
-	if cleanupSourceAfterArchive {
-		_ = removeDirIfEmpty(sourceDir)
-	}
-
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
 		stats.Summary = "no supported archive items found"
@@ -335,9 +331,6 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
-		if cleanupSourceAfterArchive {
-			_ = removeDirIfEmpty(seriesPath)
-		}
 		return nil
 	}
 
@@ -345,9 +338,13 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		if cleanupSourceAfterArchive {
-			_ = removeDirIfEmpty(seriesPath)
-		}
+		return nil
+	}
+
+	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && !allImages {
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped non-image package series %s", seriesPath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("skipped package series %s: contains non-image files", seriesPath))
 		return nil
 	}
 
@@ -385,9 +382,6 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		}
 	}
 
-	if cleanupSourceAfterArchive {
-		_ = removeDirIfEmpty(seriesPath)
-	}
 	return nil
 }
 
@@ -446,9 +440,6 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
-		if cleanupSourceAfterArchive {
-			_ = removeDirIfEmpty(volumePath)
-		}
 		return nil
 	}
 
@@ -456,9 +447,13 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		if cleanupSourceAfterArchive {
-			_ = removeDirIfEmpty(volumePath)
-		}
+		return nil
+	}
+
+	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && !allImages {
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped non-image package volume %s", volumePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("skipped package volume %s: contains non-image files", volumePath))
 		return nil
 	}
 
@@ -510,9 +505,6 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		}
 	}
 
-	if cleanupSourceAfterArchive {
-		_ = removeDirIfEmpty(volumePath)
-	}
 	return nil
 }
 
