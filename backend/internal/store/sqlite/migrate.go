@@ -135,13 +135,16 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) ensureRuleSortOrderColumn() error {
+	log.Printf("sqlite:migrate: ensure sort_order column: query rules schema")
 	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
 	if err != nil {
+		log.Printf("sqlite:migrate: ensure sort_order column: query rules schema failed: %v", err)
 		return fmt.Errorf("query rules schema: %w", err)
 	}
 	defer rows.Close()
 
 	hasSortOrder := false
+	log.Printf("sqlite:migrate: ensure sort_order column: scanning schema rows")
 	for rows.Next() {
 		var cid int
 		var name string
@@ -157,20 +160,26 @@ func (s *Store) ensureRuleSortOrderColumn() error {
 			break
 		}
 	}
+	log.Printf("sqlite:migrate: ensure sort_order column: has_sort_order=%t", hasSortOrder)
 
 	if !hasSortOrder {
+		log.Printf("sqlite:migrate: ensure sort_order column: adding column")
 		if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`); err != nil {
+			log.Printf("sqlite:migrate: ensure sort_order column: add column failed: %v", err)
 			return fmt.Errorf("add sort_order column: %w", err)
 		}
 	}
 
+	log.Printf("sqlite:migrate: ensure sort_order column: backfilling sort_order")
 	if _, err := s.db.Exec(`
 		UPDATE rules
 		SET sort_order = id
 		WHERE sort_order = 0;
 	`); err != nil {
+		log.Printf("sqlite:migrate: ensure sort_order column: backfill failed: %v", err)
 		return fmt.Errorf("backfill sort_order column: %w", err)
 	}
+	log.Printf("sqlite:migrate: ensure sort_order column: complete")
 
 	return nil
 }
