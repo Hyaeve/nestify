@@ -1662,13 +1662,12 @@ onMounted(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
-.rule-actions { display: inline-flex; align-items: center; gap: 12px; }
+.rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
 .rule-action { padding: 4px; font-size: 18px; }
 .rule-action--primary { color: var(--el-color-primary); }
 .rule-action--success { color: var(--el-color-success); }
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
-.rule-actions::after { content: none; }
 .archive-mode-group {
   display: inline-flex;
   width: auto;

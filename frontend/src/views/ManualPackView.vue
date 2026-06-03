@@ -599,11 +599,19 @@ function dedupeRecentVisitedPaths(paths: string[]) {
       continue
     }
 
-    if (result.some((item) => item === path || isAncestorPath(item, path))) {
+    const exactIndex = result.findIndex((item) => item === path)
+    if (exactIndex >= 0) {
+      result.splice(exactIndex, 1)
+      result.unshift(path)
       continue
     }
 
-    const filtered = result.filter((item) => !isAncestorPath(path, item))
+    const descendantIndex = result.findIndex((item) => isAncestorPath(path, item))
+    if (descendantIndex >= 0) {
+      continue
+    }
+
+    const filtered = result.filter((item) => !isAncestorPath(item, path))
     result.length = 0
     result.push(path, ...filtered)
 
