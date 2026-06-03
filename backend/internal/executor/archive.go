@@ -290,13 +290,13 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 
 	sortEntriesNaturally(entries)
 	files := make([]os.DirEntry, 0, len(entries))
+	imageFiles := make([]os.DirEntry, 0, len(entries))
+	nonImageFiles := make([]os.DirEntry, 0, len(entries))
 	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
-	allImages := true
 	for _, entry := range entries {
 		if entry.IsDir() {
 			hasSubdirs = true
-			allImages = false
 			continue
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(entry.Name(), directMatchers) {
@@ -308,29 +308,37 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 			continue
 		}
 		files = append(files, entry)
-		if !isImageFile(entry.Name()) {
-			allImages = false
+		if isImageFile(entry.Name()) {
+			imageFiles = append(imageFiles, entry)
+		} else {
+			nonImageFiles = append(nonImageFiles, entry)
 		}
 	}
 
-	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && allImages {
-		archivePath, err := createCBZFromFiles(seriesPath, files, targetSeriesDir, filepath.Base(seriesPath)+".cbz")
+	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
+		archivePath, err := createCBZFromFiles(seriesPath, imageFiles, targetSeriesDir, filepath.Base(seriesPath)+".cbz")
 		if err != nil {
 			return err
 		}
 		if cleanupSourceAfterArchive {
-			if err := removePackedSourceFiles(seriesPath, files); err != nil {
+			if err := removePackedSourceFiles(seriesPath, imageFiles); err != nil {
 				return fmt.Errorf("remove packed source files: %w", err)
 			}
 		}
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		stats.ProcessedFiles += len(files)
+		stats.ProcessedFiles += len(imageFiles)
 		stats.SuccessCount++
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
+		for _, entry := range nonImageFiles {
+			sourcePath := filepath.Join(seriesPath, entry.Name())
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("skipped non-image file %s", sourcePath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("skipped non-image file %s: not included in package archive", sourcePath))
+		}
 		return nil
 	}
 
@@ -338,13 +346,6 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		return nil
-	}
-
-	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && !allImages {
-		stats.SkipCount++
-		s.persistRunHistory(runID, fmt.Sprintf("skipped non-image package series %s", seriesPath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("skipped package series %s: contains non-image files", seriesPath))
 		return nil
 	}
 
@@ -399,13 +400,13 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 
 	sortEntriesNaturally(entries)
 	files := make([]os.DirEntry, 0, len(entries))
+	imageFiles := make([]os.DirEntry, 0, len(entries))
+	nonImageFiles := make([]os.DirEntry, 0, len(entries))
 	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
-	allImages := true
 	for _, entry := range entries {
 		if entry.IsDir() {
 			hasSubdirs = true
-			allImages = false
 			continue
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(entry.Name(), directMatchers) {
@@ -417,29 +418,37 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 			continue
 		}
 		files = append(files, entry)
-		if !isImageFile(entry.Name()) {
-			allImages = false
+		if isImageFile(entry.Name()) {
+			imageFiles = append(imageFiles, entry)
+		} else {
+			nonImageFiles = append(nonImageFiles, entry)
 		}
 	}
 
-	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && allImages {
-		archivePath, err := createCBZFromFiles(volumePath, files, targetDir, filepath.Base(volumePath)+".cbz")
+	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
+		archivePath, err := createCBZFromFiles(volumePath, imageFiles, targetDir, filepath.Base(volumePath)+".cbz")
 		if err != nil {
 			return err
 		}
 		if cleanupSourceAfterArchive {
-			if err := removePackedSourceFiles(volumePath, files); err != nil {
+			if err := removePackedSourceFiles(volumePath, imageFiles); err != nil {
 				return fmt.Errorf("remove packed source files: %w", err)
 			}
 		}
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		stats.ProcessedFiles += len(files)
+		stats.ProcessedFiles += len(imageFiles)
 		stats.SuccessCount++
 		stats.PackedVolumes++
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
+		for _, entry := range nonImageFiles {
+			sourcePath := filepath.Join(volumePath, entry.Name())
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("skipped non-image file %s", sourcePath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("skipped non-image file %s: not included in package archive", sourcePath))
+		}
 		return nil
 	}
 
@@ -447,13 +456,6 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		return nil
-	}
-
-	if archiveMode == "package" && !hasSubdirs && len(files) > 0 && !allImages {
-		stats.SkipCount++
-		s.persistRunHistory(runID, fmt.Sprintf("skipped non-image package volume %s", volumePath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("skipped package volume %s: contains non-image files", volumePath))
 		return nil
 	}
 

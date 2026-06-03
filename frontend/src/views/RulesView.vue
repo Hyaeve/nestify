@@ -1960,10 +1960,6 @@ onMounted(() => {
 .uniform-mode-group {
   display: inline-flex;
   width: 100%;
-  max-width: 360px;
-}
-
-.rules-page :deep(.el-dialog .el-form-item__content) .uniform-mode-group {
   max-width: 416px;
 }
 
