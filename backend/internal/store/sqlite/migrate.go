@@ -171,13 +171,19 @@ func (s *Store) ensureRuleSortOrderColumn() error {
 	}
 
 	log.Printf("sqlite:migrate: ensure sort_order column: backfilling sort_order")
-	if _, err := s.db.Exec(`
+	result, err := s.db.Exec(`
 		UPDATE rules
 		SET sort_order = id
 		WHERE sort_order = 0;
-	`); err != nil {
+	`)
+	if err != nil {
 		log.Printf("sqlite:migrate: ensure sort_order column: backfill failed: %v", err)
 		return fmt.Errorf("backfill sort_order column: %w", err)
+	}
+	if affected, affectedErr := result.RowsAffected(); affectedErr == nil {
+		log.Printf("sqlite:migrate: ensure sort_order column: backfill affected_rows=%d", affected)
+	} else {
+		log.Printf("sqlite:migrate: ensure sort_order column: backfill rows affected unavailable: %v", affectedErr)
 	}
 	log.Printf("sqlite:migrate: ensure sort_order column: complete")
 
