@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"fmt"
+	"log"
 	"strings"
 )
 
@@ -72,43 +73,63 @@ func (s *Store) migrate() error {
 		);`,
 	}
 
-	for _, statement := range statements {
+	for index, statement := range statements {
+		log.Printf("sqlite:migrate: exec base statement %d/%d", index+1, len(statements))
 		if _, err := s.db.Exec(statement); err != nil {
+			log.Printf("sqlite:migrate: base statement %d failed: %v", index+1, err)
 			return fmt.Errorf("migrate sqlite schema: %w", err)
 		}
 	}
+	log.Printf("sqlite:migrate: base schema statements complete")
 
+	log.Printf("sqlite:migrate: ensure default settings")
 	if err := s.ensureDefaultSettings(); err != nil {
+		log.Printf("sqlite:migrate: ensure default settings failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure compatibility_mode column")
 	if err := s.ensureRuleCompatibilityModeColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure compatibility_mode column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure rule_type column")
 	if err := s.ensureRuleTypeColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure rule_type column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure link_mode column")
 	if err := s.ensureRuleLinkModeColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure link_mode column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure transform_rules column")
 	if err := s.ensureRuleTransformRulesColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure transform_rules column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure match_filters column")
 	if err := s.ensureRuleMatchFiltersColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure match_filters column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure nest_filters column")
 	if err := s.ensureRuleNestFiltersColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure nest_filters column failed: %v", err)
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure sort_order column")
 	if err := s.ensureRuleSortOrderColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure sort_order column failed: %v", err)
 		return err
 	}
+	log.Printf("sqlite:migrate: migration pipeline complete")
 
 	return nil
 }
