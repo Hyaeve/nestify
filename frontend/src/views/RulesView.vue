@@ -19,7 +19,7 @@
         </div>
       </template>
 
-      <el-table v-if="archiveRules.length" v-loading="archiveLoading" :data="archiveRules">
+      <el-table v-if="archiveRules.length" v-loading="archiveLoading" :data="archiveRules" class="rules-table" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="140" />
         <el-table-column label="模式" width="78">
           <template #default="scope">
@@ -33,9 +33,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="源路径" min-width="280" show-overflow-tooltip />
-        <el-table-column prop="target_dir" label="目标路径" min-width="280" show-overflow-tooltip />
-        <el-table-column label="监控" width="110">
+        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
+        <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
+        <el-table-column label="监控" min-width="110" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.monitor_enabled"
@@ -47,7 +47,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="88">
+        <el-table-column label="状态" min-width="120" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.enabled"
@@ -59,7 +59,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right" align="center">
+        <el-table-column label="操作" min-width="140" fixed="right" align="center">
           <template #default="scope">
             <div class="rule-actions">
               <el-tooltip content="编辑" placement="top">
@@ -130,7 +130,7 @@
         </div>
       </div>
 
-      <el-table v-loading="historyLoading" :data="historyItems">
+      <el-table v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
         <el-table-column label="规则 / 摘要" min-width="360">
           <template #default="scope">
             <div class="history-rule">
@@ -181,7 +181,7 @@
         </div>
       </template>
 
-      <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules">
+      <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules" class="rules-table" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="78">
           <template #default>
@@ -195,7 +195,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="监控目录" min-width="320" show-overflow-tooltip />
+        <el-table-column prop="source_dir" label="监控目录" min-width="340" show-overflow-tooltip />
         <el-table-column label="清理项" min-width="220">
           <template #default="scope">
             <div class="purify-tags">
@@ -204,7 +204,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="监控" width="110">
+        <el-table-column label="监控" min-width="110" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.monitor_enabled"
@@ -216,7 +216,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="88">
+        <el-table-column label="状态" min-width="120" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.enabled"
@@ -228,7 +228,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right" align="center">
+        <el-table-column label="操作" min-width="140" fixed="right" align="center">
           <template #default="scope">
             <div class="rule-actions">
               <el-tooltip content="编辑" placement="top">
@@ -277,7 +277,7 @@
         </div>
       </template>
 
-      <el-table v-if="linkRules.length" v-loading="linkLoading" :data="linkRules">
+      <el-table v-if="linkRules.length" v-loading="linkLoading" :data="linkRules" class="rules-table" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="78">
           <template #default="scope">
@@ -286,9 +286,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="监控目录" min-width="260" show-overflow-tooltip />
-        <el-table-column prop="target_dir" label="链路目录" min-width="260" show-overflow-tooltip />
-        <el-table-column label="监控" width="110">
+        <el-table-column prop="source_dir" label="监控目录" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="target_dir" label="链路目录" min-width="300" show-overflow-tooltip />
+        <el-table-column label="监控" min-width="110" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.monitor_enabled"
@@ -300,7 +300,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="计划" width="88">
+        <el-table-column label="计划" min-width="88" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.run_mode === 'cron' ? 'warning' : 'info'" effect="plain">{{ scope.row.run_mode === 'cron' ? '开' : '关' }}</el-tag>
           </template>
@@ -308,7 +308,7 @@
         <el-table-column label="Cron" min-width="140">
           <template #default="scope">{{ scope.row.cron_expression || '—' }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="88">
+        <el-table-column label="状态" min-width="120" align="center">
           <template #default="scope">
             <el-switch
               :model-value="scope.row.enabled"
@@ -320,7 +320,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right" align="center">
+        <el-table-column label="操作" min-width="140" fixed="right" align="center">
           <template #default="scope">
             <div class="rule-actions">
               <el-tooltip content="编辑" placement="top">
@@ -1662,12 +1662,59 @@ onMounted(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
+.rules-page :deep(.rules-table) {
+  width: 100%;
+}
+
+.rules-page :deep(.rules-table .el-table__inner-wrapper) {
+  width: 100%;
+}
+
+.rules-page :deep(.rules-table .cell) {
+  min-width: 0;
+}
+
+.rules-page :deep(.rules-table .el-table__cell:not(.gutter) .cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rules-page :deep(.rules-table .el-table__cell) {
+  padding: 14px 0;
+}
+
+.rules-page :deep(.rules-table .el-table__cell.is-center .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.rules-page :deep(.rules-table .el-table__fixed-right) {
+  box-shadow: -10px 0 18px rgba(15, 23, 42, 0.05);
+}
+
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
-.rule-action { padding: 4px; font-size: 18px; }
+.rule-action { flex: 0 0 auto; padding: 4px; font-size: 18px; }
 .rule-action--primary { color: var(--el-color-primary); }
 .rule-action--success { color: var(--el-color-success); }
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
+.rule-actions :deep(.el-button + .el-button) { margin-left: 0; }
+
+.rules-page :deep(.rules-table .el-switch) {
+  flex-shrink: 0;
+}
+
+.rules-page :deep(.rules-table .el-switch__label) {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.rules-page :deep(.rules-table .el-switch__label.is-active),
+.rules-page :deep(.rules-table .el-switch__label.is-inactive) {
+  min-width: auto;
+}
 .archive-mode-group {
   display: inline-flex;
   width: auto;
@@ -1699,5 +1746,15 @@ onMounted(() => {
   .history-toolbar { flex-direction: column; align-items: stretch; }
   .history-search { flex-wrap: wrap; }
   .history-search :deep(.el-input) { width: 100%; }
+}
+
+@media (max-width: 1440px) {
+  .rules-page :deep(.rules-table .el-switch__label) {
+    display: none;
+  }
+
+  .rules-page :deep(.rules-table .el-table__cell) {
+    padding: 12px 0;
+  }
 }
 </style>
