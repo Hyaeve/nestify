@@ -20,7 +20,16 @@
       </template>
 
       <el-table v-if="archiveRules.length" ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
-        <el-table-column prop="name" label="规则名称" min-width="140" />
+        <el-table-column label="规则名称" min-width="180">
+          <template #default="scope">
+            <div class="rule-name-cell">
+              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+                ⋮⋮
+              </button>
+              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag type="info" effect="plain">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</el-tag>
@@ -35,28 +44,27 @@
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
         <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="监控" min-width="110" align="center">
+        <el-table-column label="Cron" min-width="180">
           <template #default="scope">
-            <el-switch
-              :model-value="scope.row.monitor_enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="开"
-              inactive-text="关"
-              @change="toggleRuleMonitorEnabled(scope.row, $event)"
-            />
+            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
+              <template v-if="isEditingCron(scope.row.id)">
+                <el-input
+                  v-model="cronEditingValue"
+                  size="small"
+                  placeholder="请输入 Cron 表达式"
+                  @click.stop
+                  @keyup.enter="saveInlineCron(scope.row)"
+                  @keyup.esc="cancelInlineCronEdit"
+                  @blur="saveInlineCron(scope.row)"
+                />
+              </template>
+              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" min-width="120" align="center">
+        <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              @change="toggleRuleEnabled(scope.row, $event)"
-            />
+            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -182,8 +190,17 @@
       </template>
 
       <el-table v-if="purifyRules.length" ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
-        <el-table-column prop="name" label="规则名称" min-width="160" />
-        <el-table-column label="模式" width="92">
+        <el-table-column label="规则名称" min-width="180">
+          <template #default="scope">
+            <div class="rule-name-cell">
+              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+                ⋮⋮
+              </button>
+              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag :type="scope.row.archive_mode === 'transform' ? 'primary' : 'warning'" effect="plain">
               {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
@@ -197,43 +214,31 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="监控目录" min-width="340" show-overflow-tooltip />
-        <el-table-column label="功能项" min-width="260">
+        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
+        <el-table-column label="目标路径" min-width="320">
+          <template #default>—</template>
+        </el-table-column>
+        <el-table-column label="Cron" min-width="180">
           <template #default="scope">
-            <div class="purify-tags">
-              <template v-if="scope.row.archive_mode === 'transform'">
-                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultTransformOptions()).convert_traditional_to_simplified" size="small" effect="plain">繁简转换</el-tag>
-                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultTransformOptions()).convert_matching_text" size="small" effect="plain">匹配转换</el-tag>
+            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
+              <template v-if="isEditingCron(scope.row.id)">
+                <el-input
+                  v-model="cronEditingValue"
+                  size="small"
+                  placeholder="请输入 Cron 表达式"
+                  @click.stop
+                  @keyup.enter="saveInlineCron(scope.row)"
+                  @keyup.esc="cancelInlineCronEdit"
+                  @blur="saveInlineCron(scope.row)"
+                />
               </template>
-              <template v-else>
-                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_empty_dirs" size="small" effect="plain">空文件夹</el-tag>
-                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_matching_files" size="small" effect="plain">匹配文件</el-tag>
-              </template>
+              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="监控" min-width="110" align="center">
+        <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-switch
-              :model-value="scope.row.monitor_enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="开"
-              inactive-text="关"
-              @change="toggleRuleMonitorEnabled(scope.row, $event)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="120" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              @change="toggleRuleEnabled(scope.row, $event)"
-            />
+            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -286,7 +291,16 @@
       </template>
 
       <el-table v-if="linkRules.length" ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
-        <el-table-column prop="name" label="规则名称" min-width="160" />
+        <el-table-column label="规则名称" min-width="180">
+          <template #default="scope">
+            <div class="rule-name-cell">
+              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+                ⋮⋮
+              </button>
+              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag :type="scope.row.link_mode === 'hard' ? 'danger' : 'primary'" effect="plain">
@@ -294,38 +308,34 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="监控目录" min-width="300" show-overflow-tooltip />
-        <el-table-column prop="target_dir" label="链路目录" min-width="300" show-overflow-tooltip />
-        <el-table-column label="监控" min-width="110" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="scope.row.monitor_enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="开"
-              inactive-text="关"
-              @change="toggleRuleMonitorEnabled(scope.row, $event)"
-            />
+        <el-table-column label="执行模式" width="110">
+          <template #default>
+            <el-tag type="success" effect="plain">本地模式</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="计划" min-width="88" align="center">
+        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
+        <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
+        <el-table-column label="Cron" min-width="180">
           <template #default="scope">
-            <el-tag :type="scope.row.run_mode === 'cron' ? 'warning' : 'info'" effect="plain">{{ scope.row.run_mode === 'cron' ? '开' : '关' }}</el-tag>
+            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
+              <template v-if="isEditingCron(scope.row.id)">
+                <el-input
+                  v-model="cronEditingValue"
+                  size="small"
+                  placeholder="请输入 Cron 表达式"
+                  @click.stop
+                  @keyup.enter="saveInlineCron(scope.row)"
+                  @keyup.esc="cancelInlineCronEdit"
+                  @blur="saveInlineCron(scope.row)"
+                />
+              </template>
+              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="Cron" min-width="140">
-          <template #default="scope">{{ scope.row.cron_expression || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="120" align="center">
+        <el-table-column label="状态" min-width="100" align="center">
           <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              :loading="togglingRuleIds.has(scope.row.id)"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              @change="toggleRuleEnabled(scope.row, $event)"
-            />
+            <el-tag :type="scope.row.enabled ? 'primary' : 'info'" effect="plain">{{ scope.row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" min-width="140" fixed="right" align="center">
@@ -459,7 +469,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode" class="archive-mode-group"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -494,7 +504,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode" class="archive-mode-group"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -583,7 +593,7 @@ import {
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'single_file_nesting'
-type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
+type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text'
 type PurifyArchiveMode = 'cleanup' | 'transform'
@@ -607,11 +617,9 @@ const packageModeOptions = [
 ] as const
 
 const collectModeOptions = [
-  { key: 'recursive_collect', label: '递归收集', description: '自动扫描所有子目录，把符合条件的文件一并收集。' },
-  { key: 'deduplicate_same_name', label: '同名文件去重', description: '遇到重复文件时自动跳过重复项，减少覆盖冲突。' },
-  { key: 'keep_latest_only', label: '仅保留最新文件', description: '存在多个版本时优先保留最新文件。' },
-  { key: 'collect_related_files', label: '收集关联文件', description: '在收集主文件时同步带上相关说明或附属文件。' },
-  { key: 'cleanup_source_after_archive', label: '成功后清理源文件夹', description: '收集成功后清理已处理目录中的空文件夹，保持源目录整洁。' },
+  { key: 'recursive_collect', label: '递归收集', description: '默认递归扫描监控目录下的全部子目录，并将父目录中的所有文件统一收集到目标目录对应的同名文件夹下。' },
+  { key: 'deduplicate_same_name', label: '同名去重', description: '默认勾选；遇到同名文件时会判断是否为同一文件：相同则保留最新版本，不同则为其中一个追加 “-re” 后缀以避免覆盖。' },
+  { key: 'cleanup_source_after_archive', label: '清理源文件', description: '默认勾选；收集完成后删除已成功归档的源文件，关闭后保留原始文件。' },
 ] as const
 
 const cleanupModeOptions = [
@@ -629,7 +637,7 @@ function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
-  return { recursive_collect: true, deduplicate_same_name: true, keep_latest_only: false, collect_related_files: true, cleanup_source_after_archive: false }
+  return { recursive_collect: true, deduplicate_same_name: true, cleanup_source_after_archive: true }
 }
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
@@ -717,14 +725,14 @@ function normalizeRuleType(rule: RuleItem): RuleListType {
   return 'archive'
 }
 
-function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePayload {
+function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePayload> = {}): UpdateRulePayload {
   const ruleType = normalizeRuleType(rule)
   const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
 
   return {
     name: rule.name,
     description: rule.description ?? '',
-    enabled,
+    enabled: rule.enabled,
     monitor_enabled: rule.monitor_enabled,
     compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
     archive_mode: rule.archive_mode,
@@ -746,6 +754,7 @@ function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePay
     filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
     nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
+    ...overrides,
   }
 }
 
@@ -758,11 +767,13 @@ const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
-const togglingRuleIds = ref(new Set<number>())
+const savingCronRuleIds = ref(new Set<number>())
 const archiveTableRef = ref()
 const purifyTableRef = ref()
 const linkTableRef = ref()
 const reorderingRuleType = ref<RuleListType | null>(null)
+const editingCronRuleId = ref<number | null>(null)
+const cronEditingValue = ref('')
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -1263,6 +1274,7 @@ function setupRuleSortable(ruleType: RuleListType) {
 
   const sortable = Sortable.create(tbody, {
     animation: 180,
+    handle: '.rule-drag-handle',
     ghostClass: 'rule-sortable-ghost',
     chosenClass: 'rule-sortable-chosen',
     dragClass: 'rule-sortable-drag',
@@ -1713,77 +1725,52 @@ async function refreshRuleList(type: RuleListType) {
   await loadLinkRules()
 }
 
-async function toggleRuleEnabled(rule: RuleItem, enabled: boolean | string | number) {
-  const nextEnabled = Boolean(enabled)
-  const ruleType = normalizeRuleType(rule)
-  const loadingSet = new Set(togglingRuleIds.value)
-
-  loadingSet.add(rule.id)
-  togglingRuleIds.value = loadingSet
-  errorMessage.value = ''
-
-  try {
-    await updateRule(rule.id, buildRuleUpdatePayload(rule, nextEnabled))
-    rule.enabled = nextEnabled
-    ElMessage.success(`规则已${nextEnabled ? '启用' : '停用'}`)
-    await refreshRuleList(ruleType)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : `规则${nextEnabled ? '启用' : '停用'}失败`)
-    await refreshRuleList(ruleType)
-  } finally {
-    const nextLoadingSet = new Set(togglingRuleIds.value)
-    nextLoadingSet.delete(rule.id)
-    togglingRuleIds.value = nextLoadingSet
-  }
+function isEditingCron(ruleId: number) {
+  return editingCronRuleId.value === ruleId
 }
 
-async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean | string | number) {
-  const nextMonitorEnabled = Boolean(monitorEnabled)
+async function openInlineCronEditor(rule: RuleItem) {
+  editingCronRuleId.value = rule.id
+  cronEditingValue.value = rule.cron_expression || ''
+  await nextTick()
+}
+
+function cancelInlineCronEdit() {
+  editingCronRuleId.value = null
+  cronEditingValue.value = ''
+}
+
+async function saveInlineCron(rule: RuleItem) {
+  if (editingCronRuleId.value !== rule.id) return
+
+  const nextCronExpression = cronEditingValue.value.trim()
   const ruleType = normalizeRuleType(rule)
-  const loadingSet = new Set(togglingRuleIds.value)
-  const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
+  const loadingSet = new Set(savingCronRuleIds.value)
+
+  if (nextCronExpression === (rule.cron_expression || '')) {
+    cancelInlineCronEdit()
+    return
+  }
 
   loadingSet.add(rule.id)
-  togglingRuleIds.value = loadingSet
+  savingCronRuleIds.value = loadingSet
   errorMessage.value = ''
 
   try {
-    await updateRule(rule.id, {
-      name: rule.name,
-      description: rule.description ?? '',
-      enabled: rule.enabled,
-      monitor_enabled: nextMonitorEnabled,
-      compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
-      archive_mode: rule.archive_mode,
-      rule_type: ruleType,
-      link_mode: ruleType === 'link' ? (rule.link_mode === 'hard' ? 'hard' : 'soft') : undefined,
-      run_mode: resolveRunMode(nextMonitorEnabled, scheduleEnabled),
-      source_dir: rule.source_dir,
-      target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
-      watch_debounce_ms: rule.watch_debounce_ms,
-      cron_expression: scheduleEnabled ? rule.cron_expression : '',
-      run_on_start: rule.run_on_start,
-      options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : {},
-      package_options: ruleType === 'archive' && rule.archive_mode === 'package'
-        ? parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
-        : {},
-      collect_options: ruleType === 'archive' && rule.archive_mode === 'collect'
-        ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
-        : {},
-      filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
-      match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
-      nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
-    })
-    rule.monitor_enabled = nextMonitorEnabled
-    ElMessage.success(`监控已${nextMonitorEnabled ? '开启' : '关闭'}`)
+    await updateRule(rule.id, buildRuleUpdatePayload(rule, {
+      run_mode: nextCronExpression ? 'cron' : (rule.monitor_enabled ? 'watch' : 'once'),
+      cron_expression: nextCronExpression,
+    }))
+    ElMessage.success('Cron 已更新')
+    cancelInlineCronEdit()
     await refreshRuleList(ruleType)
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : `监控${nextMonitorEnabled ? '开启' : '关闭'}失败`)
+    ElMessage.error(error instanceof Error ? error.message : 'Cron 更新失败')
     await refreshRuleList(ruleType)
   } finally {
-    const nextLoadingSet = new Set(togglingRuleIds.value)
+    const nextLoadingSet = new Set(savingCronRuleIds.value)
     nextLoadingSet.delete(rule.id)
-    togglingRuleIds.value = nextLoadingSet
+    savingCronRuleIds.value = nextLoadingSet
   }
 }
 
@@ -1895,6 +1882,15 @@ onMounted(() => {
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
 .rule-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }
+.rule-drag-handle:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
+.rule-drag-handle:active { cursor: grabbing; }
+.editable-cron { min-height: 32px; display: flex; align-items: center; cursor: pointer; }
+.editable-cron__text { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; border-radius: 6px; transition: background-color 0.2s ease, color 0.2s ease; }
+.editable-cron:hover .editable-cron__text { background: var(--el-fill-color-light); }
+.editable-cron__text.is-empty { color: var(--el-text-color-placeholder); }
 
 .rules-page :deep(.rules-table .el-switch) {
   flex-shrink: 0;
@@ -1913,7 +1909,7 @@ onMounted(() => {
 .uniform-mode-group {
   display: inline-flex;
   width: 100%;
-  max-width: 100%;
+  max-width: 420px;
 }
 
 .archive-mode-group :deep(.el-radio-button),
@@ -1929,10 +1925,6 @@ onMounted(() => {
   min-width: 0;
   width: 100%;
   padding-inline: 18px;
-}
-
-.rules-page :deep(.rules-table--sortable tbody tr) {
-  cursor: move;
 }
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
