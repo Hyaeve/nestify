@@ -170,6 +170,13 @@ func (s *Store) ensureRuleSortOrderColumn() error {
 		}
 	}
 
+	log.Printf("sqlite:migrate: ensure sort_order column: closing schema rows before backfill")
+	if err := rows.Close(); err != nil {
+		log.Printf("sqlite:migrate: ensure sort_order column: close rows failed: %v", err)
+		return fmt.Errorf("close rules schema rows: %w", err)
+	}
+	rows = nil
+
 	log.Printf("sqlite:migrate: ensure sort_order column: backfilling sort_order")
 	result, err := s.db.Exec(`
 		UPDATE rules
