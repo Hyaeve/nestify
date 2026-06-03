@@ -19,24 +19,33 @@ import (
 
 func Run() error {
 	env := config.LoadEnv()
+	log.Printf("startup: env loaded http_addr=%s web_dir=%s db_path=%s browse_roots=%d", env.HTTPAddr, env.WebDir, env.DBPath, len(env.BrowseRoots))
 
+	log.Printf("startup: opening sqlite store")
 	store, err := sqlite.Open(env)
 	if err != nil {
+		log.Printf("startup: opening sqlite store failed: %v", err)
 		return err
 	}
+	log.Printf("startup: sqlite store ready")
 	defer func() {
 		if closeErr := store.Close(); closeErr != nil {
 			log.Printf("close store error: %v", closeErr)
 		}
 	}()
 
+	log.Printf("startup: creating executor service")
 	execService := executor.NewService(store)
 	automationCtx, automationCancel := context.WithCancel(context.Background())
 	defer automationCancel()
+	log.Printf("startup: starting automation")
 	if err := execService.StartAutomation(automationCtx); err != nil {
+		log.Printf("startup: starting automation failed: %v", err)
 		return err
 	}
+	log.Printf("startup: automation ready")
 
+	log.Printf("startup: building http server")
 	srv := &http.Server{
 		Addr: env.HTTPAddr,
 		Handler: httpapi.NewRouter(httpapi.Dependencies{
@@ -52,8 +61,10 @@ func Run() error {
 	errCh := make(chan error, 1)
 
 	go func() {
+		log.Printf("startup: http server entering listen state on %s", env.HTTPAddr)
 		log.Printf("nestify backend listening on %s, sqlite=%s", env.HTTPAddr, env.DBPath)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("startup: http server stopped with error: %v", err)
 			errCh <- err
 		}
 	}()
