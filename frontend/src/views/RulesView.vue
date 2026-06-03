@@ -1963,6 +1963,10 @@ onMounted(() => {
   max-width: 360px;
 }
 
+.rules-page :deep(.el-dialog .el-form-item__content) .uniform-mode-group {
+  max-width: 416px;
+}
+
 .archive-mode-group :deep(.el-radio-button),
 .uniform-mode-group :deep(.el-radio-button) {
   flex: 1 1 0;
