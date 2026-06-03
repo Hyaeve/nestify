@@ -1618,7 +1618,7 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		return errors.New("source_dir is required")
 	}
 	archiveMode = strings.TrimSpace(archiveMode)
-	if archiveMode != "cleanup" && strings.TrimSpace(targetDir) == "" {
+	if archiveMode != "cleanup" && archiveMode != "transform" && strings.TrimSpace(targetDir) == "" {
 		return errors.New("target_dir is required")
 	}
 
