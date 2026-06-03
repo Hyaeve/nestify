@@ -162,10 +162,11 @@ type renameItemRequest struct {
 }
 
 type fileMutationRequest struct {
-	Paths           []string `json:"paths"`
-	DestinationPath string   `json:"destination_path"`
-	OutputDir       string   `json:"output_dir"`
-	ArchiveName     string   `json:"archive_name"`
+	Paths            []string `json:"paths"`
+	DestinationPath  string   `json:"destination_path"`
+	OutputDir        string   `json:"output_dir"`
+	ArchiveName      string   `json:"archive_name"`
+	NestSourceFolder *bool    `json:"nest_source_folder,omitempty"`
 }
 
 type updateAdminAccountRequest struct {
@@ -547,7 +548,11 @@ func (a *apiHandler) handlePackCBZ(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outputPath, err := a.pathBrowse.PackItemsAsCBZ(input.Paths, input.OutputDir, input.ArchiveName)
+	nestSourceFolder := true
+	if input.NestSourceFolder != nil {
+		nestSourceFolder = *input.NestSourceFolder
+	}
+	outputPath, err := a.pathBrowse.PackItemsAsCBZ(input.Paths, input.OutputDir, input.ArchiveName, nestSourceFolder)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "PACK_CBZ_FAILED", Message: err.Error()})
 		return
@@ -577,6 +582,7 @@ func (a *apiHandler) handleExtractArchives(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "EXTRACT_FAILED", Message: err.Error()})
 		return
 	}
+	a.executor.RecordManualExtractRun(input.Paths, input.OutputDir, items)
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Archives extracted", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
 }

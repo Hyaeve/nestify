@@ -206,7 +206,7 @@ func (s *Service) DeleteItems(paths []string) error {
 	return nil
 }
 
-func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string) (string, error) {
+func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string, nestSourceFolder bool) (string, error) {
 	if len(paths) == 0 {
 		return "", fmt.Errorf("paths are required")
 	}
@@ -253,7 +253,7 @@ func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string) 
 
 	zipWriter := zip.NewWriter(archiveFile)
 	for _, itemPath := range resolvedPaths {
-		if err := addPathToZip(zipWriter, itemPath); err != nil {
+		if err := addPathToZip(zipWriter, itemPath, nestSourceFolder); err != nil {
 			_ = zipWriter.Close()
 			return "", err
 		}
@@ -486,7 +486,7 @@ func copyPathContents(sourcePath, targetPath string) error {
 	return os.Chmod(targetPath, info.Mode())
 }
 
-func addPathToZip(zipWriter *zip.Writer, sourcePath string) error {
+func addPathToZip(zipWriter *zip.Writer, sourcePath string, nestSourceFolder bool) error {
 	info, err := os.Stat(sourcePath)
 	if err != nil {
 		return fmt.Errorf("stat archive source: %w", err)
@@ -496,12 +496,17 @@ func addPathToZip(zipWriter *zip.Writer, sourcePath string) error {
 		return addFileToZip(zipWriter, sourcePath, filepath.Base(sourcePath))
 	}
 
+	baseDir := filepath.Dir(sourcePath)
+	if !nestSourceFolder {
+		baseDir = sourcePath
+	}
+
 	return filepath.Walk(sourcePath, func(path string, walkInfo os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 
-		relPath, err := filepath.Rel(filepath.Dir(sourcePath), path)
+		relPath, err := filepath.Rel(baseDir, path)
 		if err != nil {
 			return err
 		}

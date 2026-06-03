@@ -95,6 +95,51 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 	return s.cloneRun(run), nil
 }
 
+func (s *Service) RecordManualExtractRun(sourcePaths []string, outputDir string, extractedPaths []string) {
+	cleanSources := make([]string, 0, len(sourcePaths))
+	for _, path := range sourcePaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed != "" {
+			cleanSources = append(cleanSources, trimmed)
+		}
+	}
+
+	run := s.newRun(model.TriggerModeManual, "extract", nil, "manual-extract")
+	now := time.Now().UTC()
+
+	s.mu.Lock()
+	if currentRun, ok := s.runs[run.ID]; ok {
+		currentRun.Status = model.RunStatusSucceeded
+		currentRun.Stage = model.RunStageFinalizing
+		currentRun.ProcessedFiles = len(cleanSources)
+		currentRun.SuccessCount = len(extractedPaths)
+		currentRun.SkipCount = 0
+		currentRun.FailureCount = 0
+		currentRun.UpdatedAt = now
+		currentRun.FinishedAt = &now
+	}
+	s.mu.Unlock()
+
+	if len(cleanSources) > 0 {
+		s.appendLog(run.ID, "info", fmt.Sprintf("manual extract requested for %d archive(s)", len(cleanSources)))
+		for _, path := range cleanSources {
+			s.appendLog(run.ID, "info", fmt.Sprintf("source archive: %s", path))
+		}
+	}
+	if strings.TrimSpace(outputDir) != "" {
+		s.appendLog(run.ID, "info", fmt.Sprintf("extract output directory: %s", outputDir))
+	}
+	for _, path := range extractedPaths {
+		s.appendLog(run.ID, "info", fmt.Sprintf("extracted archive to %s", path))
+	}
+
+	s.persistRunHistory(run.ID, fmt.Sprintf("manual extract completed: %d archive(s) -> %d directorie(s)", len(cleanSources), len(extractedPaths)), &executionStats{
+		ProcessedFiles: len(cleanSources),
+		SuccessCount:   len(extractedPaths),
+		Summary:        fmt.Sprintf("manual extract completed: %d archive(s) -> %d directorie(s)", len(cleanSources), len(extractedPaths)),
+	})
+}
+
 func (s *Service) GetRun(runID string) (*model.RunInstance, bool) {
 	s.mu.RLock()
 	run, ok := s.runs[runID]

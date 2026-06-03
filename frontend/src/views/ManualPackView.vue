@@ -14,7 +14,14 @@
           <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
           <el-button type="primary" @click="triggerUpload">上传</el-button>
           <el-button :loading="loading" @click="reloadEntries">刷新</el-button>
-          <el-button :disabled="!lastVisitedPath || lastVisitedPath === directoryPath" @click="openLastVisitedPath">最近访问</el-button>
+          <el-dropdown trigger="click" :disabled="recentVisitedPaths.length === 0" @command="handleRecentVisitedCommand">
+            <el-button>最近访问</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item v-for="path in recentVisitedPaths" :key="path" :command="path">{{ path }}</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <span class="toolbar-row__split" />
           <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
           <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
@@ -52,6 +59,10 @@
               <el-option label="修改时间" value="modified_at" />
               <el-option label="文件名称" value="name" />
               <el-option label="文件类型" value="type" />
+            </el-select>
+            <el-select v-model="sortOrder" size="small" class="summary-row__sort-order-select">
+              <el-option label="倒序" value="desc" />
+              <el-option label="正序" value="asc" />
             </el-select>
           </span>
           <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
@@ -249,6 +260,10 @@
         <el-form-item label="归档名称">
           <el-input v-model="packArchiveName" placeholder="例如：archive.cbz，可留空自动生成" />
         </el-form-item>
+        <el-form-item>
+          <el-checkbox v-model="packNestSourceFolder">是否嵌套源文件夹</el-checkbox>
+          <div class="pack-form__hint">勾选后会按源文件夹名称保留一层目录；取消后会直接输出到目标路径，不再额外套源文件夹。</div>
+        </el-form-item>
         <el-form-item label="待打包项目">
           <el-space wrap>
             <el-tag v-for="item in packCandidates" :key="item.path" type="warning">{{ item.name }}</el-tag>
@@ -300,9 +315,10 @@ interface BreadcrumbItem {
 
 type PickerMode = 'browse' | 'copy' | 'move' | 'pack'
 type SortBy = 'modified_at' | 'name' | 'type'
+type SortOrder = 'asc' | 'desc'
 
 const STARRED_FOLDERS_STORAGE_KEY = 'nestify:file-manager:starred-folders'
-const LAST_VISITED_PATH_STORAGE_KEY = 'nestify:file-manager:last-visited-path'
+const RECENT_VISITED_PATHS_STORAGE_KEY = 'nestify:file-manager:recent-visited-paths'
 
 const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
@@ -319,8 +335,9 @@ const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const selectedRows = ref<FileManagerEntry[]>([])
 const sortBy = ref<SortBy>('modified_at')
+const sortOrder = ref<SortOrder>('desc')
 const starredFolders = ref<string[]>([])
-const lastVisitedPath = ref('')
+const recentVisitedPaths = ref<string[]>([])
 const tableRef = ref<any>(null)
 const uploadInputRef = ref<HTMLInputElement | null>(null)
 
@@ -342,6 +359,7 @@ const moveCandidates = ref<FileManagerEntry[]>([])
 const packDialogVisible = ref(false)
 const packOutputDir = ref('')
 const packArchiveName = ref('')
+const packNestSourceFolder = ref(true)
 const packCandidates = ref<FileManagerEntry[]>([])
 
 const contextMenu = ref<{ visible: boolean; x: number; y: number; entry: FileManagerEntry | null }>({
@@ -475,21 +493,29 @@ function compareEntries(a: FileManagerEntry, b: FileManagerEntry) {
     return a.is_dir ? -1 : 1
   }
 
+  let result = 0
+
   if (sortBy.value === 'modified_at') {
-    const timeDelta = compareByModifiedAt(a, b)
-    if (timeDelta !== 0) {
-      return timeDelta
-    }
+    result = compareByModifiedAt(a, b)
+  } else if (sortBy.value === 'type') {
+    result = getEntryExtension(a).localeCompare(getEntryExtension(b), 'zh-CN', { sensitivity: 'base' })
+  } else {
+    result = compareByName(a, b)
   }
 
-  if (sortBy.value === 'type') {
-    const typeDelta = getEntryExtension(a).localeCompare(getEntryExtension(b), 'zh-CN', { sensitivity: 'base' })
-    if (typeDelta !== 0) {
-      return typeDelta
-    }
+  if (result !== 0) {
+    return applySortOrder(result)
   }
 
+  return compareByName(a, b)
+}
+
+function compareByName(a: FileManagerEntry, b: FileManagerEntry) {
   return a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base', numeric: true })
+}
+
+function applySortOrder(result: number) {
+  return sortOrder.value === 'asc' ? result : -result
 }
 
 function compareByModifiedAt(a: FileManagerEntry, b: FileManagerEntry) {
@@ -521,18 +547,38 @@ function loadStarredFolders() {
   }
 }
 
-function loadLastVisitedPath() {
+function loadRecentVisitedPaths() {
   try {
-    lastVisitedPath.value = normalizePath(window.localStorage.getItem(LAST_VISITED_PATH_STORAGE_KEY) || '')
+    const raw = window.localStorage.getItem(RECENT_VISITED_PATHS_STORAGE_KEY)
+    if (!raw) {
+      recentVisitedPaths.value = []
+      return
+    }
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      recentVisitedPaths.value = []
+      return
+    }
+
+    recentVisitedPaths.value = parsed
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => normalizePath(item))
+      .filter(Boolean)
+      .slice(0, 5)
   } catch {
-    lastVisitedPath.value = ''
+    recentVisitedPaths.value = []
   }
 }
 
-function persistLastVisitedPath(path: string) {
+function persistRecentVisitedPath(path: string) {
   const normalizedPath = normalizePath(path)
-  lastVisitedPath.value = normalizedPath
-  window.localStorage.setItem(LAST_VISITED_PATH_STORAGE_KEY, normalizedPath)
+  if (!normalizedPath) {
+    return
+  }
+
+  recentVisitedPaths.value = [normalizedPath, ...recentVisitedPaths.value.filter((item) => item !== normalizedPath)].slice(0, 5)
+  window.localStorage.setItem(RECENT_VISITED_PATHS_STORAGE_KEY, JSON.stringify(recentVisitedPaths.value))
 }
 
 function persistStarredFolders() {
@@ -553,12 +599,12 @@ function toggleFolderStar(path: string) {
   persistStarredFolders()
 }
 
-async function openLastVisitedPath() {
-  if (!lastVisitedPath.value || lastVisitedPath.value === directoryPath.value) {
+async function handleRecentVisitedCommand(path: string) {
+  if (!path || path === directoryPath.value) {
     return
   }
 
-  await openPath(lastVisitedPath.value)
+  await openPath(path)
 }
 
 function isArchiveEntry(entry: FileManagerEntry) {
@@ -630,7 +676,10 @@ async function openCurrentPath() {
     parentPath.value = response.data?.parent_path ?? ''
     entries.value = response.data?.entries ?? []
     if (previousPath && previousPath !== directoryPath.value) {
-      persistLastVisitedPath(previousPath)
+      persistRecentVisitedPath(previousPath)
+    }
+    if (directoryPath.value) {
+      persistRecentVisitedPath(directoryPath.value)
     }
     clearSelection()
   } catch (error) {
@@ -867,6 +916,7 @@ function openPackDialog(entry?: FileManagerEntry) {
   packCandidates.value = items
   packOutputDir.value = directoryPath.value
   packArchiveName.value = ''
+  packNestSourceFolder.value = true
   packDialogVisible.value = true
 }
 
@@ -876,6 +926,7 @@ async function submitPackCBZ() {
       packCandidates.value.map((item) => item.path),
       packOutputDir.value,
       packArchiveName.value,
+      packNestSourceFolder.value,
     )
     ElMessage.success(`CBZ 已生成：${response.data?.output_path ?? ''}`)
     packDialogVisible.value = false
@@ -967,7 +1018,7 @@ async function handlePreflight() {
 
 onMounted(() => {
   loadStarredFolders()
-  loadLastVisitedPath()
+  loadRecentVisitedPaths()
   window.addEventListener('keydown', handleWindowKeyDown)
   window.addEventListener('scroll', hideContextMenu, true)
   void initialize()
@@ -1099,6 +1150,10 @@ onBeforeUnmount(() => {
   width: 132px;
 }
 
+.summary-row__sort-order-select {
+  width: 96px;
+}
+
 .entry-name {
   display: flex;
   align-items: center;
@@ -1191,6 +1246,13 @@ onBeforeUnmount(() => {
   margin-top: 16px;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.pack-form__hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .file-upload-input {

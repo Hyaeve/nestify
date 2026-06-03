@@ -47,6 +47,7 @@ export interface FileMutationPayload {
 	destination_path?: string
 	output_dir?: string
 	archive_name?: string
+	nest_source_folder?: boolean
 }
 
 export interface RenameItemPayload {
@@ -107,11 +108,12 @@ export function deleteItems(paths: string[]) {
   })
 }
 
-export function packItemsAsCBZ(paths: string[], outputDir?: string, archiveName?: string) {
+export function packItemsAsCBZ(paths: string[], outputDir?: string, archiveName?: string, nestSourceFolder = true) {
   return postJSON<FileMutationResult>('/api/v1/files/pack-cbz', {
     paths,
     output_dir: outputDir || '',
     archive_name: archiveName || '',
+    nest_source_folder: nestSourceFolder,
   })
 }
 
