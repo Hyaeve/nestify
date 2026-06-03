@@ -46,6 +46,25 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 			TargetDir:   req.TargetDir,
 			Summary:     joinPreparedSummary(summary, targetDirSummary),
 		}, nil
+	case "transform":
+		actions := make([]string, 0, 2)
+		if req.Options["convert_traditional_to_simplified"] {
+			actions = append(actions, "繁体转简体")
+		}
+		if req.Options["convert_matching_text"] {
+			actions = append(actions, fmt.Sprintf("匹配转换（%d 条规则）", len(req.TransformRules)))
+		}
+		summary := "transform mode skeleton prepared"
+		if len(actions) > 0 {
+			summary = fmt.Sprintf("transform mode skeleton prepared: %s", strings.Join(actions, ", "))
+		}
+		return &PreparedMode{
+			ArchiveMode: req.ArchiveMode,
+			RuleType:    req.RuleType,
+			SourceDir:   req.SourceDir,
+			TargetDir:   req.TargetDir,
+			Summary:     joinPreparedSummary(summary, targetDirSummary),
+		}, nil
 	case "link":
 		modeLabel := "软链"
 		if strings.TrimSpace(req.LinkMode) == "hard" {
@@ -65,7 +84,7 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 
 func buildTargetDirSummary(req ExecuteRuleRequest) string {
 	archiveMode := strings.TrimSpace(req.ArchiveMode)
-	if archiveMode == "cleanup" {
+	if archiveMode == "cleanup" || archiveMode == "transform" {
 		return ""
 	}
 

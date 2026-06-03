@@ -677,6 +677,8 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
+		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
 	})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
@@ -701,6 +703,8 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
+		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
 	})
 	if err != nil {
 		writeInternalError(w, err)
@@ -1430,14 +1434,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.Filters)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.TransformRules)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.Filters)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.TransformRules)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, filters []string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, matchFilters []string, transformRules []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1457,8 +1461,8 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		return errors.New("compatibility_mode must be local or compatibility")
 	}
 
-	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" {
-		return errors.New("archive_mode must be package, collect, cleanup, or link")
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" && archiveMode != "transform" {
+		return errors.New("archive_mode must be package, collect, cleanup, transform, or link")
 	}
 	if archiveMode == "cleanup" {
 		cleanupEmptyDirs := options["cleanup_empty_dirs"]
@@ -1469,6 +1473,19 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		if cleanupMatchingFiles && len(normalizeRuleFilters(filters)) == 0 {
 			return errors.New("filters are required when cleanup_matching_files is enabled")
 		}
+	}
+	if archiveMode == "transform" {
+		convertTraditional := options["convert_traditional_to_simplified"]
+		convertCustom := options["convert_matching_text"]
+		if !convertTraditional && !convertCustom {
+			return errors.New("transform rule requires at least one transform option")
+		}
+		if convertCustom && len(normalizeRuleFilters(transformRules)) == 0 {
+			return errors.New("transform rules are required when convert_matching_text is enabled")
+		}
+	}
+	if archiveMode == "package" && packageOptions["match_archive"] && len(normalizeRuleFilters(matchFilters)) == 0 {
+		return errors.New("match_filters are required when match_archive is enabled")
 	}
 
 	runMode = strings.TrimSpace(runMode)

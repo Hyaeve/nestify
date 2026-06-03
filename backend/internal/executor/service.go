@@ -74,7 +74,7 @@ func (s *Service) ClearHistory() error {
 
 func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
 	archiveMode := strings.TrimSpace(req.ArchiveMode)
-	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" {
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "transform" && archiveMode != "link" {
 		return nil, fmt.Errorf("unsupported archive mode: %s", archiveMode)
 	}
 
@@ -313,6 +313,10 @@ func ParseStringListJSON(raw string) []string {
 	}
 
 	return items
+}
+
+func ParseTransformRulesJSON(raw string) []string {
+	return ParseStringListJSON(raw)
 }
 
 func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {

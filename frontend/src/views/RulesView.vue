@@ -183,9 +183,11 @@
 
       <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules" class="rules-table" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="160" />
-        <el-table-column label="模式" width="78">
-          <template #default>
-            <el-tag type="warning" effect="plain">清理</el-tag>
+        <el-table-column label="模式" width="92">
+          <template #default="scope">
+            <el-tag :type="scope.row.archive_mode === 'transform' ? 'primary' : 'warning'" effect="plain">
+              {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="执行模式" width="110">
@@ -196,11 +198,17 @@
           </template>
         </el-table-column>
         <el-table-column prop="source_dir" label="监控目录" min-width="340" show-overflow-tooltip />
-        <el-table-column label="清理项" min-width="220">
+        <el-table-column label="功能项" min-width="260">
           <template #default="scope">
             <div class="purify-tags">
-              <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_empty_dirs" size="small" effect="plain">空文件夹</el-tag>
-              <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_matching_files" size="small" effect="plain">匹配文件</el-tag>
+              <template v-if="scope.row.archive_mode === 'transform'">
+                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultTransformOptions()).convert_traditional_to_simplified" size="small" effect="plain">繁简转换</el-tag>
+                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultTransformOptions()).convert_matching_text" size="small" effect="plain">匹配转换</el-tag>
+              </template>
+              <template v-else>
+                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_empty_dirs" size="small" effect="plain">空文件夹</el-tag>
+                <el-tag v-if="parseOptionJSON(scope.row.options_json, createDefaultCleanupOptions()).cleanup_matching_files" size="small" effect="plain">匹配文件</el-tag>
+              </template>
             </div>
           </template>
         </el-table-column>
@@ -264,7 +272,7 @@
         />
       </div>
 
-      <el-empty v-else description="暂无净化规则，可添加清理模式规则" />
+      <el-empty v-else description="暂无净化规则，可添加清理模式或转换模式规则" />
     </el-card>
 
     <el-card v-show="activeTab === 'link'" class="page-card rules-card">
@@ -374,18 +382,25 @@
           <div class="mode-config-panel__description">本地模式适用于本机目录操作；兼容模式用于挂载网盘等兼容性场景。</div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createArchiveOptionsExpanded = !createArchiveOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div><div class="mode-config-panel__description">{{ getModeDescription(createForm.archive_mode) }}</div></div>
+            <div><div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': createArchiveOptionsExpanded }">⌄</span></div>
           </button>
           <el-collapse-transition>
             <div v-show="createArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item v-if="createForm.archive_mode === 'package'" label="匹配归档">
+          <el-switch v-model="createForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
+          <div class="mode-config-panel__description">启用后，命中的文件不参与打包，而是直接转移到目标路径对应目录下；匹配时包含文件扩展名。</div>
+        </el-form-item>
+        <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" label="匹配归档规则">
+          <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
+        </el-form-item>
         <el-form-item label="文件名匹配规则黑名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，仅匹配文件名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -407,18 +422,25 @@
           <div class="mode-config-panel__description">本地模式适用于本机目录操作；兼容模式用于挂载网盘等兼容性场景。</div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editArchiveOptionsExpanded = !editArchiveOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div><div class="mode-config-panel__description">{{ getModeDescription(editForm.archive_mode) }}</div></div>
+            <div><div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': editArchiveOptionsExpanded }">⌄</span></div>
           </button>
           <el-collapse-transition>
             <div v-show="editArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item v-if="editForm.archive_mode === 'package'" label="匹配归档">
+          <el-switch v-model="editForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
+          <div class="mode-config-panel__description">启用后，命中的文件不参与打包，而是直接转移到目标路径对应目录下；匹配时包含文件扩展名。</div>
+        </el-form-item>
+        <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" label="匹配归档规则">
+          <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
+        </el-form-item>
         <el-form-item label="文件名匹配规则黑名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，仅匹配文件名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -429,7 +451,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-input value="清理模式" readonly /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -440,18 +462,21 @@
           <div class="mode-config-panel__description">净化规则同样支持兼容模式，适合挂载网盘目录；兼容模式下会限制为 1 秒最多读取 3 次。</div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createPurifyOptionsExpanded = !createPurifyOptionsExpanded">
-            <div><div class="mode-config-panel__title">清理模式功能</div><div class="mode-config-panel__description">按需勾选需要启用的净化动作。</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">清理模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': createPurifyOptionsExpanded }">⌄</span></div>
+            <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</div></div>
+            <div class="mode-config-toggle__meta"><el-tag :type="createPurifyForm.archive_mode === 'transform' ? 'primary' : 'warning'">{{ createPurifyForm.archive_mode === 'transform' ? '转换模式' : '清理模式' }}</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': createPurifyOptionsExpanded }">⌄</span></div>
           </button>
           <el-collapse-transition>
             <div v-show="createPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in cleanupModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
         <el-form-item label="监控目录"><el-input v-model="createPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="文件名匹配规则">
+        <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup'" label="文件名匹配规则">
           <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；仅匹配文件名。" />
+        </el-form-item>
+        <el-form-item v-if="createPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
+          <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
         </el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -462,7 +487,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-input value="清理模式" readonly /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -473,18 +498,21 @@
           <div class="mode-config-panel__description">净化规则同样支持兼容模式，适合挂载网盘目录；兼容模式下会限制为 1 秒最多读取 3 次。</div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editPurifyOptionsExpanded = !editPurifyOptionsExpanded">
-            <div><div class="mode-config-panel__title">清理模式功能</div><div class="mode-config-panel__description">按需勾选需要启用的净化动作。</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">清理模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': editPurifyOptionsExpanded }">⌄</span></div>
+            <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</div></div>
+            <div class="mode-config-toggle__meta"><el-tag :type="editPurifyForm.archive_mode === 'transform' ? 'primary' : 'warning'">{{ editPurifyForm.archive_mode === 'transform' ? '转换模式' : '清理模式' }}</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': editPurifyOptionsExpanded }">⌄</span></div>
           </button>
           <el-collapse-transition>
             <div v-show="editPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in cleanupModeOptions" :key="option.key" :span="12"><label class="mode-option-card"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox><span class="mode-option-card__description">{{ option.description }}</span></label></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
         <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="文件名匹配规则">
+        <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup'" label="文件名匹配规则">
           <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；仅匹配文件名。" />
+        </el-form-item>
+        <el-form-item v-if="editPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
+          <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
         </el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -546,28 +574,31 @@ import {
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
-type PackageOptionKey = 'preserve_structure' | 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
+type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
+type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text'
+type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
 type TabKey = 'rules' | 'purify' | 'link' | 'history'
 type RuleListType = 'archive' | 'cleanup' | 'link'
+type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
 
 const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
 
 const packageModeOptions = [
-  { key: 'preserve_structure', label: '保留目录结构', description: '按源目录层级打包归档，避免目标目录结构混乱。' },
   { key: 'flat_archive', label: '扁平归档', description: '勾选后直接输出到目标路径；取消勾选时默认额外套一层源文件夹后再生成 CBZ。' },
-  { key: 'include_manifest', label: '生成归档清单', description: '为每次打包写入清单，方便后续核对归档内容。' },
-  { key: 'verify_after_archive', label: '归档后校验', description: '完成后再次检查结果，减少丢包或缺失问题。' },
-  { key: 'cleanup_source_after_archive', label: '成功后清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
-  { key: 'package_nested_folders', label: '打包嵌套子目录', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
+  { key: 'include_manifest', label: '归档清单', description: '为每次打包写入清单，方便后续核对归档内容。' },
+  { key: 'verify_after_archive', label: '归档校验', description: '完成后再次检查结果，减少丢包或缺失问题。' },
+  { key: 'cleanup_source_after_archive', label: '清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
+  { key: 'package_nested_folders', label: '嵌套打包', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
+  { key: 'match_archive', label: '匹配归档', description: '按规则匹配文件名或扩展名，命中后直接转移到目标路径，不参与打包。' },
 ] as const
 
 const collectModeOptions = [
-  { key: 'recursive_collect', label: '递归收集子目录', description: '自动扫描所有子目录，把符合条件的文件一并收集。' },
+  { key: 'recursive_collect', label: '递归收集', description: '自动扫描所有子目录，把符合条件的文件一并收集。' },
   { key: 'deduplicate_same_name', label: '同名文件去重', description: '遇到重复文件时自动跳过重复项，减少覆盖冲突。' },
   { key: 'keep_latest_only', label: '仅保留最新文件', description: '存在多个版本时优先保留最新文件。' },
   { key: 'collect_related_files', label: '收集关联文件', description: '在收集主文件时同步带上相关说明或附属文件。' },
@@ -579,8 +610,13 @@ const cleanupModeOptions = [
   { key: 'cleanup_matching_files', label: '清理匹配文件', description: '按文件名匹配规则删除命中的文件，支持字符串和正则。' },
 ] as const
 
+const transformModeOptions = [
+  { key: 'convert_traditional_to_simplified', label: '繁简转换', description: '将监控目录下文件和文件夹名称中的中文繁体字转换为简体字，其他字符保持不变。' },
+  { key: 'convert_matching_text', label: '匹配转换', description: '按自定义规则重命名文件和文件夹名称，支持关键词部分匹配与正则转换。' },
+] as const
+
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { preserve_structure: true, flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false }
+  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false }
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
@@ -589,6 +625,14 @@ function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
   return { cleanup_empty_dirs: true, cleanup_matching_files: false }
+}
+
+function createDefaultTransformOptions(): Record<TransformOptionKey, boolean> {
+  return { convert_traditional_to_simplified: true, convert_matching_text: false }
+}
+
+function createDefaultPurifyOptions(): PurifyOptions {
+  return { ...createDefaultCleanupOptions(), ...createDefaultTransformOptions() }
 }
 
 function createDefaultHistorySummary(): RunHistorySummary {
@@ -634,10 +678,12 @@ function getModeTitle(mode: ArchiveMode) {
   return mode === 'package' ? '打包归档功能' : '收集归档功能'
 }
 
-function getModeDescription(mode: ArchiveMode) {
-  return mode === 'package'
-    ? '选择打包归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
-    : '选择收集归档后，下面会展开当前模式专属的规则功能，可按需勾选。'
+function getPurifyModeTitle(mode: PurifyArchiveMode) {
+  return mode === 'transform' ? '转换模式功能' : '清理模式功能'
+}
+
+function getPurifyModeOptions(mode: PurifyArchiveMode) {
+  return mode === 'transform' ? transformModeOptions : cleanupModeOptions
 }
 
 function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'watch' | 'cron' | 'once' {
@@ -681,7 +727,7 @@ function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePay
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
-    options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultCleanupOptions()) : {},
+    options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : {},
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
       ? parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
       : {},
@@ -689,6 +735,7 @@ function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePay
       ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
       : {},
     filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+    match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
   }
 }
 
@@ -764,6 +811,7 @@ const createForm = reactive({
   package_options: createDefaultPackageOptions(),
   collect_options: createDefaultCollectOptions(),
   filters_text: '',
+  match_filters_text: '',
 })
 
 const editForm = reactive({
@@ -782,6 +830,7 @@ const editForm = reactive({
   package_options: createDefaultPackageOptions(),
   collect_options: createDefaultCollectOptions(),
   filters_text: '',
+  match_filters_text: '',
 })
 
 const createPurifyForm = reactive({
@@ -789,13 +838,15 @@ const createPurifyForm = reactive({
   enabled: true,
   monitor_enabled: true,
   schedule_enabled: false,
+  archive_mode: 'cleanup' as PurifyArchiveMode,
   compatibility_mode: 'local' as CompatibilityMode,
   source_dir: '',
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
-  options: createDefaultCleanupOptions(),
+  options: createDefaultPurifyOptions(),
   filters_text: '',
+  transform_rules_text: '',
 })
 
 const editPurifyForm = reactive({
@@ -803,13 +854,15 @@ const editPurifyForm = reactive({
   enabled: true,
   monitor_enabled: true,
   schedule_enabled: false,
+  archive_mode: 'cleanup' as PurifyArchiveMode,
   compatibility_mode: 'local' as CompatibilityMode,
   source_dir: '',
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
-  options: createDefaultCleanupOptions(),
+  options: createDefaultPurifyOptions(),
   filters_text: '',
+  transform_rules_text: '',
 })
 
 const createLinkForm = reactive({
@@ -856,6 +909,7 @@ function resetCreateForm() {
   createForm.package_options = createDefaultPackageOptions()
   createForm.collect_options = createDefaultCollectOptions()
   createForm.filters_text = ''
+  createForm.match_filters_text = ''
 }
 
 function resetEditForm() {
@@ -874,6 +928,7 @@ function resetEditForm() {
   editForm.package_options = createDefaultPackageOptions()
   editForm.collect_options = createDefaultCollectOptions()
   editForm.filters_text = ''
+  editForm.match_filters_text = ''
 }
 
 function resetCreatePurifyForm() {
@@ -881,13 +936,15 @@ function resetCreatePurifyForm() {
   createPurifyForm.enabled = true
   createPurifyForm.monitor_enabled = true
   createPurifyForm.schedule_enabled = false
+  createPurifyForm.archive_mode = 'cleanup'
   createPurifyForm.compatibility_mode = 'local'
   createPurifyForm.source_dir = ''
   createPurifyForm.cron_expression = ''
   createPurifyForm.watch_debounce_ms = 2000
   createPurifyForm.run_on_start = true
-  createPurifyForm.options = createDefaultCleanupOptions()
+  createPurifyForm.options = createDefaultPurifyOptions()
   createPurifyForm.filters_text = ''
+  createPurifyForm.transform_rules_text = ''
 }
 
 function resetEditPurifyForm() {
@@ -895,13 +952,15 @@ function resetEditPurifyForm() {
   editPurifyForm.enabled = true
   editPurifyForm.monitor_enabled = true
   editPurifyForm.schedule_enabled = false
+  editPurifyForm.archive_mode = 'cleanup'
   editPurifyForm.compatibility_mode = 'local'
   editPurifyForm.source_dir = ''
   editPurifyForm.cron_expression = ''
   editPurifyForm.watch_debounce_ms = 2000
   editPurifyForm.run_on_start = true
-  editPurifyForm.options = createDefaultCleanupOptions()
+  editPurifyForm.options = createDefaultPurifyOptions()
   editPurifyForm.filters_text = ''
+  editPurifyForm.transform_rules_text = ''
 }
 
 function resetCreateLinkForm() {
@@ -1237,6 +1296,7 @@ async function submitCreateRule() {
       package_options: { ...createForm.package_options },
       collect_options: { ...createForm.collect_options },
       filters: parseFiltersText(createForm.filters_text),
+      match_filters: createForm.archive_mode === 'package' && createForm.package_options.match_archive ? parseFiltersText(createForm.match_filters_text) : [],
     })
     ElMessage.success('规则创建成功')
     createDialogVisible.value = false
@@ -1272,6 +1332,7 @@ async function openEditDialog(id: number) {
     editForm.package_options = parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
     editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
     editForm.filters_text = parseFiltersJSON(rule.filters_json)
+    editForm.match_filters_text = parseFiltersJSON(rule.match_filters_json)
     editDialogVisible.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则详情加载失败'
@@ -1305,6 +1366,7 @@ async function submitUpdateRule() {
       package_options: { ...editForm.package_options },
       collect_options: { ...editForm.collect_options },
       filters: parseFiltersText(editForm.filters_text),
+      match_filters: editForm.archive_mode === 'package' && editForm.package_options.match_archive ? parseFiltersText(editForm.match_filters_text) : [],
     })
     ElMessage.success('规则更新成功')
     editDialogVisible.value = false
@@ -1324,7 +1386,7 @@ async function openEditPurifyDialog(id: number) {
   try {
     const rule = (await fetchRule(id)).data
     if (!rule) throw new Error('规则详情不存在')
-    if (rule.archive_mode !== 'cleanup') throw new Error('当前规则不是净化规则')
+    if (rule.archive_mode !== 'cleanup' && rule.archive_mode !== 'transform') throw new Error('当前规则不是净化规则')
 
     editingPurifyRuleID.value = rule.id
     editPurifyForm.name = rule.name
@@ -1336,8 +1398,10 @@ async function openEditPurifyDialog(id: number) {
     editPurifyForm.cron_expression = rule.cron_expression
     editPurifyForm.watch_debounce_ms = rule.watch_debounce_ms
     editPurifyForm.run_on_start = rule.run_on_start
-    editPurifyForm.options = parseOptionJSON(rule.options_json, createDefaultCleanupOptions())
+    editPurifyForm.archive_mode = rule.archive_mode === 'transform' ? 'transform' : 'cleanup'
+    editPurifyForm.options = parseOptionJSON(rule.options_json, createDefaultPurifyOptions())
     editPurifyForm.filters_text = parseFiltersJSON(rule.filters_json)
+    editPurifyForm.transform_rules_text = parseFiltersJSON(rule.transform_rules_json)
     editPurifyDialogVisible.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '净化规则详情加载失败'
@@ -1356,7 +1420,7 @@ async function submitCreatePurifyRule() {
       enabled: createPurifyForm.enabled,
       monitor_enabled: createPurifyForm.monitor_enabled,
       compatibility_mode: createPurifyForm.compatibility_mode,
-      archive_mode: 'cleanup',
+      archive_mode: createPurifyForm.archive_mode,
       run_mode: resolveRunMode(createPurifyForm.monitor_enabled, createPurifyForm.schedule_enabled),
       source_dir: createPurifyForm.source_dir,
       target_dir: '',
@@ -1364,7 +1428,8 @@ async function submitCreatePurifyRule() {
       cron_expression: createPurifyForm.schedule_enabled ? createPurifyForm.cron_expression : '',
       run_on_start: createPurifyForm.run_on_start,
       options: { ...createPurifyForm.options },
-      filters: parseFiltersText(createPurifyForm.filters_text),
+      filters: createPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(createPurifyForm.filters_text) : [],
+      transform_rules: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_rules_text) : [],
     })
     ElMessage.success('净化规则创建成功')
     createPurifyDialogVisible.value = false
@@ -1392,7 +1457,7 @@ async function submitUpdatePurifyRule() {
       enabled: editPurifyForm.enabled,
       monitor_enabled: editPurifyForm.monitor_enabled,
       compatibility_mode: editPurifyForm.compatibility_mode,
-      archive_mode: 'cleanup',
+      archive_mode: editPurifyForm.archive_mode,
       run_mode: resolveRunMode(editPurifyForm.monitor_enabled, editPurifyForm.schedule_enabled),
       source_dir: editPurifyForm.source_dir,
       target_dir: '',
@@ -1400,7 +1465,8 @@ async function submitUpdatePurifyRule() {
       cron_expression: editPurifyForm.schedule_enabled ? editPurifyForm.cron_expression : '',
       run_on_start: editPurifyForm.run_on_start,
       options: { ...editPurifyForm.options },
-      filters: parseFiltersText(editPurifyForm.filters_text),
+      filters: editPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(editPurifyForm.filters_text) : [],
+      transform_rules: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_rules_text) : [],
     })
     ElMessage.success('净化规则更新成功')
     editPurifyDialogVisible.value = false
@@ -1571,7 +1637,7 @@ async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean 
       watch_debounce_ms: rule.watch_debounce_ms,
       cron_expression: rule.run_mode === 'cron' || Boolean(rule.cron_expression) ? rule.cron_expression : '',
       run_on_start: rule.run_on_start,
-      options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultCleanupOptions()) : {},
+      options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : {},
       package_options: ruleType === 'archive' && rule.archive_mode === 'package'
         ? parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
         : {},
@@ -1738,6 +1804,7 @@ onMounted(() => {
 .mode-config-toggle__icon { font-size: 18px; line-height: 1; color: var(--el-text-color-secondary); transition: transform 0.2s ease; }
 .mode-config-toggle__icon.is-expanded { transform: rotate(180deg); }
 .mode-option-card { display: flex; flex-direction: column; gap: 6px; min-height: 92px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); cursor: pointer; }
+.mode-option-card--compact { min-height: auto; padding: 12px 14px; }
 .mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
 .mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }

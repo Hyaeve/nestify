@@ -4,7 +4,7 @@
 
 Nestify 是一个面向 NAS / 家庭服务器场景的可视化文件整理与规则执行平台，当前已具备完整的前后端界面、SQLite 持久化、规则管理、任务日志、目录浏览、系统设置与基础自动化执行能力。
 
-当前前端界面版本为 `v1.4`。
+当前版本为 `v3.0`。
 
 ## 主要能力
 
@@ -18,6 +18,7 @@ Nestify 是一个面向 NAS / 家庭服务器场景的可视化文件整理与�
 - 规则管理：
   - 归档规则
     - 打包归档
+      - 匹配归档：按关键词或扩展名直接分流文件到目标目录，不参与打包
     - 收集归档
   - 净化规则
     - 清理空文件夹
@@ -51,6 +52,13 @@ Nestify 是一个面向 NAS / 家庭服务器场景的可视化文件整理与�
 - 定时执行
 - 启动后立即执行
 - 本地模式 / 兼容模式
+- 文件名匹配黑名单：命中后跳过归档处理
+- 匹配归档：
+  - 仅在打包归档模式生效
+  - 一行一条规则
+  - 支持按扩展名匹配，例如 `mp4`
+  - 支持按关键词匹配，例如 `cover`
+  - 命中的文件直接转移到目标路径对应目录，不参与 CBZ 打包
 
 ### 2. 净化规则
 
@@ -246,6 +254,36 @@ docker compose up --build
 
 - 前端构建产物由后端从 `/app/web` 托管
 - 默认访问地址：`http://localhost:8080`
+
+### Docker Compose 部署示例
+
+```yaml
+services:
+  nestify:
+    image: ghcr.io/hyaeve/nestify:latest
+    container_name: Nestify
+    network_mode: bridge
+    ports:
+      - 8080:8080
+    volumes:
+      - ./config:/config
+      - ./data:/data
+      - ./logs:/logs
+    environment:
+      NESTIFY_HTTP_ADDR: ":8080"
+      NESTIFY_CONFIG_PATH: "/config/config.yaml"
+      NESTIFY_WEB_DIR: "/app/web"
+      NESTIFY_DB_PATH: "/data/app.db"
+      NESTIFY_ADMIN_INITIAL_USERNAME: "admin"
+      NESTIFY_ADMIN_INITIAL_PASSWORD: "password"
+    restart: always
+```
+
+说明：
+
+- 将配置文件放置到宿主机 [`config/config.yaml`](config/config.example.yaml)
+- 首次启动前建议修改默认管理员账号与密码
+- 持久化目录建议保留 [`./data`](data/) 与 [`./logs`](logs/)
 
 ## GitHub 自动构建镜像
 

@@ -14,6 +14,8 @@ type ExecuteRuleRequest struct {
 	PackageOptions    map[string]bool
 	CollectOptions    map[string]bool
 	Filters           []string
+	MatchFilters      []string
+	TransformRules    []string
 }
 
 type PreparedMode struct {

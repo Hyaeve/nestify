@@ -33,7 +33,9 @@ func (s *Store) migrate() error {
 			options_json TEXT NOT NULL DEFAULT '{}',
 			package_options_json TEXT NOT NULL DEFAULT '{}',
 			collect_options_json TEXT NOT NULL DEFAULT '{}',
-			filters_json TEXT NOT NULL DEFAULT '{}',
+			filters_json TEXT NOT NULL DEFAULT '[]',
+			match_filters_json TEXT NOT NULL DEFAULT '[]',
+			transform_rules_json TEXT NOT NULL DEFAULT '[]',
 			last_run_status TEXT NOT NULL DEFAULT '',
 			last_success_count INTEGER NOT NULL DEFAULT 0,
 			last_skip_count INTEGER NOT NULL DEFAULT 0,
@@ -88,6 +90,43 @@ func (s *Store) migrate() error {
 
 	if err := s.ensureRuleLinkModeColumn(); err != nil {
 		return err
+	}
+
+	if err := s.ensureRuleTransformRulesColumn(); err != nil {
+		return err
+	}
+
+	if err := s.ensureRuleMatchFiltersColumn(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleMatchFiltersColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "match_filters_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN match_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add match_filters_json column: %w", err)
 	}
 
 	return nil
@@ -175,6 +214,35 @@ func (s *Store) ensureRuleLinkModeColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
 		return fmt.Errorf("add link_mode column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleTransformRulesColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "transform_rules_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN transform_rules_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add transform_rules_json column: %w", err)
 	}
 
 	return nil

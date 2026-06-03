@@ -22,6 +22,8 @@ type Rule struct {
 	PackageOptionsJSON string    `json:"package_options_json"`
 	CollectOptionsJSON string    `json:"collect_options_json"`
 	FiltersJSON        string    `json:"filters_json"`
+	MatchFiltersJSON   string    `json:"match_filters_json"`
+	TransformRulesJSON string    `json:"transform_rules_json"`
 	LastRunStatus      string    `json:"last_run_status"`
 	LastSuccessCount   int       `json:"last_success_count"`
 	LastSkipCount      int       `json:"last_skip_count"`
@@ -49,6 +51,8 @@ type CreateRuleInput struct {
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
+	MatchFilters      []string        `json:"match_filters"`
+	TransformRules    []string        `json:"transform_rules"`
 }
 
 type UpdateRuleInput struct {
@@ -70,4 +74,6 @@ type UpdateRuleInput struct {
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
+	MatchFilters      []string        `json:"match_filters"`
+	TransformRules    []string        `json:"transform_rules"`
 }

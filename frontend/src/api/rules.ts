@@ -7,7 +7,7 @@ export interface RuleItem {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup' | 'link'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
   rule_type?: 'archive' | 'cleanup' | 'link'
   link_mode?: 'soft' | 'hard'
   run_mode: 'watch' | 'cron' | 'once'
@@ -20,6 +20,8 @@ export interface RuleItem {
   package_options_json?: string
   collect_options_json?: string
   filters_json?: string
+  match_filters_json?: string
+  transform_rules_json?: string
   last_run_status: string
   last_success_count: number
   last_skip_count: number
@@ -47,7 +49,7 @@ export interface CreateRulePayload {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup' | 'link'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
   rule_type?: 'archive' | 'cleanup' | 'link'
   link_mode?: 'soft' | 'hard'
   run_mode: 'watch' | 'cron' | 'once'
@@ -60,6 +62,8 @@ export interface CreateRulePayload {
   package_options?: Record<string, boolean>
   collect_options?: Record<string, boolean>
   filters?: string[]
+  match_filters?: string[]
+  transform_rules?: string[]
 }
 
 export interface UpdateRulePayload extends CreateRulePayload {}

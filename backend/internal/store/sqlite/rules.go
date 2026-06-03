@@ -14,7 +14,7 @@ func (s *Store) ListRules() ([]model.Rule, error) {
 	rows, err := s.db.Query(`
 		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
@@ -61,7 +61,7 @@ func (s *Store) ListRulesPage(page, pageSize int, ruleType string) ([]model.Rule
 	rows, err := s.db.Query(`
 		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules`+whereClause+`
@@ -106,7 +106,7 @@ func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 	row := s.db.QueryRow(`
 		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
@@ -139,9 +139,9 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		INSERT INTO rules (
 			name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			options_json, package_options_json, collect_options_json, filters_json,
+			options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		strings.TrimSpace(input.Name),
 		strings.TrimSpace(input.Description),
@@ -161,6 +161,8 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
+		marshalStringList(input.MatchFilters),
+		marshalStringList(input.TransformRules),
 		now.Format(time.RFC3339),
 		now.Format(time.RFC3339),
 	)
@@ -198,6 +200,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    package_options_json = ?,
 		    collect_options_json = ?,
 		    filters_json = ?,
+		    match_filters_json = ?,
+		    transform_rules_json = ?,
 		    updated_at = ?
 		WHERE id = ?
 	`,
@@ -219,6 +223,8 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
+		marshalStringList(input.MatchFilters),
+		marshalStringList(input.TransformRules),
 		now.Format(time.RFC3339),
 		id,
 	)
@@ -366,6 +372,8 @@ func scanRule(s scanner) (model.Rule, error) {
 		&rule.PackageOptionsJSON,
 		&rule.CollectOptionsJSON,
 		&rule.FiltersJSON,
+		&rule.MatchFiltersJSON,
+		&rule.TransformRulesJSON,
 		&rule.LastRunStatus,
 		&rule.LastSuccessCount,
 		&rule.LastSkipCount,

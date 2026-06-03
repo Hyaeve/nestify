@@ -298,6 +298,27 @@ async function confirmSelection() {
   min-width: 280px;
 }
 
+.picker-input :deep(.el-input-group__append) {
+  padding: 0;
+  overflow: hidden;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.picker-input :deep(.el-input-group__append .el-button) {
+  min-width: 92px;
+  height: 100%;
+  margin: 0;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 0;
+}
+
+.picker-input :deep(.el-input__wrapper) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .picker-label {
   color: #606266;
   font-size: 14px;
@@ -315,7 +336,8 @@ async function confirmSelection() {
   overflow: auto;
   padding: 8px 12px;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
+  border-radius: 16px;
+  background: #fff;
 }
 
 .picker-tree__node {
