@@ -8,7 +8,7 @@
         <img class="login-brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div>
           <div class="login-brand__title">Nestify 登录</div>
-          <div class="login-brand__subtitle">Version v1.1 · 媒体归档管理台</div>
+          <div class="login-brand__subtitle">Version v2.2 · 媒体归档管理台</div>
         </div>
       </div>
 

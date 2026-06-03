@@ -21,7 +21,7 @@
 
       <el-table v-if="archiveRules.length" v-loading="archiveLoading" :data="archiveRules">
         <el-table-column prop="name" label="规则名称" min-width="140" />
-        <el-table-column label="模式" width="100">
+        <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag type="info" effect="plain">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</el-tag>
           </template>
@@ -35,9 +35,16 @@
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="280" show-overflow-tooltip />
         <el-table-column prop="target_dir" label="目标路径" min-width="280" show-overflow-tooltip />
-        <el-table-column label="监控" width="88">
+        <el-table-column label="监控" width="110">
           <template #default="scope">
-            <el-tag :type="scope.row.monitor_enabled ? 'success' : 'info'" effect="plain">{{ scope.row.monitor_enabled ? '开' : '关' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.monitor_enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="开"
+              inactive-text="关"
+              @change="toggleRuleMonitorEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="状态" width="88">
@@ -66,7 +73,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'archive')">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'archive')" aria-label="删除">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -176,7 +183,7 @@
 
       <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules">
         <el-table-column prop="name" label="规则名称" min-width="160" />
-        <el-table-column label="模式" width="100">
+        <el-table-column label="模式" width="78">
           <template #default>
             <el-tag type="warning" effect="plain">清理</el-tag>
           </template>
@@ -197,9 +204,16 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="监控" width="88">
+        <el-table-column label="监控" width="110">
           <template #default="scope">
-            <el-tag :type="scope.row.monitor_enabled ? 'success' : 'info'" effect="plain">{{ scope.row.monitor_enabled ? '开' : '关' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.monitor_enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="开"
+              inactive-text="关"
+              @change="toggleRuleMonitorEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="状态" width="88">
@@ -228,7 +242,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'cleanup')">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'cleanup')" aria-label="删除">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -265,7 +279,7 @@
 
       <el-table v-if="linkRules.length" v-loading="linkLoading" :data="linkRules">
         <el-table-column prop="name" label="规则名称" min-width="160" />
-        <el-table-column label="模式" width="110">
+        <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag :type="scope.row.link_mode === 'hard' ? 'danger' : 'primary'" effect="plain">
               {{ scope.row.link_mode === 'hard' ? '硬链模式' : '软链模式' }}
@@ -274,9 +288,16 @@
         </el-table-column>
         <el-table-column prop="source_dir" label="监控目录" min-width="260" show-overflow-tooltip />
         <el-table-column prop="target_dir" label="链路目录" min-width="260" show-overflow-tooltip />
-        <el-table-column label="监控" width="88">
+        <el-table-column label="监控" width="110">
           <template #default="scope">
-            <el-tag :type="scope.row.monitor_enabled ? 'success' : 'info'" effect="plain">{{ scope.row.monitor_enabled ? '开' : '关' }}</el-tag>
+            <el-switch
+              :model-value="scope.row.monitor_enabled"
+              :loading="togglingRuleIds.has(scope.row.id)"
+              inline-prompt
+              active-text="开"
+              inactive-text="关"
+              @change="toggleRuleMonitorEnabled(scope.row, $event)"
+            />
           </template>
         </el-table-column>
         <el-table-column label="计划" width="88">
@@ -313,7 +334,7 @@
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'link')">
+                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'link')" aria-label="删除">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </el-tooltip>
@@ -365,6 +386,7 @@
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="文件名匹配规则黑名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，仅匹配文件名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateRule">创建</el-button></template>
@@ -397,6 +419,7 @@
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="文件名匹配规则黑名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过归档处理，仅匹配文件名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
@@ -739,6 +762,7 @@ const createForm = reactive({
   run_on_start: true,
   package_options: createDefaultPackageOptions(),
   collect_options: createDefaultCollectOptions(),
+  filters_text: '',
 })
 
 const editForm = reactive({
@@ -756,6 +780,7 @@ const editForm = reactive({
   run_on_start: true,
   package_options: createDefaultPackageOptions(),
   collect_options: createDefaultCollectOptions(),
+  filters_text: '',
 })
 
 const createPurifyForm = reactive({
@@ -829,6 +854,7 @@ function resetCreateForm() {
   createForm.run_on_start = true
   createForm.package_options = createDefaultPackageOptions()
   createForm.collect_options = createDefaultCollectOptions()
+  createForm.filters_text = ''
 }
 
 function resetEditForm() {
@@ -846,6 +872,7 @@ function resetEditForm() {
   editForm.run_on_start = true
   editForm.package_options = createDefaultPackageOptions()
   editForm.collect_options = createDefaultCollectOptions()
+  editForm.filters_text = ''
 }
 
 function resetCreatePurifyForm() {
@@ -1208,6 +1235,7 @@ async function submitCreateRule() {
       run_on_start: createForm.run_on_start,
       package_options: { ...createForm.package_options },
       collect_options: { ...createForm.collect_options },
+      filters: parseFiltersText(createForm.filters_text),
     })
     ElMessage.success('规则创建成功')
     createDialogVisible.value = false
@@ -1242,6 +1270,7 @@ async function openEditDialog(id: number) {
     editForm.run_on_start = rule.run_on_start
     editForm.package_options = parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
     editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
+    editForm.filters_text = parseFiltersJSON(rule.filters_json)
     editDialogVisible.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则详情加载失败'
@@ -1274,6 +1303,7 @@ async function submitUpdateRule() {
       run_on_start: editForm.run_on_start,
       package_options: { ...editForm.package_options },
       collect_options: { ...editForm.collect_options },
+      filters: parseFiltersText(editForm.filters_text),
     })
     ElMessage.success('规则更新成功')
     editDialogVisible.value = false
@@ -1507,6 +1537,53 @@ async function toggleRuleEnabled(rule: RuleItem, enabled: boolean | string | num
     await refreshRuleList(ruleType)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : `规则${nextEnabled ? '启用' : '停用'}失败`)
+    await refreshRuleList(ruleType)
+  } finally {
+    const nextLoadingSet = new Set(togglingRuleIds.value)
+    nextLoadingSet.delete(rule.id)
+    togglingRuleIds.value = nextLoadingSet
+  }
+}
+
+async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean | string | number) {
+  const nextMonitorEnabled = Boolean(monitorEnabled)
+  const ruleType = normalizeRuleType(rule)
+  const loadingSet = new Set(togglingRuleIds.value)
+
+  loadingSet.add(rule.id)
+  togglingRuleIds.value = loadingSet
+  errorMessage.value = ''
+
+  try {
+    await updateRule(rule.id, {
+      name: rule.name,
+      description: rule.description ?? '',
+      enabled: rule.enabled,
+      monitor_enabled: nextMonitorEnabled,
+      compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
+      archive_mode: rule.archive_mode,
+      rule_type: ruleType,
+      link_mode: ruleType === 'link' ? (rule.link_mode === 'hard' ? 'hard' : 'soft') : undefined,
+      run_mode: resolveRunMode(nextMonitorEnabled, rule.run_mode === 'cron' || Boolean(rule.cron_expression)),
+      source_dir: rule.source_dir,
+      target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
+      watch_debounce_ms: rule.watch_debounce_ms,
+      cron_expression: rule.run_mode === 'cron' || Boolean(rule.cron_expression) ? rule.cron_expression : '',
+      run_on_start: rule.run_on_start,
+      options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultCleanupOptions()) : {},
+      package_options: ruleType === 'archive' && rule.archive_mode === 'package'
+        ? parseOptionJSON(rule.package_options_json, createDefaultPackageOptions())
+        : {},
+      collect_options: ruleType === 'archive' && rule.archive_mode === 'collect'
+        ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
+        : {},
+      filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+    })
+    rule.monitor_enabled = nextMonitorEnabled
+    ElMessage.success(`监控已${nextMonitorEnabled ? '开启' : '关闭'}`)
+    await refreshRuleList(ruleType)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : `监控${nextMonitorEnabled ? '开启' : '关闭'}失败`)
     await refreshRuleList(ruleType)
   } finally {
     const nextLoadingSet = new Set(togglingRuleIds.value)

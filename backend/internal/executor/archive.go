@@ -66,6 +66,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 
 	sortEntriesNaturally(entries)
+	matchers := buildFileNameMatchers(req.Filters)
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
 	cleanupSourceAfterArchive := false
 	if req.ArchiveMode == "package" {
@@ -75,8 +76,13 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 	for _, entry := range entries {
 		entryPath := filepath.Join(sourceDir, entry.Name())
+		if matchesFileName(entry.Name(), matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+			continue
+		}
 		if entry.IsDir() {
-			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, &stats); err != nil {
+			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, matchers, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
@@ -237,7 +243,7 @@ func createFileLink(sourcePath, targetPath, linkMode string) error {
 	return nil
 }
 
-func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, matchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, seriesPath)
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
@@ -304,8 +310,13 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(seriesPath, entry.Name())
+		if matchesFileName(entry.Name(), matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+			continue
+		}
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, matchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
@@ -326,7 +337,7 @@ func (s *Service) processSeriesDir(runID, seriesPath, targetSeriesDir, archiveMo
 	return nil
 }
 
-func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders bool, cleanupSourceAfterArchive bool, matchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, volumePath)
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
@@ -407,8 +418,13 @@ func (s *Service) processVolumeDir(runID, volumePath, targetDir, archiveMode, co
 
 	for _, entry := range entries {
 		entryPath := filepath.Join(volumePath, entry.Name())
+		if matchesFileName(entry.Name(), matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted archive item %s", entryPath))
+			continue
+		}
 		if entry.IsDir() {
-			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, stats); err != nil {
+			if err := s.processVolumeDir(runID, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, matchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))

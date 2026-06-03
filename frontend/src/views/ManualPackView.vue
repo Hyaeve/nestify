@@ -14,6 +14,7 @@
           <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
           <el-button type="primary" @click="triggerUpload">上传</el-button>
           <el-button :loading="loading" @click="reloadEntries">刷新</el-button>
+          <el-button :disabled="!lastVisitedPath || lastVisitedPath === directoryPath" @click="openLastVisitedPath">最近访问</el-button>
           <span class="toolbar-row__split" />
           <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
           <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
@@ -45,13 +46,21 @@
           <span>当前目录：{{ currentPathDisplay }}</span>
           <span>已选择 {{ selectedCount }} 项</span>
           <span>{{ entries.length }} 个项目</span>
+          <span class="summary-row__sort">
+            文件排序：
+            <el-select v-model="sortBy" size="small" class="summary-row__sort-select">
+              <el-option label="修改时间" value="modified_at" />
+              <el-option label="文件名称" value="name" />
+              <el-option label="文件类型" value="type" />
+            </el-select>
+          </span>
           <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
         </div>
 
         <el-table
           ref="tableRef"
           v-loading="loading"
-          :data="entries"
+          :data="sortedEntries"
           row-key="path"
           :row-class-name="getRowClassName"
           @selection-change="handleSelectionChange"
@@ -66,6 +75,15 @@
                 :class="{ 'is-dir': scope.row.is_dir }"
                 @click.stop="handleEntryPrimaryAction(scope.row)"
               >
+                <el-button
+                  v-if="scope.row.is_dir"
+                  link
+                  class="entry-star"
+                  :class="{ 'is-active': isStarred(scope.row.path) }"
+                  @click.stop="toggleFolderStar(scope.row.path)"
+                >
+                  <span class="entry-star__icon">{{ isStarred(scope.row.path) ? '★' : '☆' }}</span>
+                </el-button>
                 <el-icon class="entry-name__icon">
                   <FolderOpened v-if="scope.row.is_dir" />
                   <Document v-else />
@@ -281,6 +299,10 @@ interface BreadcrumbItem {
 }
 
 type PickerMode = 'browse' | 'copy' | 'move' | 'pack'
+type SortBy = 'modified_at' | 'name' | 'type'
+
+const STARRED_FOLDERS_STORAGE_KEY = 'nestify:file-manager:starred-folders'
+const LAST_VISITED_PATH_STORAGE_KEY = 'nestify:file-manager:last-visited-path'
 
 const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
@@ -296,6 +318,9 @@ const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const selectedRows = ref<FileManagerEntry[]>([])
+const sortBy = ref<SortBy>('modified_at')
+const starredFolders = ref<string[]>([])
+const lastVisitedPath = ref('')
 const tableRef = ref<any>(null)
 const uploadInputRef = ref<HTMLInputElement | null>(null)
 
@@ -330,6 +355,8 @@ const selectedCount = computed(() => selectedRows.value.length)
 const currentPathDisplay = computed(() => directoryPath.value || '未选择')
 const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => item.path)))
 const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
+const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
+const sortedEntries = computed(() => [...entries.value].sort(compareEntries))
 
 const pickerInitialPath = computed(() => {
   switch (pickerMode.value) {
@@ -429,6 +456,111 @@ function formatTimestamp(value: string) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+function getEntryExtension(entry: FileManagerEntry) {
+  if (entry.is_dir) return 'folder'
+  const index = entry.name.lastIndexOf('.')
+  if (index <= 0 || index === entry.name.length - 1) {
+    return ''
+  }
+  return entry.name.slice(index + 1).toLowerCase()
+}
+
+function compareEntries(a: FileManagerEntry, b: FileManagerEntry) {
+  const starredDelta = Number(isStarred(b.path)) - Number(isStarred(a.path))
+  if (starredDelta !== 0) {
+    return starredDelta
+  }
+
+  if (a.is_dir !== b.is_dir) {
+    return a.is_dir ? -1 : 1
+  }
+
+  if (sortBy.value === 'modified_at') {
+    const timeDelta = compareByModifiedAt(a, b)
+    if (timeDelta !== 0) {
+      return timeDelta
+    }
+  }
+
+  if (sortBy.value === 'type') {
+    const typeDelta = getEntryExtension(a).localeCompare(getEntryExtension(b), 'zh-CN', { sensitivity: 'base' })
+    if (typeDelta !== 0) {
+      return typeDelta
+    }
+  }
+
+  return a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base', numeric: true })
+}
+
+function compareByModifiedAt(a: FileManagerEntry, b: FileManagerEntry) {
+  const aTime = a.modified_at ? new Date(a.modified_at).getTime() : 0
+  const bTime = b.modified_at ? new Date(b.modified_at).getTime() : 0
+  if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+    return b.modified_at.localeCompare(a.modified_at)
+  }
+  return bTime - aTime
+}
+
+function loadStarredFolders() {
+  try {
+    const raw = window.localStorage.getItem(STARRED_FOLDERS_STORAGE_KEY)
+    if (!raw) {
+      starredFolders.value = []
+      return
+    }
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      starredFolders.value = []
+      return
+    }
+
+    starredFolders.value = parsed.filter((item): item is string => typeof item === 'string').map((item) => normalizePath(item))
+  } catch {
+    starredFolders.value = []
+  }
+}
+
+function loadLastVisitedPath() {
+  try {
+    lastVisitedPath.value = normalizePath(window.localStorage.getItem(LAST_VISITED_PATH_STORAGE_KEY) || '')
+  } catch {
+    lastVisitedPath.value = ''
+  }
+}
+
+function persistLastVisitedPath(path: string) {
+  const normalizedPath = normalizePath(path)
+  lastVisitedPath.value = normalizedPath
+  window.localStorage.setItem(LAST_VISITED_PATH_STORAGE_KEY, normalizedPath)
+}
+
+function persistStarredFolders() {
+  window.localStorage.setItem(STARRED_FOLDERS_STORAGE_KEY, JSON.stringify(starredFolders.value))
+}
+
+function isStarred(path: string) {
+  return starredFolderSet.value.has(normalizePath(path))
+}
+
+function toggleFolderStar(path: string) {
+  const targetPath = normalizePath(path)
+  if (starredFolderSet.value.has(targetPath)) {
+    starredFolders.value = starredFolders.value.filter((item) => normalizePath(item) !== targetPath)
+  } else {
+    starredFolders.value = [...starredFolders.value, targetPath]
+  }
+  persistStarredFolders()
+}
+
+async function openLastVisitedPath() {
+  if (!lastVisitedPath.value || lastVisitedPath.value === directoryPath.value) {
+    return
+  }
+
+  await openPath(lastVisitedPath.value)
+}
+
 function isArchiveEntry(entry: FileManagerEntry) {
   if (entry.is_dir) return false
   return /\.(zip|cbz)$/i.test(entry.name)
@@ -492,10 +624,14 @@ async function openCurrentPath() {
   errorMessage.value = ''
 
   try {
+    const previousPath = directoryPath.value
     const response = await browseDirectories(directoryPath.value)
     directoryPath.value = response.data?.current_path ?? directoryPath.value
     parentPath.value = response.data?.parent_path ?? ''
     entries.value = response.data?.entries ?? []
+    if (previousPath && previousPath !== directoryPath.value) {
+      persistLastVisitedPath(previousPath)
+    }
     clearSelection()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '目录加载失败'
@@ -830,6 +966,8 @@ async function handlePreflight() {
 }
 
 onMounted(() => {
+  loadStarredFolders()
+  loadLastVisitedPath()
   window.addEventListener('keydown', handleWindowKeyDown)
   window.addEventListener('scroll', hideContextMenu, true)
   void initialize()
@@ -951,6 +1089,16 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.summary-row__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-row__sort-select {
+  width: 132px;
+}
+
 .entry-name {
   display: flex;
   align-items: center;
@@ -962,6 +1110,23 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 12px;
   transition: background-color 0.2s ease;
+}
+
+.entry-star {
+  flex-shrink: 0;
+  min-width: auto;
+  margin-right: -6px;
+  color: #c0c4cc;
+}
+
+.entry-star.is-active,
+.entry-star:hover {
+  color: #f5b942;
+}
+
+.entry-star__icon {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .entry-name.is-dir {
@@ -1009,7 +1174,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 14px;
 }
 
 .entry-actions__icon {
