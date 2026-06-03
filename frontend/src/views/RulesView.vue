@@ -546,7 +546,7 @@ import {
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
-type PackageOptionKey = 'preserve_structure' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
+type PackageOptionKey = 'preserve_structure' | 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type HistoryStatus = 'success' | 'skip' | 'failed'
@@ -559,6 +559,7 @@ const pageSizeOptions = [25, 50]
 
 const packageModeOptions = [
   { key: 'preserve_structure', label: '保留目录结构', description: '按源目录层级打包归档，避免目标目录结构混乱。' },
+  { key: 'flat_archive', label: '扁平归档', description: '勾选后直接输出到目标路径；取消勾选时默认额外套一层源文件夹后再生成 CBZ。' },
   { key: 'include_manifest', label: '生成归档清单', description: '为每次打包写入清单，方便后续核对归档内容。' },
   { key: 'verify_after_archive', label: '归档后校验', description: '完成后再次检查结果，减少丢包或缺失问题。' },
   { key: 'cleanup_source_after_archive', label: '成功后清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
@@ -579,7 +580,7 @@ const cleanupModeOptions = [
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { preserve_structure: true, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false }
+  return { preserve_structure: true, flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false }
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
@@ -1661,12 +1662,13 @@ onMounted(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
-.rule-actions { display: inline-flex; align-items: center; gap: 8px; }
+.rule-actions { display: inline-flex; align-items: center; gap: 12px; }
 .rule-action { padding: 4px; font-size: 18px; }
 .rule-action--primary { color: var(--el-color-primary); }
 .rule-action--success { color: var(--el-color-success); }
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
+.rule-actions::after { content: none; }
 .archive-mode-group {
   display: inline-flex;
   width: auto;

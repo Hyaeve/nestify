@@ -68,6 +68,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	sortEntriesNaturally(entries)
 	matchers := buildFileNameMatchers(req.Filters)
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
+	flatArchive := req.PackageOptions["flat_archive"]
 	cleanupSourceAfterArchive := false
 	if req.ArchiveMode == "package" {
 		cleanupSourceAfterArchive = req.PackageOptions["cleanup_source_after_archive"]
@@ -82,7 +83,11 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			continue
 		}
 		if entry.IsDir() {
-			if err := s.processSeriesDir(runID, entryPath, filepath.Join(targetDir, entry.Name()), req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, matchers, &stats); err != nil {
+			targetSeriesDir := filepath.Join(targetDir, entry.Name())
+			if req.ArchiveMode == "package" && flatArchive {
+				targetSeriesDir = targetDir
+			}
+			if err := s.processSeriesDir(runID, entryPath, targetSeriesDir, req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, cleanupSourceAfterArchive, matchers, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))

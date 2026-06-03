@@ -15,6 +15,15 @@
   --accent-color: #409eff;
   --accent-soft: rgba(64, 158, 255, 0.1);
   --shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.06);
+  --app-content-max-width: 100%;
+  --app-shell-padding-x: 20px;
+  --app-shell-padding-y: 18px;
+  --panel-radius: 18px;
+  --table-cell-padding-x: 12px;
+  --table-cell-padding-y: 12px;
+  --control-height: 36px;
+  --font-size-body: 14px;
+  --font-size-title: 18px;
 }
 
 :root[data-theme='dark'] {
@@ -65,6 +74,7 @@ body {
   background: var(--bg-app);
   background-attachment: fixed;
   color: var(--text-primary);
+  font-size: var(--font-size-body);
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
@@ -75,13 +85,13 @@ body {
 }
 
 .page-card {
-  border-radius: 18px;
+  border-radius: var(--panel-radius);
   overflow: hidden;
 }
 
 .page-section-title {
   margin: 0 0 16px;
-  font-size: 18px;
+  font-size: var(--font-size-title);
   font-weight: 600;
 }
 
@@ -122,7 +132,7 @@ body {
 .el-dialog {
   --el-dialog-bg-color: var(--bg-panel-strong);
   border: 1px solid var(--border-color);
-  border-radius: 18px;
+  border-radius: var(--panel-radius);
   overflow: hidden;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
 }
@@ -182,11 +192,89 @@ body {
 
 .el-button {
   border-radius: 12px;
+  min-height: var(--control-height);
 }
 
 .el-button.is-circle {
   width: 36px;
   height: 36px;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-pagination .btn-next,
+.el-pagination .btn-prev,
+.el-pagination .el-pager li,
+.el-pagination .el-select .el-input__wrapper {
+  min-height: var(--control-height);
+}
+
+.el-card,
+.el-dialog,
+.el-table,
+.el-tabs,
+.el-form,
+.el-input,
+.el-select,
+.el-button,
+.el-tag,
+.el-pagination,
+.el-empty,
+.el-descriptions {
+  max-width: 100%;
+}
+
+.el-table .cell {
+  padding-top: var(--table-cell-padding-y);
+  padding-bottom: var(--table-cell-padding-y);
+}
+
+.el-table th.el-table__cell,
+.el-table td.el-table__cell {
+  padding-left: var(--table-cell-padding-x);
+  padding-right: var(--table-cell-padding-x);
+}
+
+@media (min-width: 1440px) and (max-width: 1919px) {
+  :root {
+    --app-shell-padding-x: 18px;
+    --app-shell-padding-y: 16px;
+    --panel-radius: 18px;
+    --table-cell-padding-x: 10px;
+    --table-cell-padding-y: 11px;
+    --control-height: 34px;
+    --font-size-body: 14px;
+    --font-size-title: 18px;
+  }
+}
+
+@media (min-width: 1920px) and (max-width: 2559px) {
+  :root {
+    --app-content-max-width: 1880px;
+    --app-shell-padding-x: 24px;
+    --app-shell-padding-y: 20px;
+    --panel-radius: 20px;
+    --table-cell-padding-x: 14px;
+    --table-cell-padding-y: 13px;
+    --control-height: 38px;
+    --font-size-body: 15px;
+    --font-size-title: 19px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --app-content-max-width: 2200px;
+    --app-shell-padding-x: 28px;
+    --app-shell-padding-y: 22px;
+    --panel-radius: 22px;
+    --table-cell-padding-x: 16px;
+    --table-cell-padding-y: 14px;
+    --control-height: 40px;
+    --font-size-body: 15px;
+    --font-size-title: 20px;
+  }
 }
 
 .el-menu {

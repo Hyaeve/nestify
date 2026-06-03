@@ -561,14 +561,58 @@ function loadRecentVisitedPaths() {
       return
     }
 
-    recentVisitedPaths.value = parsed
+    recentVisitedPaths.value = dedupeRecentVisitedPaths(parsed
       .filter((item): item is string => typeof item === 'string')
       .map((item) => normalizePath(item))
       .filter(Boolean)
-      .slice(0, 5)
+    )
   } catch {
     recentVisitedPaths.value = []
   }
+}
+
+function getPathDepth(path: string) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath || normalizedPath === '/') {
+    return 0
+  }
+
+  return normalizedPath.split('/').filter(Boolean).length
+}
+
+function isAncestorPath(ancestor: string, target: string) {
+  const normalizedAncestor = normalizePath(ancestor)
+  const normalizedTarget = normalizePath(target)
+  if (!normalizedAncestor || !normalizedTarget || normalizedAncestor === normalizedTarget) {
+    return false
+  }
+  return normalizedTarget.startsWith(`${normalizedAncestor}/`)
+}
+
+function dedupeRecentVisitedPaths(paths: string[]) {
+  const result: string[] = []
+
+  for (const rawPath of paths) {
+    const path = normalizePath(rawPath)
+    const depth = getPathDepth(path)
+    if (depth < 2) {
+      continue
+    }
+
+    if (result.some((item) => item === path || isAncestorPath(item, path))) {
+      continue
+    }
+
+    const filtered = result.filter((item) => !isAncestorPath(path, item))
+    result.length = 0
+    result.push(path, ...filtered)
+
+    if (result.length >= 5) {
+      break
+    }
+  }
+
+  return result.slice(0, 5)
 }
 
 function persistRecentVisitedPath(path: string) {
@@ -577,7 +621,7 @@ function persistRecentVisitedPath(path: string) {
     return
   }
 
-  recentVisitedPaths.value = [normalizedPath, ...recentVisitedPaths.value.filter((item) => item !== normalizedPath)].slice(0, 5)
+  recentVisitedPaths.value = dedupeRecentVisitedPaths([normalizedPath, ...recentVisitedPaths.value])
   window.localStorage.setItem(RECENT_VISITED_PATHS_STORAGE_KEY, JSON.stringify(recentVisitedPaths.value))
 }
 
@@ -1229,13 +1273,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px;
+  gap: 16px;
 }
 
 .entry-actions__icon {
   font-size: 16px;
   min-width: 20px;
   padding: 0;
+}
+
+.entry-actions :deep(.el-dropdown) {
+  margin-left: 4px;
 }
 
 .entry-actions__icon--warning {

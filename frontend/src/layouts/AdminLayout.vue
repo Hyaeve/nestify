@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v2.2</div>
+          <div class="brand__version">v2.3</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -213,14 +213,14 @@ async function handleLogout() {
     justify-content: space-between;
     gap: 16px;
     height: 52px;
-    padding: 0 18px;
+    padding: 0 var(--app-shell-padding-x);
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-color);
     backdrop-filter: blur(18px);
   }
 
   &__main {
-    padding: 18px 20px;
+    padding: var(--app-shell-padding-y) var(--app-shell-padding-x);
     background: transparent;
   }
 }
@@ -286,18 +286,25 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .page-title {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .page-title__crumb,
 .page-title__text {
   font-size: 14px;
   font-weight: 600;
+}
+
+.page-title__text {
+  min-width: 0;
 }
 
 .page-title__crumb,
@@ -311,6 +318,67 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.admin-layout > .el-container {
+  min-width: 0;
+}
+
+.admin-layout__main > * {
+  width: 100%;
+  max-width: var(--app-content-max-width);
+  margin: 0 auto;
+}
+
+@media (max-width: 1599px) {
+  .admin-layout {
+    &__aside {
+      box-shadow: 8px 0 24px rgba(2, 6, 23, 0.1);
+    }
+
+    &__header {
+      gap: 12px;
+      height: 50px;
+    }
+  }
+
+  .brand {
+    min-height: 68px;
+    padding: 12px 10px 10px;
+  }
+
+  .brand__logo {
+    width: 34px;
+    height: 34px;
+  }
+
+  :deep(.el-menu-item) {
+    height: 42px;
+    border-radius: 12px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .admin-layout {
+    &__header {
+      height: 56px;
+    }
+  }
+
+  .brand {
+    min-height: 76px;
+  }
+
+  .page-title__crumb,
+  .page-title__text,
+  .page-title__divider {
+    font-size: 15px;
+  }
+
+  :deep(.el-menu-item) {
+    height: 46px;
+  }
 }
 
 .icon-button {
@@ -436,13 +504,17 @@ async function handleLogout() {
 :deep(.el-menu--collapse .el-menu-item) {
   padding: 0;
   justify-content: center;
-  width: 52px;
+  width: 56px;
   margin-left: auto;
   margin-right: auto;
 }
 
 :deep(.el-menu-item .el-icon) {
   font-size: 18px;
+}
+
+:deep(.el-menu--collapse .el-menu-item .el-icon) {
+  margin: 0;
 }
 
 :deep(.el-menu-item.is-active) {
