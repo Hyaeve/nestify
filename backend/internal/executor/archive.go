@@ -72,6 +72,8 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	matchers := buildFileNameMatchers(req.Filters)
 	matchArchiveEnabled := req.ArchiveMode == "package" && req.PackageOptions["match_archive"]
 	directMatchers := buildArchiveDirectMatchers(req.MatchFilters)
+	singleFileNestingEnabled := req.ArchiveMode == "package" && req.PackageOptions["single_file_nesting"]
+	nestMatchers := buildArchiveDirectMatchers(req.NestFilters)
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
 	flatArchive := req.PackageOptions["flat_archive"]
 	cleanupSourceAfterArchive := false
@@ -97,6 +99,14 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("move matched file %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched file %s failed: %v", entryPath, err))
+			}
+			continue
+		}
+		if singleFileNestingEnabled && !entry.IsDir() && matchesArchiveDirectly(entry.Name(), nestMatchers) {
+			if err := s.moveLooseFileToOwnDir(runID, entryPath, targetDir, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("nest matched file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("nest matched file %s failed: %v", entryPath, err))
 			}
 			continue
 		}
@@ -505,6 +515,36 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir string, stats *exec
 	stats.MovedFiles++
 	s.persistRunHistory(runID, fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("moved file %s -> %s", sourcePath, targetPath))
+	return nil
+}
+
+func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, stats *executionStats) error {
+	baseName := strings.TrimSpace(filepath.Base(sourcePath))
+	if baseName == "" {
+		return fmt.Errorf("source file name is empty")
+	}
+
+	fileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = baseName
+	}
+
+	nestedTargetDir := filepath.Join(targetDir, fileName)
+	if err := os.MkdirAll(nestedTargetDir, 0o755); err != nil {
+		return fmt.Errorf("create nested target dir: %w", err)
+	}
+
+	targetPath := uniqueArchiveDestinationPath(nestedTargetDir, filepath.Base(sourcePath))
+	if err := moveFile(sourcePath, targetPath); err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	stats.SuccessCount++
+	stats.MovedFiles++
+	s.persistRunHistory(runID, fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath), stats)
+	s.appendLog(runID, "info", fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath))
 	return nil
 }
 

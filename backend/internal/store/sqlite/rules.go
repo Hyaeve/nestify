@@ -12,13 +12,13 @@ import (
 
 func (s *Store) ListRules() ([]model.Rule, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, nest_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
-		ORDER BY id DESC
+		ORDER BY sort_order ASC, id ASC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list rules: %w", err)
@@ -59,13 +59,13 @@ func (s *Store) ListRulesPage(page, pageSize int, ruleType string) ([]model.Rule
 
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
 	rows, err := s.db.Query(`
-		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, nest_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules`+whereClause+`
-		ORDER BY id DESC
+		ORDER BY sort_order ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, queryArgs...)
 	if err != nil {
@@ -104,9 +104,9 @@ func buildRuleTypeWhereClause(ruleType string) (string, []any) {
 
 func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 	row := s.db.QueryRow(`
-		SELECT id, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
+		       options_json, package_options_json, collect_options_json, filters_json, match_filters_json, nest_filters_json, transform_rules_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
@@ -135,14 +135,20 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 	}
 	runMode := strings.TrimSpace(input.RunMode)
 
+	var maxSortOrder int
+	if err := s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), 0) FROM rules`).Scan(&maxSortOrder); err != nil {
+		return nil, fmt.Errorf("query max sort_order: %w", err)
+	}
+
 	result, err := s.db.Exec(`
 		INSERT INTO rules (
-			name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
+			sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			options_json, package_options_json, collect_options_json, filters_json, match_filters_json, transform_rules_json,
+			options_json, package_options_json, collect_options_json, filters_json, match_filters_json, nest_filters_json, transform_rules_json,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
+		maxSortOrder+1,
 		strings.TrimSpace(input.Name),
 		strings.TrimSpace(input.Description),
 		boolToInt(defaultBool(input.Enabled, true)),
@@ -162,6 +168,7 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
 		marshalStringList(input.MatchFilters),
+		marshalStringList(input.NestFilters),
 		marshalStringList(input.TransformRules),
 		now.Format(time.RFC3339),
 		now.Format(time.RFC3339),
@@ -201,6 +208,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    collect_options_json = ?,
 		    filters_json = ?,
 		    match_filters_json = ?,
+		    nest_filters_json = ?,
 		    transform_rules_json = ?,
 		    updated_at = ?
 		WHERE id = ?
@@ -224,6 +232,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
 		marshalStringList(input.MatchFilters),
+		marshalStringList(input.NestFilters),
 		marshalStringList(input.TransformRules),
 		now.Format(time.RFC3339),
 		id,
@@ -248,6 +257,37 @@ func (s *Store) DeleteRule(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM rules WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete rule: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ReorderRules(items []model.RuleReorderItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin reorder rules transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE rules SET sort_order = ?, updated_at = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare reorder rules statement: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, item := range items {
+		if _, err := stmt.Exec(item.SortOrder, now, item.ID); err != nil {
+			return fmt.Errorf("update rule sort_order: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit reorder rules transaction: %w", err)
 	}
 
 	return nil
@@ -354,6 +394,7 @@ func scanRule(s scanner) (model.Rule, error) {
 
 	err := s.Scan(
 		&rule.ID,
+		&rule.SortOrder,
 		&rule.Name,
 		&rule.Description,
 		&enabled,
@@ -373,6 +414,7 @@ func scanRule(s scanner) (model.Rule, error) {
 		&rule.CollectOptionsJSON,
 		&rule.FiltersJSON,
 		&rule.MatchFiltersJSON,
+		&rule.NestFiltersJSON,
 		&rule.TransformRulesJSON,
 		&rule.LastRunStatus,
 		&rule.LastSuccessCount,

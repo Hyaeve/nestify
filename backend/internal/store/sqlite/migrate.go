@@ -16,6 +16,7 @@ func (s *Store) migrate() error {
 		);`,
 		`CREATE TABLE IF NOT EXISTS rules (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sort_order INTEGER NOT NULL DEFAULT 0,
 			name TEXT NOT NULL,
 			description TEXT NOT NULL DEFAULT '',
 			enabled INTEGER NOT NULL DEFAULT 1,
@@ -35,6 +36,7 @@ func (s *Store) migrate() error {
 			collect_options_json TEXT NOT NULL DEFAULT '{}',
 			filters_json TEXT NOT NULL DEFAULT '[]',
 			match_filters_json TEXT NOT NULL DEFAULT '[]',
+			nest_filters_json TEXT NOT NULL DEFAULT '[]',
 			transform_rules_json TEXT NOT NULL DEFAULT '[]',
 			last_run_status TEXT NOT NULL DEFAULT '',
 			last_success_count INTEGER NOT NULL DEFAULT 0,
@@ -100,6 +102,55 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	if err := s.ensureRuleNestFiltersColumn(); err != nil {
+		return err
+	}
+
+	if err := s.ensureRuleSortOrderColumn(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleSortOrderColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	hasSortOrder := false
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "sort_order") {
+			hasSortOrder = true
+			break
+		}
+	}
+
+	if !hasSortOrder {
+		if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`); err != nil {
+			return fmt.Errorf("add sort_order column: %w", err)
+		}
+	}
+
+	if _, err := s.db.Exec(`
+		UPDATE rules
+		SET sort_order = id
+		WHERE sort_order = 0;
+	`); err != nil {
+		return fmt.Errorf("backfill sort_order column: %w", err)
+	}
+
 	return nil
 }
 
@@ -127,6 +178,35 @@ func (s *Store) ensureRuleMatchFiltersColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN match_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
 		return fmt.Errorf("add match_filters_json column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleNestFiltersColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "nest_filters_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN nest_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add nest_filters_json column: %w", err)
 	}
 
 	return nil

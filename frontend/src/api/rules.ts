@@ -2,6 +2,7 @@ import { deleteJSON, getJSON } from './http'
 
 export interface RuleItem {
   id: number
+  sort_order: number
   name: string
   description: string
   enabled: boolean
@@ -21,6 +22,7 @@ export interface RuleItem {
   collect_options_json?: string
   filters_json?: string
   match_filters_json?: string
+  nest_filters_json?: string
   transform_rules_json?: string
   last_run_status: string
   last_success_count: number
@@ -63,10 +65,16 @@ export interface CreateRulePayload {
   collect_options?: Record<string, boolean>
   filters?: string[]
   match_filters?: string[]
+  nest_filters?: string[]
   transform_rules?: string[]
 }
 
 export interface UpdateRulePayload extends CreateRulePayload {}
+
+export interface RuleReorderItem {
+  id: number
+  sort_order: number
+}
 
 function buildRulesURL(params: FetchRulesParams = {}) {
   const query = new URLSearchParams()
@@ -128,6 +136,24 @@ export function updateRule(id: number, payload: UpdateRulePayload) {
       throw new Error(data.message || 'Update rule failed')
     }
     return data
+	})
+}
+
+export function reorderRules(payload: RuleReorderItem[]) {
+	return fetch('/api/v1/rules/reorder', {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+		},
+		credentials: 'include',
+		body: JSON.stringify(payload),
+	}).then(async (response) => {
+		const data = await response.json()
+		if (!response.ok) {
+			throw new Error(data.message || 'Reorder rules failed')
+		}
+		return data
 	})
 }
 

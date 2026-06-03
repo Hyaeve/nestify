@@ -19,7 +19,7 @@
         </div>
       </template>
 
-      <el-table v-if="archiveRules.length" v-loading="archiveLoading" :data="archiveRules" class="rules-table" table-layout="auto">
+      <el-table v-if="archiveRules.length" ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="140" />
         <el-table-column label="模式" width="78">
           <template #default="scope">
@@ -177,11 +177,11 @@
           <div>
             <div class="rules-card__title">净化规则</div>
           </div>
-          <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加净化规则</el-button>
+          <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加规则</el-button>
         </div>
       </template>
 
-      <el-table v-if="purifyRules.length" v-loading="purifyLoading" :data="purifyRules" class="rules-table" table-layout="auto">
+      <el-table v-if="purifyRules.length" ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="92">
           <template #default="scope">
@@ -281,11 +281,11 @@
           <div>
             <div class="rules-card__title">链路规则</div>
           </div>
-          <el-button type="primary" round @click="openCreateLinkDialog">+ 添加链路规则</el-button>
+          <el-button type="primary" round @click="openCreateLinkDialog">+ 添加规则</el-button>
         </div>
       </template>
 
-      <el-table v-if="linkRules.length" v-loading="linkLoading" :data="linkRules" class="rules-table" table-layout="auto">
+      <el-table v-if="linkRules.length" ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
         <el-table-column prop="name" label="规则名称" min-width="160" />
         <el-table-column label="模式" width="78">
           <template #default="scope">
@@ -386,8 +386,8 @@
           </button>
           <el-collapse-transition>
             <div v-show="createArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
@@ -398,6 +398,12 @@
         </el-form-item>
         <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
+        </el-form-item>
+        <el-form-item v-if="createForm.archive_mode === 'package'" label="单件归巢">
+          <el-switch v-model="createForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
+        </el-form-item>
+        <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting" label="单件归巢规则">
+          <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词、扩展名或正则；命中监控目录下裸露文件后，会按文件名建立同名文件夹再转移。" />
         </el-form-item>
         <el-form-item label="过滤名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中文件名后将直接清理该文件。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -424,8 +430,8 @@
           </button>
           <el-collapse-transition>
             <div v-show="editArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
@@ -436,6 +442,12 @@
         </el-form-item>
         <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
+        </el-form-item>
+        <el-form-item v-if="editForm.archive_mode === 'package'" label="单件归巢">
+          <el-switch v-model="editForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
+        </el-form-item>
+        <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting" label="单件归巢规则">
+          <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词、扩展名或正则；命中监控目录下裸露文件后，会按文件名建立同名文件夹再转移。" />
         </el-form-item>
         <el-form-item label="过滤名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中文件名后将直接清理该文件。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -462,7 +474,7 @@
           </button>
           <el-collapse-transition>
             <div v-show="createPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
@@ -497,7 +509,7 @@
           </button>
           <el-collapse-transition>
             <div v-show="editPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
@@ -523,7 +535,7 @@
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="匹配黑名单"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过创建链路，同时匹配文件名和文件夹名。" /></el-form-item>
+        <el-form-item label="过滤名单"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过创建链路，同时匹配文件名和文件夹名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
@@ -539,7 +551,7 @@
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="匹配黑名单"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过创建链路，同时匹配文件名和文件夹名。" /></el-form-item>
+        <el-form-item label="过滤名单"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" placeholder="一行一个字符串或正则；命中后跳过创建链路，同时匹配文件名和文件夹名。" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
@@ -551,12 +563,14 @@
 
 <script setup lang="ts">
 import { Delete, Edit, Operation } from '@element-plus/icons-vue'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
+import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { prepareRuleExecution } from '../api/executions'
-import { createRule, deleteRule, fetchRule, fetchRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
+import { createRule, deleteRule, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
   deleteRunHistoryItem,
@@ -568,7 +582,7 @@ import {
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
-type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive'
+type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'single_file_nesting'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'keep_latest_only' | 'collect_related_files' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text'
@@ -589,6 +603,7 @@ const packageModeOptions = [
   { key: 'cleanup_source_after_archive', label: '清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
   { key: 'package_nested_folders', label: '嵌套打包', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
   { key: 'match_archive', label: '匹配归档', description: '按规则匹配文件名或扩展名，命中后直接转移到目标路径，不参与打包。' },
+  { key: 'single_file_nesting', label: '单件归巢', description: '对监控目录下裸露文件按规则命中后，以文件名创建同名目录再转移进去。' },
 ] as const
 
 const collectModeOptions = [
@@ -610,7 +625,7 @@ const transformModeOptions = [
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false }
+  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false, single_file_nesting: false }
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
@@ -730,6 +745,7 @@ function buildRuleUpdatePayload(rule: RuleItem, enabled: boolean): UpdateRulePay
       : {},
     filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
+    nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
   }
 }
 
@@ -743,6 +759,10 @@ const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
 const togglingRuleIds = ref(new Set<number>())
+const archiveTableRef = ref()
+const purifyTableRef = ref()
+const linkTableRef = ref()
+const reorderingRuleType = ref<RuleListType | null>(null)
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -789,6 +809,10 @@ const failedCount = computed(() => historySummary.value.failed)
 
 const purifyRulesTotal = ref(0)
 
+let archiveSortable: Sortable | null = null
+let purifySortable: Sortable | null = null
+let linkSortable: Sortable | null = null
+
 const createForm = reactive({
   name: '',
   description: '',
@@ -806,6 +830,7 @@ const createForm = reactive({
   collect_options: createDefaultCollectOptions(),
   filters_text: '',
   match_filters_text: '',
+  nest_filters_text: '',
 })
 
 const editForm = reactive({
@@ -825,6 +850,7 @@ const editForm = reactive({
   collect_options: createDefaultCollectOptions(),
   filters_text: '',
   match_filters_text: '',
+  nest_filters_text: '',
 })
 
 const createPurifyForm = reactive({
@@ -904,6 +930,7 @@ function resetCreateForm() {
   createForm.collect_options = createDefaultCollectOptions()
   createForm.filters_text = ''
   createForm.match_filters_text = ''
+  createForm.nest_filters_text = ''
 }
 
 function resetEditForm() {
@@ -923,6 +950,7 @@ function resetEditForm() {
   editForm.collect_options = createDefaultCollectOptions()
   editForm.filters_text = ''
   editForm.match_filters_text = ''
+  editForm.nest_filters_text = ''
 }
 
 function resetCreatePurifyForm() {
@@ -1130,6 +1158,8 @@ async function loadArchiveRules() {
     })
     archiveRules.value = response.data?.items ?? []
     archiveRulesTotal.value = response.data?.total ?? 0
+    await nextTick()
+    setupRuleSortable('archive')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '归档规则加载失败'
   } finally {
@@ -1148,6 +1178,8 @@ async function loadPurifyRules() {
     })
     purifyRules.value = response.data?.items ?? []
     purifyRulesTotal.value = response.data?.total ?? 0
+    await nextTick()
+    setupRuleSortable('cleanup')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '净化规则加载失败'
   } finally {
@@ -1166,10 +1198,106 @@ async function loadLinkRules() {
     })
     linkRules.value = response.data?.items ?? []
     linkRulesTotal.value = response.data?.total ?? 0
+    await nextTick()
+    setupRuleSortable('link')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '链路规则加载失败'
   } finally {
     linkLoading.value = false
+  }
+}
+
+function getRuleItemsByType(ruleType: RuleListType) {
+  if (ruleType === 'archive') return archiveRules.value
+  if (ruleType === 'cleanup') return purifyRules.value
+  return linkRules.value
+}
+
+function setRuleItemsByType(ruleType: RuleListType, items: RuleItem[]) {
+  if (ruleType === 'archive') {
+    archiveRules.value = items
+    return
+  }
+  if (ruleType === 'cleanup') {
+    purifyRules.value = items
+    return
+  }
+  linkRules.value = items
+}
+
+function getTableRefByType(ruleType: RuleListType) {
+  if (ruleType === 'archive') return archiveTableRef.value
+  if (ruleType === 'cleanup') return purifyTableRef.value
+  return linkTableRef.value
+}
+
+function getSortableByType(ruleType: RuleListType) {
+  if (ruleType === 'archive') return archiveSortable
+  if (ruleType === 'cleanup') return purifySortable
+  return linkSortable
+}
+
+function setSortableByType(ruleType: RuleListType, instance: Sortable | null) {
+  if (ruleType === 'archive') {
+    archiveSortable = instance
+    return
+  }
+  if (ruleType === 'cleanup') {
+    purifySortable = instance
+    return
+  }
+  linkSortable = instance
+}
+
+function setupRuleSortable(ruleType: RuleListType) {
+  const tableRef = getTableRefByType(ruleType)
+  const tableElement = tableRef?.$el as HTMLElement | undefined
+  const tbody = tableElement?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
+  if (!tbody) return
+
+  const current = getSortableByType(ruleType)
+  if (current) {
+    current.destroy()
+    setSortableByType(ruleType, null)
+  }
+
+  const sortable = Sortable.create(tbody, {
+    animation: 180,
+    ghostClass: 'rule-sortable-ghost',
+    chosenClass: 'rule-sortable-chosen',
+    dragClass: 'rule-sortable-drag',
+    onEnd: (event: SortableEvent) => {
+      void handleRuleReorder(ruleType, event.oldIndex ?? -1, event.newIndex ?? -1)
+    },
+  })
+  setSortableByType(ruleType, sortable)
+}
+
+async function handleRuleReorder(ruleType: RuleListType, oldIndex: number, newIndex: number) {
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex || reorderingRuleType.value) return
+
+  const items = [...getRuleItemsByType(ruleType)]
+  const [moved] = items.splice(oldIndex, 1)
+  if (!moved) return
+  items.splice(newIndex, 0, moved)
+
+  const previous = getRuleItemsByType(ruleType)
+  setRuleItemsByType(ruleType, items)
+  reorderingRuleType.value = ruleType
+
+  try {
+    await reorderRules(items.map((item, index) => ({ id: item.id, sort_order: index + 1 })))
+    ElMessage.success('规则顺序已更新')
+    if (ruleType === 'archive') await loadArchiveRules()
+    else if (ruleType === 'cleanup') await loadPurifyRules()
+    else await loadLinkRules()
+  } catch (error) {
+    setRuleItemsByType(ruleType, previous)
+    errorMessage.value = error instanceof Error ? error.message : '规则排序更新失败'
+    await nextTick()
+    setupRuleSortable(ruleType)
+  } finally {
+    reorderingRuleType.value = null
   }
 }
 
@@ -1291,6 +1419,7 @@ async function submitCreateRule() {
       collect_options: { ...createForm.collect_options },
       filters: parseFiltersText(createForm.filters_text),
       match_filters: createForm.archive_mode === 'package' && createForm.package_options.match_archive ? parseFiltersText(createForm.match_filters_text) : [],
+      nest_filters: createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting ? parseFiltersText(createForm.nest_filters_text) : [],
     })
     ElMessage.success('规则创建成功')
     createDialogVisible.value = false
@@ -1327,6 +1456,7 @@ async function openEditDialog(id: number) {
     editForm.collect_options = parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
     editForm.filters_text = parseFiltersJSON(rule.filters_json)
     editForm.match_filters_text = parseFiltersJSON(rule.match_filters_json)
+    editForm.nest_filters_text = parseFiltersJSON(rule.nest_filters_json)
     editDialogVisible.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则详情加载失败'
@@ -1361,6 +1491,7 @@ async function submitUpdateRule() {
       collect_options: { ...editForm.collect_options },
       filters: parseFiltersText(editForm.filters_text),
       match_filters: editForm.archive_mode === 'package' && editForm.package_options.match_archive ? parseFiltersText(editForm.match_filters_text) : [],
+      nest_filters: editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting ? parseFiltersText(editForm.nest_filters_text) : [],
     })
     ElMessage.success('规则更新成功')
     editDialogVisible.value = false
@@ -1610,6 +1741,7 @@ async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean 
   const nextMonitorEnabled = Boolean(monitorEnabled)
   const ruleType = normalizeRuleType(rule)
   const loadingSet = new Set(togglingRuleIds.value)
+  const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
 
   loadingSet.add(rule.id)
   togglingRuleIds.value = loadingSet
@@ -1625,11 +1757,11 @@ async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean 
       archive_mode: rule.archive_mode,
       rule_type: ruleType,
       link_mode: ruleType === 'link' ? (rule.link_mode === 'hard' ? 'hard' : 'soft') : undefined,
-      run_mode: resolveRunMode(nextMonitorEnabled, rule.run_mode === 'cron' || Boolean(rule.cron_expression)),
+      run_mode: resolveRunMode(nextMonitorEnabled, scheduleEnabled),
       source_dir: rule.source_dir,
       target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
       watch_debounce_ms: rule.watch_debounce_ms,
-      cron_expression: rule.run_mode === 'cron' || Boolean(rule.cron_expression) ? rule.cron_expression : '',
+      cron_expression: scheduleEnabled ? rule.cron_expression : '',
       run_on_start: rule.run_on_start,
       options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : {},
       package_options: ruleType === 'archive' && rule.archive_mode === 'package'
@@ -1639,6 +1771,8 @@ async function toggleRuleMonitorEnabled(rule: RuleItem, monitorEnabled: boolean 
         ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
         : {},
       filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+      match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
+      nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
     })
     rule.monitor_enabled = nextMonitorEnabled
     ElMessage.success(`监控已${nextMonitorEnabled ? '开启' : '关闭'}`)
@@ -1778,7 +1912,7 @@ onMounted(() => {
 .archive-mode-group,
 .uniform-mode-group {
   display: inline-flex;
-  width: auto;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -1792,9 +1926,33 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 118px;
+  min-width: 0;
   width: 100%;
   padding-inline: 18px;
+}
+
+.rules-page :deep(.rules-table--sortable tbody tr) {
+  cursor: move;
+}
+
+.rules-page :deep(.rules-table--sortable .el-table__row) {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rules-page :deep(.rules-table--sortable .el-table__row:hover) {
+  background: var(--el-fill-color-light);
+}
+
+.rule-sortable-ghost {
+  opacity: 0.45;
+}
+
+.rules-page :deep(.rule-sortable-chosen > td) {
+  background: var(--el-color-primary-light-9);
+}
+
+.rules-page :deep(.rule-sortable-drag > td) {
+  background: var(--el-color-primary-light-8);
 }
 
 .rules-page :deep(.el-input-group__append) {

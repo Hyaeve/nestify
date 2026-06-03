@@ -134,6 +134,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/settings", api.handleSettings)
 	mux.HandleFunc("/api/v1/settings/admin-account", api.handleUpdateAdminAccount)
 	mux.HandleFunc("/api/v1/rules", api.handleRules)
+	mux.HandleFunc("/api/v1/rules/reorder", api.handleReorderRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
 
 	registerStaticRoutes(mux, deps.Env.WebDir)
@@ -678,6 +679,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
+		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
 	})
 	if err != nil {
@@ -704,6 +706,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
+		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
 	})
 	if err != nil {
@@ -1152,6 +1155,41 @@ func (a *apiHandler) handleRules(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *apiHandler) handleReorderRules(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var items []model.RuleReorderItem
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_JSON",
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if err := a.store.ReorderRules(items); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if err := a.executor.ReloadAutomation(); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Rules reordered",
+	})
+}
+
 func (a *apiHandler) handleRuleByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseIDFromPath(r.URL.Path, "/api/v1/rules/")
 	if err != nil {
@@ -1434,14 +1472,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.NestFilters, input.TransformRules)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.MatchFilters, input.NestFilters, input.TransformRules)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, matchFilters []string, transformRules []string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, matchFilters []string, nestFilters []string, transformRules []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1486,6 +1524,9 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	}
 	if archiveMode == "package" && packageOptions["match_archive"] && len(normalizeRuleFilters(matchFilters)) == 0 {
 		return errors.New("match_filters are required when match_archive is enabled")
+	}
+	if archiveMode == "package" && packageOptions["single_file_nesting"] && len(normalizeRuleFilters(nestFilters)) == 0 {
+		return errors.New("nest_filters are required when single_file_nesting is enabled")
 	}
 
 	runMode = strings.TrimSpace(runMode)

@@ -4,6 +4,7 @@ import "time"
 
 type Rule struct {
 	ID                 int64     `json:"id"`
+	SortOrder          int       `json:"sort_order"`
 	Name               string    `json:"name"`
 	Description        string    `json:"description"`
 	Enabled            bool      `json:"enabled"`
@@ -23,6 +24,7 @@ type Rule struct {
 	CollectOptionsJSON string    `json:"collect_options_json"`
 	FiltersJSON        string    `json:"filters_json"`
 	MatchFiltersJSON   string    `json:"match_filters_json"`
+	NestFiltersJSON    string    `json:"nest_filters_json"`
 	TransformRulesJSON string    `json:"transform_rules_json"`
 	LastRunStatus      string    `json:"last_run_status"`
 	LastSuccessCount   int       `json:"last_success_count"`
@@ -30,6 +32,11 @@ type Rule struct {
 	LastFailureCount   int       `json:"last_failure_count"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type RuleReorderItem struct {
+	ID        int64 `json:"id"`
+	SortOrder int   `json:"sort_order"`
 }
 
 type CreateRuleInput struct {
@@ -52,6 +59,7 @@ type CreateRuleInput struct {
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
 	MatchFilters      []string        `json:"match_filters"`
+	NestFilters       []string        `json:"nest_filters"`
 	TransformRules    []string        `json:"transform_rules"`
 }
 
@@ -75,5 +83,6 @@ type UpdateRuleInput struct {
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
 	MatchFilters      []string        `json:"match_filters"`
+	NestFilters       []string        `json:"nest_filters"`
 	TransformRules    []string        `json:"transform_rules"`
 }

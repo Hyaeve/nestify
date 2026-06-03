@@ -15,6 +15,7 @@ type ExecuteRuleRequest struct {
 	CollectOptions    map[string]bool
 	Filters           []string
 	MatchFilters      []string
+	NestFilters       []string
 	TransformRules    []string
 }
 
