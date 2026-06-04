@@ -435,6 +435,8 @@ func deriveRuleType(archiveMode string) string {
 	switch strings.TrimSpace(archiveMode) {
 	case "cleanup":
 		return "cleanup"
+	case "transform":
+		return "cleanup"
 	case "link":
 		return "link"
 	default:
