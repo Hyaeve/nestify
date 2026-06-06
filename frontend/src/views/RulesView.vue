@@ -440,16 +440,34 @@
         <el-form-item v-if="createForm.archive_mode === 'package'" label="匹配归档">
           <el-switch v-model="createForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
-        <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" label="匹配归档规则">
-          <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" :placeholder="ruleMatcherPlaceholder + '命中文件后直接转移到目标路径对应文件夹。'" />
-        </el-form-item>
+        <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">匹配归档规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
         <el-form-item v-if="createForm.archive_mode === 'package'" label="单件归巢">
           <el-switch v-model="createForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
-        <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting" label="单件归巢规则">
-          <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" :placeholder="ruleMatcherPlaceholder + '命中监控目录下裸露文件后，会按文件名建立同名文件夹再转移。'" />
-        </el-form-item>
-        <el-form-item label="过滤名单"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="ruleMatcherPlaceholder + '命中文件后清理该文件；命中文件夹后跳过该文件夹。'" /></el-form-item>
+        <template v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">单件归巢规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
+        <template v-if="createForm.archive_mode === 'package' ? createForm.package_options.match_archive || createForm.package_options.single_file_nesting || createForm.filters_text : createForm.filters_text">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateRule">创建</el-button></template>
@@ -484,16 +502,34 @@
         <el-form-item v-if="editForm.archive_mode === 'package'" label="匹配归档">
           <el-switch v-model="editForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
-        <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" label="匹配归档规则">
-          <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" :placeholder="ruleMatcherPlaceholder + '命中文件后直接转移到目标路径对应文件夹。'" />
-        </el-form-item>
+        <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">匹配归档规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
         <el-form-item v-if="editForm.archive_mode === 'package'" label="单件归巢">
           <el-switch v-model="editForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
-        <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting" label="单件归巢规则">
-          <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" :placeholder="ruleMatcherPlaceholder + '命中监控目录下裸露文件后，会按文件名建立同名文件夹再转移。'" />
-        </el-form-item>
-        <el-form-item label="过滤名单"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="ruleMatcherPlaceholder + '命中文件后清理该文件；命中文件夹后跳过该文件夹。'" /></el-form-item>
+        <template v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">单件归巢规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
+        <template v-if="editForm.archive_mode === 'package' ? editForm.package_options.match_archive || editForm.package_options.single_file_nesting || editForm.filters_text : editForm.filters_text">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
@@ -523,12 +559,24 @@
           </el-collapse-transition>
         <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
         <el-form-item label="监控目录"><el-input v-model="createPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup'" label="匹配规则">
-          <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
-        </el-form-item>
-        <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
-          <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
-        </el-form-item>
+        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">匹配规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
+        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">白名单匹配</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+          </el-form-item>
+        </template>
         <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.convert_matching_text">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配转换</div></div>
@@ -574,12 +622,24 @@
           </el-collapse-transition>
         <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
         <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup'" label="匹配规则">
-          <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
-        </el-form-item>
-        <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
-          <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
-        </el-form-item>
+        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">匹配规则</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+          </el-form-item>
+        </template>
+        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">白名单匹配</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+          </el-form-item>
+        </template>
         <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.convert_matching_text">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配转换</div></div>
@@ -611,7 +671,13 @@
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="过滤名单"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="ruleMatcherPlaceholder + '命中文件后跳过该文件；命中文件夹后跳过整个文件夹。'" /></el-form-item>
+        <template v-if="createLinkForm.filters_text">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
@@ -627,7 +693,13 @@
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="过滤名单"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="ruleMatcherPlaceholder + '命中文件后跳过该文件；命中文件夹后跳过整个文件夹。'" /></el-form-item>
+        <template v-if="editLinkForm.filters_text">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
@@ -672,6 +744,7 @@ type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
 const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
 const ruleMatcherPlaceholder = '一行一个规则：无前缀匹配文件名，如 漫画；. 前缀匹配扩展名，如 .mp4；/ 前缀匹配文件夹名，如 /合集；/内容/ 全局匹配文件名、扩展名、文件夹名，如 /mp4/。'
+const archiveRuleMatcherPlaceholder = '文件匹配：待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n全局匹配：/待匹配/'
 const cleanupRuleMatcherPlaceholder = '文件匹配：待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n全局匹配：/待匹配/'
 
 const packageModeOptions = [

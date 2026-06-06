@@ -22,11 +22,11 @@
 
       <el-form label-position="top" @submit.prevent>
         <el-form-item label="管理员账号">
-          <el-input v-model="username" placeholder="admin" />
+          <el-input v-model="username" autocomplete="username" />
         </el-form-item>
 
         <el-form-item label="密码">
-          <el-input v-model="password" type="password" placeholder="请输入密码" show-password @keyup.enter="handleLogin" />
+          <el-input v-model="password" type="password" autocomplete="current-password" show-password @keyup.enter="handleLogin" />
         </el-form-item>
 
         <el-button type="primary" class="login-button" :loading="submitting" @click="handleLogin">登录</el-button>
@@ -45,7 +45,7 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('admin')
+const username = ref('')
 const password = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
@@ -74,10 +74,40 @@ async function handleLogin() {
   align-items: center;
   justify-content: center;
   padding: 24px;
+   overflow: hidden;
+   isolation: isolate;
   background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.24), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.2), transparent 28%),
-    linear-gradient(135deg, #0b1220 0%, #111827 100%);
+    radial-gradient(circle at 18% 16%, rgba(45, 212, 191, 0.18), transparent 24%),
+    radial-gradient(circle at 78% 12%, rgba(168, 85, 247, 0.2), transparent 22%),
+    radial-gradient(circle at 82% 82%, rgba(244, 114, 182, 0.18), transparent 26%),
+    linear-gradient(135deg, #07111a 0%, #111827 50%, #1b1330 100%);
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 18% 78%, rgba(236, 72, 153, 0.42), transparent 22%),
+    radial-gradient(circle at 76% 24%, rgba(34, 211, 238, 0.34), transparent 20%),
+    radial-gradient(circle at 62% 72%, rgba(192, 132, 252, 0.26), transparent 24%),
+    radial-gradient(circle at 35% 30%, rgba(59, 130, 246, 0.22), transparent 26%);
+  filter: blur(92px) saturate(118%);
+  opacity: 0.95;
+  transform: scale(1.05);
+}
+
+.login-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='0.75'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.16;
+  mix-blend-mode: screen;
 }
 
 .login-page__glow {
@@ -86,19 +116,20 @@ async function handleLogin() {
   height: 280px;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.45;
+  opacity: 0.52;
+  z-index: 0;
 }
 
 .login-page__glow--left {
-  top: 10%;
-  left: 10%;
-  background: rgba(59, 130, 246, 0.4);
+  top: 8%;
+  left: 8%;
+  background: rgba(59, 130, 246, 0.34);
 }
 
 .login-page__glow--right {
-  right: 12%;
-  bottom: 12%;
-  background: rgba(245, 185, 66, 0.26);
+  right: 10%;
+  bottom: 8%;
+  background: rgba(244, 114, 182, 0.28);
 }
 
 .login-card {
