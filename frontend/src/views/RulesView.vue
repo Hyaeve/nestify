@@ -58,7 +58,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
@@ -264,7 +264,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
@@ -380,7 +380,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
