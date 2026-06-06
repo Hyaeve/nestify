@@ -1,5 +1,10 @@
 import { deleteJSON, getJSON } from './http'
 
+export interface CronPreviewPayload {
+  expression: string
+  next_runs: string[]
+}
+
 export interface RuleItem {
   id: number
   sort_order: number
@@ -105,6 +110,10 @@ export function fetchRules(params: FetchRulesParams = {}) {
 
 export function fetchRule(id: number) {
   return getJSON<RuleItem>(`/api/v1/rules/${id}`)
+}
+
+export function fetchCronPreview(expression: string) {
+  return getJSON<CronPreviewPayload>(`/api/v1/rules/cron-preview?expression=${encodeURIComponent(expression)}`)
 }
 
 export function createRule(payload: CreateRulePayload) {

@@ -17,6 +17,8 @@ import (
 	"nestify/backend/internal/model"
 	"nestify/backend/internal/pathbrowse"
 	"nestify/backend/internal/store/sqlite"
+
+	"github.com/robfig/cron/v3"
 )
 
 const sessionCookieName = "nestify_session"
@@ -135,6 +137,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/settings/admin-account", api.handleUpdateAdminAccount)
 	mux.HandleFunc("/api/v1/settings/rules-backup", api.handleRulesBackup)
 	mux.HandleFunc("/api/v1/rules", api.handleRules)
+	mux.HandleFunc("/api/v1/rules/cron-preview", api.handleRuleCronPreview)
 	mux.HandleFunc("/api/v1/rules/reorder", api.handleReorderRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
 
@@ -1355,6 +1358,54 @@ func (a *apiHandler) handleRuleByID(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+func (a *apiHandler) handleRuleCronPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	expression := strings.TrimSpace(r.URL.Query().Get("expression"))
+	if expression == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_CRON_EXPRESSION",
+			Message: "expression is required",
+		})
+		return
+	}
+
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	schedule, err := parser.Parse(expression)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_CRON_EXPRESSION",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	nextRuns := make([]string, 0, 3)
+	nextTime := time.Now()
+	for i := 0; i < 3; i++ {
+		nextTime = schedule.Next(nextTime)
+		nextRuns = append(nextRuns, nextTime.Format(time.RFC3339))
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Cron preview generated",
+		Data: map[string]any{
+			"expression": expression,
+			"next_runs":  nextRuns,
+		},
+	})
 }
 
 func (a *apiHandler) handleDeleteRule(w http.ResponseWriter, r *http.Request, id int64) {

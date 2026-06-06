@@ -58,7 +58,19 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              <el-tooltip v-else placement="top" effect="light" :show-after="2000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+                <template #content>
+                  <div class="cron-preview-tooltip">
+                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
+                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
+                    <template v-else>
+                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
+                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
+                    </template>
+                  </div>
+                </template>
+                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -252,7 +264,19 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              <el-tooltip v-else placement="top" effect="light" :show-after="2000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+                <template #content>
+                  <div class="cron-preview-tooltip">
+                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
+                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
+                    <template v-else>
+                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
+                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
+                    </template>
+                  </div>
+                </template>
+                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -356,7 +380,19 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <span v-else class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              <el-tooltip v-else placement="top" effect="light" :show-after="2000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+                <template #content>
+                  <div class="cron-preview-tooltip">
+                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
+                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
+                    <template v-else>
+                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
+                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
+                    </template>
+                  </div>
+                </template>
+                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
+              </el-tooltip>
             </div>
           </template>
         </el-table-column>
@@ -706,7 +742,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { prepareRuleExecution } from '../api/executions'
-import { createRule, deleteRule, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
+import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
   deleteRunHistoryItem,
@@ -845,6 +881,31 @@ function formatDateTime(value: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
+function getCronPreviewItems(ruleId: number) {
+  return cronPreviewCache[ruleId] || []
+}
+
+async function handleCronPreviewShow(ruleId: number, expression: string) {
+  const trimmed = expression.trim()
+  if (!trimmed || cronPreviewCache[ruleId]?.length) return
+
+  cronPreviewLoadingRuleId.value = ruleId
+  cronPreviewErrorRuleId.value = null
+  cronPreviewErrorMessage.value = ''
+
+  try {
+    const response = await fetchCronPreview(trimmed)
+    cronPreviewCache[ruleId] = response.data?.next_runs || []
+  } catch (error) {
+    cronPreviewErrorRuleId.value = ruleId
+    cronPreviewErrorMessage.value = error instanceof Error ? error.message : 'Cron 预览失败'
+  } finally {
+    if (cronPreviewLoadingRuleId.value === ruleId) {
+      cronPreviewLoadingRuleId.value = null
+    }
+  }
+}
+
 function historyStatusText(status: HistoryStatus) {
   if (status === 'success') return '成功'
   if (status === 'skip') return '跳过'
@@ -908,6 +969,10 @@ const linkTableRef = ref()
 const reorderingRuleType = ref<RuleListType | null>(null)
 const editingCronRuleId = ref<number | null>(null)
 const cronEditingValue = ref('')
+const cronPreviewLoadingRuleId = ref<number | null>(null)
+const cronPreviewErrorRuleId = ref<number | null>(null)
+const cronPreviewErrorMessage = ref('')
+const cronPreviewCache = reactive<Record<number, string[]>>({})
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -2146,6 +2211,9 @@ onMounted(() => {
 .editable-cron__text { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; border-radius: 6px; transition: background-color 0.2s ease, color 0.2s ease; }
 .editable-cron:hover .editable-cron__text { background: var(--el-fill-color-light); }
 .editable-cron__text.is-empty { color: var(--el-text-color-placeholder); }
+.cron-preview-tooltip { min-width: 220px; }
+.cron-preview-tooltip__title { margin-bottom: 6px; font-weight: 600; color: var(--el-text-color-primary); }
+.cron-preview-tooltip__item { line-height: 1.7; color: var(--el-text-color-regular); }
 
 .rules-page :deep(.rules-table .el-switch) {
   flex-shrink: 0;
