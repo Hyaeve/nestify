@@ -437,9 +437,6 @@
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item v-if="createForm.archive_mode === 'package'" label="匹配归档">
-          <el-switch v-model="createForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
-        </el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配归档规则</div></div>
@@ -449,9 +446,6 @@
             <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <el-form-item v-if="createForm.archive_mode === 'package'" label="单件归巢">
-          <el-switch v-model="createForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
-        </el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">单件归巢规则</div></div>
@@ -499,9 +493,6 @@
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item v-if="editForm.archive_mode === 'package'" label="匹配归档">
-          <el-switch v-model="editForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
-        </el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配归档规则</div></div>
@@ -511,9 +502,6 @@
             <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <el-form-item v-if="editForm.archive_mode === 'package'" label="单件归巢">
-          <el-switch v-model="editForm.package_options.single_file_nesting" inline-prompt active-text="开" inactive-text="关" />
-        </el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">单件归巢规则</div></div>

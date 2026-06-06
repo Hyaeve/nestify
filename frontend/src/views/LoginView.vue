@@ -1,14 +1,30 @@
 <template>
   <div class="login-page">
-    <div class="login-page__glow login-page__glow--left"></div>
-    <div class="login-page__glow login-page__glow--right"></div>
+    <div class="login-page__noise"></div>
+    <div class="login-page__spot login-page__spot--cyan"></div>
+    <div class="login-page__spot login-page__spot--pink"></div>
+    <div class="login-page__spot login-page__spot--violet"></div>
+    <div class="login-hero" aria-hidden="true">
+      <div class="login-hero__badge">AI 媒体归档应用基座</div>
+      <div class="login-hero__title">承载 AI 应用，管理数字资产，连接未来。</div>
+      <div class="login-hero__actions">
+        <span class="login-hero__button login-hero__button--primary">快速开始</span>
+        <span class="login-hero__button">GitHub</span>
+        <span class="login-hero__button">AtomGit</span>
+      </div>
+    </div>
+    <div class="login-page__logo-mark" aria-hidden="true">
+      <div class="login-page__logo-ring login-page__logo-ring--left"></div>
+      <div class="login-page__logo-ring login-page__logo-ring--right"></div>
+      <div class="login-page__logo-star"></div>
+    </div>
 
     <el-card class="login-card">
       <div class="login-brand">
         <img class="login-brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div>
           <div class="login-brand__title">Nestify 登录</div>
-          <div class="login-brand__subtitle">Version v3.7 · 媒体归档管理台</div>
+          <div class="login-brand__subtitle">Version v3.8 · 媒体归档管理台</div>
         </div>
       </div>
 
@@ -72,30 +88,25 @@ async function handleLogin() {
   min-height: 100vh;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
-   overflow: hidden;
-   isolation: isolate;
+  justify-content: flex-end;
+  padding: 24px 8vw;
+  overflow: hidden;
+  isolation: isolate;
   background:
-    radial-gradient(circle at 18% 16%, rgba(45, 212, 191, 0.18), transparent 24%),
-    radial-gradient(circle at 78% 12%, rgba(168, 85, 247, 0.2), transparent 22%),
-    radial-gradient(circle at 82% 82%, rgba(244, 114, 182, 0.18), transparent 26%),
-    linear-gradient(135deg, #07111a 0%, #111827 50%, #1b1330 100%);
+    radial-gradient(circle at 16% 22%, rgba(39, 201, 255, 0.12), transparent 20%),
+    radial-gradient(circle at 84% 18%, rgba(236, 72, 153, 0.18), transparent 24%),
+    radial-gradient(circle at 32% 86%, rgba(192, 38, 211, 0.18), transparent 18%),
+    linear-gradient(120deg, #0b1721 0%, #131f33 42%, #1b1730 70%, #22122a 100%);
 }
 
 .login-page::before {
   content: '';
   position: absolute;
-  inset: -18%;
+  inset: 0;
   z-index: 0;
   background:
-    radial-gradient(circle at 18% 78%, rgba(236, 72, 153, 0.42), transparent 22%),
-    radial-gradient(circle at 76% 24%, rgba(34, 211, 238, 0.34), transparent 20%),
-    radial-gradient(circle at 62% 72%, rgba(192, 132, 252, 0.26), transparent 24%),
-    radial-gradient(circle at 35% 30%, rgba(59, 130, 246, 0.22), transparent 26%);
-  filter: blur(92px) saturate(118%);
-  opacity: 0.95;
-  transform: scale(1.05);
+    linear-gradient(90deg, rgba(5, 10, 20, 0.48) 0%, rgba(5, 10, 20, 0.16) 35%, rgba(5, 10, 20, 0.08) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
 }
 
 .login-page::after {
@@ -104,32 +115,148 @@ async function handleLogin() {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.15' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='0.75'/%3E%3C/svg%3E");
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
+    linear-gradient(0deg, rgba(236, 72, 153, 0.08), transparent 28%);
+}
+
+.login-page__noise {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.9'/%3E%3C/svg%3E");
   background-size: 180px 180px;
-  opacity: 0.16;
   mix-blend-mode: screen;
 }
 
-.login-page__glow {
+.login-page__spot {
   position: absolute;
-  width: 280px;
-  height: 280px;
   border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.52;
   z-index: 0;
 }
 
-.login-page__glow--left {
-  top: 8%;
-  left: 8%;
-  background: rgba(59, 130, 246, 0.34);
+.login-page__spot--cyan {
+  top: -12%;
+  right: 22%;
+  width: 620px;
+  height: 620px;
+  background: radial-gradient(circle, rgba(28, 215, 224, 0.38) 0%, rgba(28, 215, 224, 0.08) 42%, transparent 72%);
 }
 
-.login-page__glow--right {
-  right: 10%;
-  bottom: 8%;
-  background: rgba(244, 114, 182, 0.28);
+.login-page__spot--pink {
+  right: -6%;
+  top: -4%;
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.42) 0%, rgba(244, 114, 182, 0.12) 38%, transparent 70%);
+}
+
+.login-page__spot--violet {
+  left: 8%;
+  bottom: -16%;
+  width: 860px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, rgba(168, 85, 247, 0.12) 40%, transparent 74%);
+}
+
+.login-hero {
+  position: absolute;
+  left: 72px;
+  top: 18%;
+  z-index: 1;
+  max-width: 760px;
+  color: #f8eaf1;
+}
+
+.login-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(236, 72, 153, 0.28);
+  background: rgba(17, 24, 39, 0.2);
+  color: #f472b6;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.login-hero__title {
+  margin-top: 54px;
+  font-size: clamp(48px, 5vw, 76px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  text-shadow: 0 6px 30px rgba(15, 23, 42, 0.18);
+}
+
+.login-hero__actions {
+  display: flex;
+  gap: 20px;
+  margin-top: 54px;
+  flex-wrap: wrap;
+}
+
+.login-hero__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 172px;
+  height: 60px;
+  padding: 0 28px;
+  border-radius: 999px;
+  background: rgba(18, 18, 24, 0.88);
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.18);
+}
+
+.login-hero__button--primary {
+  background: linear-gradient(135deg, #ff6ab7 0%, #ec5da9 100%);
+  color: #25111d;
+}
+
+.login-page__logo-mark {
+  position: absolute;
+  right: 11%;
+  top: 13%;
+  width: 520px;
+  height: 520px;
+  z-index: 1;
+}
+
+.login-page__logo-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.login-page__logo-ring--left {
+  clip-path: ellipse(33% 50% at 36% 50%);
+  background: linear-gradient(180deg, #1ce0dd 0%, #2ec6db 36%, #7c71ff 72%, #d538ff 100%);
+  transform: rotate(18deg);
+}
+
+.login-page__logo-ring--right {
+  clip-path: ellipse(33% 50% at 64% 50%);
+  background: linear-gradient(180deg, #ff66bb 0%, #f255bb 44%, #d84dd8 100%);
+  transform: rotate(18deg);
+}
+
+.login-page__logo-star {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(180deg, #3fe3ff 0%, #8f72ff 100%);
+  clip-path: polygon(50% 0%, 63% 36%, 100% 50%, 63% 64%, 50% 100%, 37% 64%, 0% 50%, 37% 36%);
+  transform: translate(-50%, -50%) rotate(8deg);
+  filter: drop-shadow(0 0 18px rgba(120, 119, 255, 0.35));
 }
 
 .login-card {
@@ -137,9 +264,10 @@ async function handleLogin() {
   z-index: 1;
   width: 420px;
   border-radius: 20px;
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  backdrop-filter: blur(18px);
+  margin-right: 8%;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 28px 60px rgba(2, 6, 23, 0.34);
 }
 
 .login-brand {
@@ -171,6 +299,32 @@ async function handleLogin() {
 
 .login-button {
   width: 100%;
+}
+
+@media (max-width: 1380px) {
+  .login-page {
+    justify-content: center;
+    padding: 32px;
+  }
+
+  .login-hero,
+  .login-page__logo-mark {
+    display: none;
+  }
+
+  .login-card {
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-card {
+    width: min(100%, 420px);
+  }
 }
 </style>
 
