@@ -1390,8 +1390,13 @@ func (a *apiHandler) handleRuleCronPreview(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	location, locErr := time.LoadLocation("Asia/Shanghai")
+	if locErr != nil {
+		location = time.FixedZone("CST", 8*60*60)
+	}
+
 	nextRuns := make([]string, 0, 3)
-	nextTime := time.Now()
+	nextTime := time.Now().In(location)
 	for i := 0; i < 3; i++ {
 		nextTime = schedule.Next(nextTime)
 		nextRuns = append(nextRuns, nextTime.Format(time.RFC3339))
