@@ -58,7 +58,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
@@ -264,7 +264,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
@@ -380,7 +380,7 @@
                   @blur="saveInlineCron(scope.row)"
                 />
               </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="1500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
+              <el-tooltip v-else placement="top" effect="light" :show-after="1000" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
                 <template #content>
                   <div class="cron-preview-tooltip">
                     <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
@@ -695,7 +695,7 @@
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template v-if="createLinkForm.filters_text">
+        <template>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -717,7 +717,7 @@
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template v-if="editLinkForm.filters_text">
+        <template>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
