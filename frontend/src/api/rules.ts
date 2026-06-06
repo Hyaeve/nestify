@@ -25,6 +25,7 @@ export interface RuleItem {
   match_filters_json?: string
   nest_filters_json?: string
   transform_rules_json?: string
+  transform_filters_json?: string
   last_run_status: string
   last_success_count: number
   last_skip_count: number
@@ -69,6 +70,7 @@ export interface CreateRulePayload {
   match_filters?: string[]
   nest_filters?: string[]
   transform_rules?: string[]
+  transform_filters?: string[]
 }
 
 export interface UpdateRulePayload extends CreateRulePayload {}

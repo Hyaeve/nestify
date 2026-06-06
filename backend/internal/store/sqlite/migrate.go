@@ -113,6 +113,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure transform_filters column")
+	if err := s.ensureRuleTransformFiltersColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure transform_filters column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure match_filters column")
 	if err := s.ensureRuleMatchFiltersColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure match_filters column failed: %v", err)
@@ -402,6 +408,35 @@ func (s *Store) ensureRuleTransformRulesColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN transform_rules_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
 		return fmt.Errorf("add transform_rules_json column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleTransformFiltersColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "transform_filters_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN transform_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add transform_filters_json column: %w", err)
 	}
 
 	return nil

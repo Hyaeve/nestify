@@ -18,6 +18,7 @@ type ExecuteRuleRequest struct {
 	MatchFilters      []string
 	NestFilters       []string
 	TransformRules    []string
+	TransformFilters  []string
 }
 
 type PreparedMode struct {

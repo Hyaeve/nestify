@@ -42,6 +42,8 @@ export interface FetchRunHistoryParams {
   keyword?: string
   status?: RunHistoryStatus
   archive_mode?: RunHistoryArchiveMode
+  sort_by?: 'name' | 'modified_at'
+  sort_order?: 'asc' | 'desc'
 }
 
 function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
@@ -65,6 +67,14 @@ function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
 
   if (params.archive_mode) {
     query.set('archive_mode', params.archive_mode)
+  }
+
+  if (params.sort_by) {
+    query.set('sort_by', params.sort_by)
+  }
+
+  if (params.sort_order) {
+    query.set('sort_order', params.sort_order)
   }
 
   const queryString = query.toString()

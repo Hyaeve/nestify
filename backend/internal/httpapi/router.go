@@ -683,6 +683,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
+		TransformFilters:  executor.ParseStringListJSON(rule.TransformFiltersJSON),
 	})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
@@ -711,6 +712,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    executor.ParseTransformRulesJSON(rule.TransformRulesJSON),
+		TransformFilters:  executor.ParseStringListJSON(rule.TransformFiltersJSON),
 	})
 	if err != nil {
 		writeInternalError(w, err)
@@ -815,8 +817,10 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 		status := strings.TrimSpace(r.URL.Query().Get("status"))
 		archiveMode := strings.TrimSpace(r.URL.Query().Get("archive_mode"))
+		sortBy := strings.TrimSpace(r.URL.Query().Get("sort_by"))
+		sortOrder := strings.TrimSpace(r.URL.Query().Get("sort_order"))
 
-		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode")
+		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode", "sort_by", "sort_order")
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{
 				Success: false,
@@ -827,7 +831,7 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if paged {
-			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode)
+			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, sortBy, sortOrder)
 			if err != nil {
 				writeInternalError(w, err)
 				return
@@ -1603,14 +1607,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1659,6 +1663,7 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 		if convertCustom && len(normalizeRuleFilters(transformRules)) == 0 {
 			return errors.New("transform rules are required when convert_matching_text is enabled")
 		}
+		_ = normalizeRuleFilters(transformFilters)
 	}
 	if archiveMode == "package" && packageOptions["match_archive"] && len(normalizeRuleFilters(matchFilters)) == 0 {
 		return errors.New("match_filters are required when match_archive is enabled")

@@ -19,7 +19,7 @@
         </div>
       </template>
 
-      <el-table v-if="archiveRules.length" ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
+      <el-table v-if="archiveRules.length" ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handleArchiveRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -125,25 +125,45 @@
         </div>
       </template>
 
-      <div class="history-toolbar">
-        <div class="history-summary">
-          <span>累计 {{ historySummary.total }}</span>
-          <span>今日 {{ historySummary.today }}</span>
-          <span>成功 {{ successCount }}</span>
-          <span>跳过 {{ skipCount }}</span>
-          <span>失败 {{ failedCount }}</span>
+        <div class="history-toolbar">
+          <div class="history-summary">
+            <span>累计 {{ historySummary.total }}</span>
+            <span>今日 {{ historySummary.today }}</span>
+            <span>成功 {{ successCount }}</span>
+            <span>跳过 {{ skipCount }}</span>
+            <span>失败 {{ failedCount }}</span>
+            <span class="history-summary__sort">
+              文件排序：
+              <el-select v-model="historySortBy" size="small" class="history-summary__sort-select" @change="handleHistorySortChange">
+                <el-option label="修改时间" value="modified_at" />
+                <el-option label="文件名称" value="name" />
+              </el-select>
+              <el-select v-model="historySortOrder" size="small" class="history-summary__sort-order-select" @change="handleHistorySortChange">
+                <el-option label="倒序" value="desc" />
+                <el-option label="正序" value="asc" />
+              </el-select>
+            </span>
+            <span class="history-summary__filter">
+              状态筛选：
+              <el-select v-model="historyStatusFilter" size="small" class="history-summary__filter-select" @change="handleHistoryStatusChange">
+                <el-option label="全部状态" value="all" />
+                <el-option label="成功" value="success" />
+                <el-option label="失败" value="failed" />
+                <el-option label="跳过" value="skip" />
+              </el-select>
+            </span>
+          </div>
+          <div class="history-search">
+            <el-input
+              v-model="historyKeywordInput"
+              clearable
+              placeholder="关键词搜索（规则名 / 摘要）"
+              @keyup.enter="handleHistorySearch"
+            />
+            <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
+            <el-button @click="resetHistorySearch">重置</el-button>
+          </div>
         </div>
-        <div class="history-search">
-          <el-input
-            v-model="historyKeywordInput"
-            clearable
-            placeholder="关键词搜索（规则名 / 摘要）"
-            @keyup.enter="handleHistorySearch"
-          />
-          <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
-          <el-button @click="resetHistorySearch">重置</el-button>
-        </div>
-      </div>
 
       <el-table v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
         <el-table-column label="规则 / 摘要" min-width="360">
@@ -196,7 +216,7 @@
         </div>
       </template>
 
-      <el-table v-if="purifyRules.length" ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
+      <el-table v-if="purifyRules.length" ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handlePurifyRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -221,10 +241,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="目标路径" min-width="320">
-          <template #default>—</template>
-        </el-table-column>
+        <el-table-column prop="source_dir" label="监控目录" min-width="420" show-overflow-tooltip />
         <el-table-column label="Cron" min-width="180">
           <template #default="scope">
             <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
@@ -304,7 +321,7 @@
         </div>
       </template>
 
-      <el-table v-if="linkRules.length" ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto">
+      <el-table v-if="linkRules.length" ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handleLinkRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -318,7 +335,7 @@
         <el-table-column label="模式" width="78">
           <template #default="scope">
             <el-tag :type="scope.row.link_mode === 'hard' ? 'danger' : 'primary'" effect="plain">
-              {{ scope.row.link_mode === 'hard' ? '硬链模式' : '软链模式' }}
+              {{ scope.row.link_mode === 'hard' ? '硬链' : '软链' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -427,6 +444,9 @@
         <el-form-item v-if="createForm.archive_mode === 'package'" label="匹配归档">
           <el-switch v-model="createForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
+        <el-form-item v-if="createForm.archive_mode === 'package'" label="父级重名">
+          <el-switch v-model="createForm.package_options.match_archive_parent_rename" :disabled="!createForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
+        </el-form-item>
         <el-form-item v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
         </el-form-item>
@@ -470,6 +490,9 @@
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item v-if="editForm.archive_mode === 'package'" label="匹配归档">
           <el-switch v-model="editForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
+        </el-form-item>
+        <el-form-item v-if="editForm.archive_mode === 'package'" label="父级重名">
+          <el-switch v-model="editForm.package_options.match_archive_parent_rename" :disabled="!editForm.package_options.match_archive" inline-prompt active-text="开" inactive-text="关" />
         </el-form-item>
         <el-form-item v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" label="匹配归档规则">
           <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" placeholder="一行一个关键词或扩展名；例如 mp4、cover。命中后直接转移到目标路径对应文件夹。" />
@@ -516,8 +539,11 @@
         <el-form-item v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
           <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
         </el-form-item>
-        <el-form-item v-if="createPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
+        <el-form-item v-if="createPurifyForm.archive_mode === 'transform'" label="匹配转换">
           <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
+        </el-form-item>
+        <el-form-item v-if="createPurifyForm.archive_mode === 'transform'" label="匹配过滤">
+          <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；仅对文件夹重命名生效，命中后会从文件夹名称中清除该字段。" />
         </el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -554,8 +580,11 @@
         <el-form-item v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs" label="白名单匹配">
           <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
         </el-form-item>
-        <el-form-item v-if="editPurifyForm.archive_mode === 'transform'" label="匹配转换规则">
+        <el-form-item v-if="editPurifyForm.archive_mode === 'transform'" label="匹配转换">
           <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
+        </el-form-item>
+        <el-form-item v-if="editPurifyForm.archive_mode === 'transform'" label="匹配过滤">
+          <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；仅对文件夹重命名生效，命中后会从文件夹名称中清除该字段。" />
         </el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -619,7 +648,7 @@ import {
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
-type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'single_file_nesting'
+type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text'
@@ -640,6 +669,7 @@ const packageModeOptions = [
   { key: 'cleanup_source_after_archive', label: '清理源文件', description: '确认已归档后再清理原目录中的已处理文件。' },
   { key: 'package_nested_folders', label: '嵌套打包', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
   { key: 'match_archive', label: '匹配归档', description: '按规则匹配文件名或扩展名，命中后直接转移到目标路径，不参与打包。' },
+  { key: 'match_archive_parent_rename', label: '父级重名', description: '仅在开启匹配归档时可用。未开启扁平归档时，命中文件会先归档到对应父目录后再按父目录名重命名；开启扁平归档时则直接归档到目标路径，并按命中文件自身父目录名重命名。若同一父级下有多个命中文件，则依次追加 -part1、-part2、-part3。' },
   { key: 'single_file_nesting', label: '单件归巢', description: '对监控目录下裸露文件按规则命中后，以文件名创建同名目录再转移进去。' },
 ] as const
 
@@ -660,7 +690,7 @@ const transformModeOptions = [
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false, single_file_nesting: false }
+  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false, match_archive_parent_rename: false, single_file_nesting: false }
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
@@ -836,6 +866,9 @@ const historyCurrentPage = ref(1)
 const historyTotal = ref(0)
 const historyKeywordInput = ref('')
 const historyKeyword = ref('')
+const historySortBy = ref<'name' | 'modified_at'>('modified_at')
+const historySortOrder = ref<'asc' | 'desc'>('desc')
+const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -908,6 +941,7 @@ const createPurifyForm = reactive({
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
+  transform_filters_text: '',
 })
 
 const editPurifyForm = reactive({
@@ -925,6 +959,7 @@ const editPurifyForm = reactive({
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
+  transform_filters_text: '',
 })
 
 const createLinkForm = reactive({
@@ -995,6 +1030,18 @@ function resetEditForm() {
   editForm.nest_filters_text = ''
 }
 
+watch(() => createForm.package_options.match_archive, (enabled) => {
+  if (!enabled) {
+    createForm.package_options.match_archive_parent_rename = false
+  }
+})
+
+watch(() => editForm.package_options.match_archive, (enabled) => {
+  if (!enabled) {
+    editForm.package_options.match_archive_parent_rename = false
+  }
+})
+
 function resetCreatePurifyForm() {
   createPurifyForm.name = ''
   createPurifyForm.enabled = true
@@ -1010,6 +1057,7 @@ function resetCreatePurifyForm() {
   createPurifyForm.filters_text = ''
   createPurifyForm.whitelist_text = ''
   createPurifyForm.transform_rules_text = ''
+  createPurifyForm.transform_filters_text = ''
 }
 
 function resetEditPurifyForm() {
@@ -1027,6 +1075,7 @@ function resetEditPurifyForm() {
   editPurifyForm.filters_text = ''
   editPurifyForm.whitelist_text = ''
   editPurifyForm.transform_rules_text = ''
+  editPurifyForm.transform_filters_text = ''
 }
 
 function resetCreateLinkForm() {
@@ -1040,6 +1089,7 @@ function resetCreateLinkForm() {
   createLinkForm.watch_debounce_ms = 2000
   createLinkForm.run_on_start = false
   createLinkForm.link_mode = 'soft'
+  createLinkForm.filters_text = ''
 }
 
 function resetEditLinkForm() {
@@ -1053,6 +1103,53 @@ function resetEditLinkForm() {
   editLinkForm.watch_debounce_ms = 2000
   editLinkForm.run_on_start = false
   editLinkForm.link_mode = 'soft'
+  editLinkForm.filters_text = ''
+}
+
+function buildDuplicateRuleName(name: string) {
+  const trimmed = name.trim()
+  return trimmed ? `${trimmed} - 副本` : '规则副本'
+}
+
+async function duplicateRule(rule: RuleItem, type: RuleListType) {
+  errorMessage.value = ''
+  try {
+    const payload = buildRuleUpdatePayload(rule, {
+      name: buildDuplicateRuleName(rule.name),
+    })
+    await createRule(payload)
+    ElMessage.success('规则复制成功')
+    await refreshRuleList(type)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '复制规则失败'
+  }
+}
+
+function handleRuleContextMenu(row: RuleItem, type: RuleListType, event: MouseEvent) {
+  event.preventDefault()
+  void ElMessageBox.confirm(`复制规则“${row.name}”？`, '复制规则', {
+    type: 'info',
+    confirmButtonText: '复制',
+    cancelButtonText: '取消',
+    distinguishCancelAndClose: true,
+  })
+    .then(() => duplicateRule(row, type))
+    .catch((error) => {
+      if (error === 'cancel' || error === 'close') return
+      errorMessage.value = error instanceof Error ? error.message : '复制规则失败'
+    })
+}
+
+function handleArchiveRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
+  handleRuleContextMenu(row, 'archive', event as MouseEvent)
+}
+
+function handlePurifyRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
+  handleRuleContextMenu(row, 'cleanup', event as MouseEvent)
+}
+
+function handleLinkRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
+  handleRuleContextMenu(row, 'link', event as MouseEvent)
 }
 
 function applyDefaultCronOnEnable(enabled: boolean, cronExpression: string) {
@@ -1354,6 +1451,9 @@ async function loadHistory() {
       page: historyCurrentPage.value,
       page_size: historyPageSize.value,
       keyword: historyKeyword.value || undefined,
+      status: historyStatusFilter.value === 'all' ? undefined : historyStatusFilter.value,
+      sort_by: historySortBy.value,
+      sort_order: historySortOrder.value,
     })
     historyItems.value = response.data?.items ?? []
     historyTotal.value = response.data?.total ?? 0
@@ -1441,6 +1541,16 @@ function resetHistorySearch() {
   historyKeyword.value = ''
   historyCurrentPage.value = 1
   void loadHistory()
+}
+
+function handleHistorySortChange() {
+	historyCurrentPage.value = 1
+	void loadHistory()
+}
+
+function handleHistoryStatusChange() {
+	historyCurrentPage.value = 1
+	void loadHistory()
 }
 
 async function submitCreateRule() {
@@ -1573,6 +1683,7 @@ async function openEditPurifyDialog(id: number) {
     editPurifyForm.filters_text = parseFiltersJSON(rule.filters_json)
     editPurifyForm.whitelist_text = parseFiltersJSON(rule.whitelist_json)
     editPurifyForm.transform_rules_text = parseFiltersJSON(rule.transform_rules_json)
+    editPurifyForm.transform_filters_text = parseFiltersJSON(rule.transform_filters_json)
     editPurifyDialogVisible.value = true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '净化规则详情加载失败'
@@ -1602,6 +1713,7 @@ async function submitCreatePurifyRule() {
       filters: createPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(createPurifyForm.filters_text) : [],
       whitelist: createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(createPurifyForm.whitelist_text) : [],
       transform_rules: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_rules_text) : [],
+      transform_filters: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_filters_text) : [],
     })
     ElMessage.success('净化规则创建成功')
     createPurifyDialogVisible.value = false
@@ -1640,6 +1752,7 @@ async function submitUpdatePurifyRule() {
       filters: editPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(editPurifyForm.filters_text) : [],
       whitelist: editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(editPurifyForm.whitelist_text) : [],
       transform_rules: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_rules_text) : [],
+      transform_filters: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_filters_text) : [],
     })
     ElMessage.success('净化规则更新成功')
     editPurifyDialogVisible.value = false
@@ -1898,6 +2011,9 @@ onMounted(() => {
 .history-actions { display: flex; gap: 8px; }
 .history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .history-summary { display: flex; flex-wrap: wrap; gap: 12px; color: var(--el-text-color-secondary); }
+.history-summary__sort { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.history-summary__sort-select { width: 132px; }
+.history-summary__sort-order-select { width: 96px; }
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }

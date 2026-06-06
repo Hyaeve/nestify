@@ -128,7 +128,7 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	return items, nil
 }
 
-func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode string) ([]model.RunHistoryItem, int, error) {
+func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -144,13 +144,14 @@ func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveM
 		return nil, 0, fmt.Errorf("count run history: %w", err)
 	}
 
+	orderClause := buildRunHistoryOrderClause(sortBy, sortOrder)
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
 	rows, err := s.db.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, status,
 		       processed_files, success_count, skip_count, failure_count,
 		       summary, started_at, updated_at, finished_at
 		FROM run_history`+whereClause+`
-		ORDER BY started_at DESC, id DESC
+		ORDER BY `+orderClause+`
 		LIMIT ? OFFSET ?
 	`, queryArgs...)
 	if err != nil {
@@ -172,6 +173,22 @@ func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	}
 
 	return items, total, nil
+}
+
+func buildRunHistoryOrderClause(sortBy, sortOrder string) string {
+	direction := "DESC"
+	if strings.EqualFold(strings.TrimSpace(sortOrder), "asc") {
+		direction = "ASC"
+	}
+
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "name":
+		return "LOWER(COALESCE(rule_name, '')) " + direction + ", started_at DESC, id DESC"
+	case "modified_at":
+		return "started_at " + direction + ", id DESC"
+	default:
+		return "started_at DESC, id DESC"
+	}
 }
 
 func (s *Store) GetRunHistorySummary() (model.RunHistorySummary, error) {

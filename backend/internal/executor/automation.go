@@ -171,9 +171,11 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		PackageOptions:    ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           ParseStringListJSON(rule.FiltersJSON),
+		Whitelist:         ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    ParseTransformRulesJSON(rule.TransformRulesJSON),
+		TransformFilters:  ParseStringListJSON(rule.TransformFiltersJSON),
 	})
 }
 
