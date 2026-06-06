@@ -520,6 +520,7 @@ func scanRule(s scanner) (model.Rule, error) {
 		&rule.MatchFiltersJSON,
 		&rule.NestFiltersJSON,
 		&rule.TransformRulesJSON,
+		&rule.TransformFiltersJSON,
 		&rule.LastRunStatus,
 		&rule.LastSuccessCount,
 		&rule.LastSkipCount,
