@@ -9,9 +9,19 @@ import (
 )
 
 type fileNameMatcher struct {
+	target  ruleMatcherTarget
 	literal string
 	regex   *regexp.Regexp
 }
+
+type ruleMatcherTarget int
+
+const (
+	ruleMatcherFileName ruleMatcherTarget = iota
+	ruleMatcherExtension
+	ruleMatcherDirectoryName
+	ruleMatcherGlobal
+)
 
 func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	stats := executionStats{}
@@ -73,6 +83,20 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 	for _, entry := range entries {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
+			if cleanupMatchingFiles && matchesFileName(entry.Name(), true, matchers) {
+				if err := os.RemoveAll(entryPath); err != nil {
+					stats.FailureCount++
+					s.persistRunHistory(runID, fmt.Sprintf("remove matched directory %s failed: %v", entryPath, err), stats)
+					s.appendLog(runID, "error", fmt.Sprintf("remove matched directory %s failed: %v", entryPath, err))
+				} else {
+					stats.ProcessedFiles++
+					stats.SuccessCount++
+					stats.CleanupRemovedDirs++
+					s.persistRunHistory(runID, fmt.Sprintf("removed matched directory %s", entryPath), stats)
+					s.appendLog(runID, "info", fmt.Sprintf("removed matched directory %s", entryPath))
+				}
+				continue
+			}
 			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, stats)
 			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), whitelist) {
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
@@ -91,7 +115,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			continue
 		}
 
-		if !cleanupMatchingFiles || !matchesFileName(entry.Name(), matchers) {
+		if !cleanupMatchingFiles || !matchesFileName(entry.Name(), false, matchers) {
 			continue
 		}
 
@@ -138,16 +162,29 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 		if value == "" {
 			continue
 		}
+		target := ruleMatcherFileName
+		if len(value) >= 3 && strings.HasPrefix(value, "/") && strings.HasSuffix(value, "/") {
+			target = ruleMatcherGlobal
+			value = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(value, "/"), "/"))
+		} else if strings.HasPrefix(value, "/") {
+			target = ruleMatcherDirectoryName
+			value = strings.TrimSpace(strings.TrimPrefix(value, "/"))
+		} else if strings.HasPrefix(value, ".") {
+			target = ruleMatcherExtension
+		}
+		if value == "" {
+			continue
+		}
 
 		if looksLikeRegexPattern(value) {
 			compiled, err := regexp.Compile(value)
 			if err == nil {
-				items = append(items, fileNameMatcher{regex: compiled})
+				items = append(items, fileNameMatcher{target: target, regex: compiled})
 				continue
 			}
 		}
 
-		items = append(items, fileNameMatcher{literal: strings.ToLower(value)})
+		items = append(items, fileNameMatcher{target: target, literal: strings.ToLower(value)})
 	}
 
 	return items
@@ -178,17 +215,67 @@ func looksLikeRegexPattern(value string) bool {
 	return strings.ContainsAny(value, `\^$[](){}|*+?`)
 }
 
-func matchesFileName(name string, matchers []fileNameMatcher) bool {
+func matchesFileName(name string, isDir bool, matchers []fileNameMatcher) bool {
 	normalized := strings.ToLower(strings.TrimSpace(name))
+	rawName := strings.TrimSpace(name)
+	ext := strings.ToLower(filepath.Ext(rawName))
+	extWithoutDot := strings.TrimPrefix(ext, ".")
+	stem := strings.TrimSuffix(rawName, filepath.Ext(rawName))
+	lowerStem := strings.ToLower(stem)
 	for _, matcher := range matchers {
+		candidates := make([]string, 0, 3)
+		literalCandidates := make([]string, 0, 3)
+		switch matcher.target {
+		case ruleMatcherDirectoryName:
+			if !isDir {
+				continue
+			}
+			candidates = append(candidates, rawName)
+			literalCandidates = append(literalCandidates, normalized)
+		case ruleMatcherExtension:
+			if isDir {
+				continue
+			}
+			candidates = append(candidates, ext, extWithoutDot)
+			literalCandidates = append(literalCandidates, ext, extWithoutDot)
+		case ruleMatcherGlobal:
+			if isDir {
+				candidates = append(candidates, rawName)
+				literalCandidates = append(literalCandidates, normalized)
+			} else {
+				candidates = append(candidates, stem, ext, extWithoutDot)
+				literalCandidates = append(literalCandidates, lowerStem, ext, extWithoutDot)
+			}
+		default:
+			if isDir {
+				continue
+			}
+			candidates = append(candidates, stem)
+			literalCandidates = append(literalCandidates, lowerStem)
+		}
 		if matcher.regex != nil {
-			if matcher.regex.MatchString(name) {
-				return true
+			for _, candidate := range candidates {
+				if matcher.regex.MatchString(candidate) {
+					return true
+				}
 			}
 			continue
 		}
-		if matcher.literal != "" && strings.Contains(normalized, matcher.literal) {
-			return true
+		if matcher.literal == "" {
+			continue
+		}
+		if matcher.target == ruleMatcherExtension {
+			for _, literalCandidate := range literalCandidates {
+				if literalCandidate == matcher.literal {
+					return true
+				}
+			}
+			continue
+		}
+		for _, literalCandidate := range literalCandidates {
+			if strings.Contains(literalCandidate, matcher.literal) {
+				return true
+			}
 		}
 	}
 
