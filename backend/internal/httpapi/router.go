@@ -1713,11 +1713,15 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	if archiveMode == "transform" {
 		convertTraditional := options["convert_traditional_to_simplified"]
 		convertCustom := options["convert_matching_text"]
-		if !convertTraditional && !convertCustom {
+		filterCustom := options["filter_matching_text"]
+		if !convertTraditional && !convertCustom && !filterCustom {
 			return errors.New("transform rule requires at least one transform option")
 		}
 		if convertCustom && len(normalizeRuleFilters(transformRules)) == 0 {
 			return errors.New("transform rules are required when convert_matching_text is enabled")
+		}
+		if filterCustom && len(normalizeRuleFilters(transformFilters)) == 0 {
+			return errors.New("transform filters are required when filter_matching_text is enabled")
 		}
 		_ = normalizeRuleFilters(transformFilters)
 	}

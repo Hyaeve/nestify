@@ -25,6 +25,11 @@ type renameTransformRule struct {
 	regex       *regexp.Regexp
 }
 
+type transformFilterMatcher struct {
+	literal string
+	regex   *regexp.Regexp
+}
+
 func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	stats := executionStats{}
 	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
@@ -42,7 +47,8 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 
 	convertTraditional := req.Options["convert_traditional_to_simplified"]
 	convertCustom := req.Options["convert_matching_text"]
-	if !convertTraditional && !convertCustom {
+	filterCustom := req.Options["filter_matching_text"]
+	if !convertTraditional && !convertCustom && !filterCustom {
 		stats.SkipCount = 1
 		stats.Summary = "no transform actions enabled"
 		return stats, nil
@@ -52,14 +58,22 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 	if err != nil {
 		return stats, err
 	}
-	transformFilters := parseTransformFilters(req.TransformFilters)
+	transformFilters, err := parseTransformFilters(req.TransformFilters)
+	if err != nil {
+		return stats, err
+	}
 	if convertCustom && len(rules) == 0 {
 		stats.SkipCount = 1
 		stats.Summary = "convert_matching_text enabled but no valid transform rules provided"
 		return stats, nil
 	}
+	if filterCustom && len(transformFilters) == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "filter_matching_text enabled but no valid transform filters provided"
+		return stats, nil
+	}
 
-	s.transformDirectory(runID, sourceDir, req.CompatibilityMode, convertTraditional, convertCustom, rules, transformFilters, &stats)
+	s.transformDirectory(runID, sourceDir, req.CompatibilityMode, convertTraditional, convertCustom, filterCustom, rules, transformFilters, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -75,7 +89,7 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 	return stats, nil
 }
 
-func (s *Service) transformDirectory(runID, currentPath, compatibilityMode string, convertTraditional, convertCustom bool, rules []renameTransformRule, transformFilters []string, stats *executionStats) {
+func (s *Service) transformDirectory(runID, currentPath, compatibilityMode string, convertTraditional, convertCustom, filterCustom bool, rules []renameTransformRule, transformFilters []transformFilterMatcher, stats *executionStats) {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
@@ -88,7 +102,7 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 	for _, entry := range entries {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			s.transformDirectory(runID, entryPath, compatibilityMode, convertTraditional, convertCustom, rules, transformFilters, stats)
+			s.transformDirectory(runID, entryPath, compatibilityMode, convertTraditional, convertCustom, filterCustom, rules, transformFilters, stats)
 		}
 	}
 
@@ -98,7 +112,7 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 
 	for _, entry := range entries {
 		oldName := entry.Name()
-		newName := applyRenameTransforms(oldName, entry.IsDir(), convertTraditional, convertCustom, rules, transformFilters)
+		newName := applyRenameTransforms(oldName, entry.IsDir(), convertTraditional, convertCustom, filterCustom, rules, transformFilters)
 		if oldName == newName || strings.TrimSpace(newName) == "" {
 			continue
 		}
@@ -166,19 +180,27 @@ func parseRenameTransformRules(items []string) ([]renameTransformRule, error) {
 	return rules, nil
 }
 
-func parseTransformFilters(items []string) []string {
-	filters := make([]string, 0, len(items))
+func parseTransformFilters(items []string) ([]transformFilterMatcher, error) {
+	filters := make([]transformFilterMatcher, 0, len(items))
 	for _, item := range items {
 		trimmed := strings.TrimSpace(item)
 		if trimmed == "" {
 			continue
 		}
-		filters = append(filters, trimmed)
+		matcher := transformFilterMatcher{literal: trimmed}
+		if looksLikeRegexPattern(trimmed) {
+			compiled, err := regexp.Compile(trimmed)
+			if err != nil {
+				return nil, fmt.Errorf("invalid transform filter regex %q: %w", trimmed, err)
+			}
+			matcher.regex = compiled
+		}
+		filters = append(filters, matcher)
 	}
-	return filters
+	return filters, nil
 }
 
-func applyRenameTransforms(name string, isDir bool, convertTraditional, convertCustom bool, rules []renameTransformRule, transformFilters []string) string {
+func applyRenameTransforms(name string, isDir bool, convertTraditional, convertCustom, filterCustom bool, rules []renameTransformRule, transformFilters []transformFilterMatcher) string {
 	result := name
 	if convertTraditional {
 		if converted, err := convertTraditionalToSimplified(result); err == nil {
@@ -194,9 +216,13 @@ func applyRenameTransforms(name string, isDir bool, convertTraditional, convertC
 			result = strings.ReplaceAll(result, rule.pattern, rule.replacement)
 		}
 	}
-	if isDir {
+	if isDir && filterCustom {
 		for _, filter := range transformFilters {
-			result = strings.ReplaceAll(result, filter, "")
+			if filter.regex != nil {
+				result = filter.regex.ReplaceAllString(result, "")
+				continue
+			}
+			result = strings.ReplaceAll(result, filter.literal, "")
 		}
 		result = strings.TrimSpace(result)
 	}

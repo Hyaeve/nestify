@@ -8,7 +8,7 @@
         <img class="login-brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div>
           <div class="login-brand__title">Nestify 登录</div>
-          <div class="login-brand__subtitle">Version v3.8 · 媒体归档管理台</div>
+          <div class="login-brand__subtitle">Version v3.9 · 媒体归档管理台</div>
         </div>
       </div>
 
@@ -135,8 +135,9 @@ async function handleLogin() {
 .login-card {
   position: relative;
   z-index: 1;
-  width: 420px;
-  border-radius: 20px;
+  width: 500px;
+  padding: 10px;
+  border-radius: 24px;
   background: rgba(15, 23, 42, 0.82);
   border: 1px solid rgba(148, 163, 184, 0.2);
   backdrop-filter: blur(18px);
@@ -145,32 +146,33 @@ async function handleLogin() {
 .login-brand {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 18px;
+  margin-bottom: 24px;
 }
 
 .login-brand__logo {
-  width: 58px;
-  height: 58px;
+  width: 64px;
+  height: 64px;
   border-radius: 16px;
   object-fit: cover;
   box-shadow: 0 16px 40px rgba(245, 185, 66, 0.2);
 }
 
 .login-brand__title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   color: #f8fafc;
 }
 
 .login-brand__subtitle {
   margin-top: 4px;
-  font-size: 13px;
+  font-size: 14px;
   color: #94a3b8;
 }
 
 .login-button {
   width: 100%;
+  min-height: 40px;
 }
 
 @media (max-width: 768px) {
@@ -179,7 +181,8 @@ async function handleLogin() {
   }
 
   .login-card {
-    width: min(100%, 420px);
+    width: min(100%, 500px);
+    padding: 6px;
   }
 }
 </style>

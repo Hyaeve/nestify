@@ -609,12 +609,14 @@
           <el-form-item class="transform-section-input">
             <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
           </el-form-item>
+        </template>
+        <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配过滤</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；仅对文件夹重命名生效，命中后会从文件夹名称中清除该字段。" />
+            <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；支持普通文本与正则；仅对文件夹重命名生效，命中后会从文件夹名称中清除匹配内容。" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -672,12 +674,14 @@
           <el-form-item class="transform-section-input">
             <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
           </el-form-item>
+        </template>
+        <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配过滤</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；仅对文件夹重命名生效，命中后会从文件夹名称中清除该字段。" />
+            <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；支持普通文本与正则；仅对文件夹重命名生效，命中后会从文件夹名称中清除匹配内容。" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -695,13 +699,11 @@
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template>
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤名单</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        </template>
+        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+        </button>
+        <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
@@ -717,13 +719,11 @@
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template>
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤名单</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        </template>
+        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+        </button>
+        <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
@@ -757,7 +757,7 @@ type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
 type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
-type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text'
+type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text'
 type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
@@ -794,6 +794,7 @@ const cleanupModeOptions = [
 const transformModeOptions = [
   { key: 'convert_traditional_to_simplified', label: '繁简转换', description: '将监控目录下文件和文件夹名称中的中文繁体字转换为简体字，其他字符保持不变。' },
   { key: 'convert_matching_text', label: '匹配转换', description: '按自定义规则重命名文件和文件夹名称，支持关键词部分匹配与正则转换。' },
+  { key: 'filter_matching_text', label: '匹配过滤', description: '按自定义规则过滤文件夹名称中的指定片段，支持普通文本与正则匹配，命中后会在重命名结果中移除匹配内容。' },
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
@@ -813,7 +814,7 @@ function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
 }
 
 function createDefaultTransformOptions(): Record<TransformOptionKey, boolean> {
-  return { convert_traditional_to_simplified: true, convert_matching_text: false }
+  return { convert_traditional_to_simplified: true, convert_matching_text: false, filter_matching_text: false }
 }
 
 function createDefaultPurifyOptions(): PurifyOptions {
@@ -1077,7 +1078,7 @@ const createPurifyForm = reactive({
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
-  options: createDefaultPurifyOptions(),
+  options: createDefaultPurifyOptions() as PurifyOptions,
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
@@ -1095,7 +1096,7 @@ const editPurifyForm = reactive({
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
-  options: createDefaultPurifyOptions(),
+  options: createDefaultPurifyOptions() as PurifyOptions,
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
@@ -1852,8 +1853,8 @@ async function submitCreatePurifyRule() {
       options: { ...createPurifyForm.options },
       filters: createPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(createPurifyForm.filters_text) : [],
       whitelist: createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(createPurifyForm.whitelist_text) : [],
-      transform_rules: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_rules_text) : [],
-      transform_filters: createPurifyForm.archive_mode === 'transform' ? parseFiltersText(createPurifyForm.transform_filters_text) : [],
+      transform_rules: createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.convert_matching_text ? parseFiltersText(createPurifyForm.transform_rules_text) : [],
+      transform_filters: createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text ? parseFiltersText(createPurifyForm.transform_filters_text) : [],
     })
     ElMessage.success('净化规则创建成功')
     createPurifyDialogVisible.value = false
@@ -1891,8 +1892,8 @@ async function submitUpdatePurifyRule() {
       options: { ...editPurifyForm.options },
       filters: editPurifyForm.archive_mode === 'cleanup' ? parseFiltersText(editPurifyForm.filters_text) : [],
       whitelist: editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs ? parseFiltersText(editPurifyForm.whitelist_text) : [],
-      transform_rules: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_rules_text) : [],
-      transform_filters: editPurifyForm.archive_mode === 'transform' ? parseFiltersText(editPurifyForm.transform_filters_text) : [],
+      transform_rules: editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.convert_matching_text ? parseFiltersText(editPurifyForm.transform_rules_text) : [],
+      transform_filters: editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text ? parseFiltersText(editPurifyForm.transform_filters_text) : [],
     })
     ElMessage.success('净化规则更新成功')
     editPurifyDialogVisible.value = false
