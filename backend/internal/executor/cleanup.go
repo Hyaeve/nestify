@@ -93,6 +93,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.ProcessedFiles++
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
+					stats.SizeBytes += dirSizeOrZero(entryPath)
 					s.persistRunHistory(runID, fmt.Sprintf("removed matched directory %s", entryPath), stats)
 					s.appendLog(runID, "info", fmt.Sprintf("removed matched directory %s", entryPath))
 				}
@@ -109,6 +110,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.ProcessedFiles++
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
+					stats.SizeBytes += dirSizeOrZero(entryPath)
 					s.persistRunHistory(runID, fmt.Sprintf("removed empty directory %s", entryPath), stats)
 					s.appendLog(runID, "info", fmt.Sprintf("removed empty directory %s", entryPath))
 				}
@@ -130,10 +132,25 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		stats.ProcessedFiles++
 		stats.SuccessCount++
 		stats.CleanupRemovedFiles++
+		stats.SizeBytes += fileSizeOrZero(entryPath)
 		s.persistRunHistory(runID, fmt.Sprintf("removed matched file %s", entryPath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("removed matched file %s", entryPath))
 		return nil
 	})
+}
+
+func dirSizeOrZero(path string) int64 {
+	var total int64
+	if err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		total += info.Size()
+		return nil
+	}); err != nil {
+		return 0
+	}
+	return total
 }
 
 func removeDirIfEmptyWithMode(compatibilityMode, path string) (bool, error) {

@@ -22,6 +22,7 @@ type executionStats struct {
 	MovedFiles          int
 	CleanupRemovedFiles int
 	CleanupRemovedDirs  int
+	SizeBytes           int64
 	HistoryEvents       int
 	Summary             string
 }
@@ -365,6 +366,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		stats.ProcessedFiles += len(imageFiles)
 		stats.SuccessCount++
 		stats.PackedVolumes++
+		stats.SizeBytes += fileSizeOrZero(archivePath)
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
 		for _, entry := range nonImageFiles {
@@ -509,6 +511,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		stats.ProcessedFiles += len(imageFiles)
 		stats.SuccessCount++
 		stats.PackedVolumes++
+		stats.SizeBytes += fileSizeOrZero(archivePath)
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
 		for _, entry := range nonImageFiles {
@@ -637,6 +640,7 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
 	verb := "copied"
 	if cleanupSourceAfterArchive {
 		verb = "moved"
@@ -655,7 +659,7 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
-	parentName := archiveParentRenameBaseName(targetDir, sourcePath)
+	parentName := archiveParentRenameBaseNameForSource(sourcePath, targetDir)
 	if parentName == "" {
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
@@ -690,6 +694,7 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
 	verb := "copied"
 	if cleanupSourceAfterArchive {
 		verb = "moved"
@@ -725,6 +730,7 @@ func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, sta
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
 	s.persistRunHistory(runID, fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath))
 	return nil
@@ -737,9 +743,18 @@ func (s *Service) removeFilteredArchiveFile(runID, sourcePath string, stats *exe
 
 	stats.ProcessedFiles++
 	stats.CleanupRemovedFiles++
+	stats.SizeBytes += fileSizeOrZero(sourcePath)
 	s.persistRunHistory(runID, fmt.Sprintf("removed filtered archive file %s", sourcePath), stats)
 	s.appendLog(runID, "info", fmt.Sprintf("removed filtered archive file %s", sourcePath))
 	return nil
+}
+
+func fileSizeOrZero(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return 0
+	}
+	return info.Size()
 }
 
 func (s *Service) moveCoverFiles(runID, basePath string, files []os.DirEntry, targetDir string, stats *executionStats) error {
@@ -764,28 +779,69 @@ func (s *Service) moveMatchedArchiveEntries(runID, basePath string, files []os.D
 	return nil
 }
 
-func archiveParentRenameBaseName(targetDir, sourcePath string) string {
-	cleanTargetDir := filepath.Clean(strings.TrimSpace(targetDir))
+func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
 	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
 	if cleanSourcePath == "" || cleanSourcePath == "." {
 		return ""
 	}
 
 	parentDir := filepath.Dir(cleanSourcePath)
-	if sameCleanPath(cleanTargetDir, parentDir) {
+	if cleanRoot == "" || cleanRoot == "." {
+		parentName := strings.TrimSpace(filepath.Base(parentDir))
+		if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+			return ""
+		}
+		return parentName
+	}
+
+	if sameCleanPath(cleanRoot, parentDir) {
 		return ""
 	}
 
-	relDir, err := filepath.Rel(cleanTargetDir, parentDir)
+	relDir, err := filepath.Rel(cleanRoot, parentDir)
 	if err == nil {
 		segments := splitArchivePathSegments(relDir)
 		if len(segments) > 0 {
-			return strings.TrimSpace(segments[0])
+			candidate := strings.TrimSpace(segments[0])
+			if candidate != "" && candidate != "." && candidate != ".." {
+				return candidate
+			}
 		}
 	}
 
 	parentName := strings.TrimSpace(filepath.Base(parentDir))
-	if parentName == "" || parentName == "." || parentName == string(filepath.Separator) {
+	if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+		return ""
+	}
+	return parentName
+}
+
+func archiveParentRenameBaseNameForSource(sourcePath, targetDir string) string {
+	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
+	cleanTarget := filepath.Clean(strings.TrimSpace(targetDir))
+	if cleanSource == "" || cleanSource == "." {
+		return ""
+	}
+
+	parentDir := filepath.Dir(cleanSource)
+	if sameCleanPath(parentDir, cleanTarget) {
+		return ""
+	}
+
+	relDir, err := filepath.Rel(cleanTarget, parentDir)
+	if err == nil {
+		segments := splitArchivePathSegments(relDir)
+		if len(segments) > 0 {
+			candidate := strings.TrimSpace(segments[0])
+			if candidate != "" && candidate != "." && candidate != ".." {
+				return candidate
+			}
+		}
+	}
+
+	parentName := strings.TrimSpace(filepath.Base(parentDir))
+	if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
 		return ""
 	}
 	return parentName
@@ -795,7 +851,7 @@ func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirE
 	archiveName := filepath.Base(volumePath) + ".cbz"
 	if parentRenameEnabled {
 		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
-			archiveName = parentName + ".cbz"
+			archiveName = parentName + "-part1.cbz"
 		}
 	}
 	return createCBZFromFiles(volumePath, files, targetDir, archiveName)

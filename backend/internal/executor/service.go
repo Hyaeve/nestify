@@ -344,12 +344,14 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 	successCount := run.SuccessCount
 	skipCount := run.SkipCount
 	failureCount := run.FailureCount
+	var sizeBytes int64
 	if stats != nil {
 		status = mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount)
 		processedFiles = stats.ProcessedFiles
 		successCount = stats.SuccessCount
 		skipCount = stats.SkipCount
 		failureCount = stats.FailureCount
+		sizeBytes = stats.SizeBytes
 	}
 
 	item := model.RunHistoryItem{
@@ -363,6 +365,7 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 		SuccessCount:   successCount,
 		SkipCount:      skipCount,
 		FailureCount:   failureCount,
+		SizeBytes:      sizeBytes,
 		Summary:        summary,
 		StartedAt:      run.StartedAt,
 		UpdatedAt:      run.UpdatedAt,

@@ -193,6 +193,9 @@
         <el-table-column label="时间" min-width="180">
           <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
         </el-table-column>
+        <el-table-column label="大小" width="120">
+          <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="90">
           <template #default="scope">
             <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
@@ -890,6 +893,23 @@ function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'wat
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+
+function formatHistorySize(sizeBytes?: number) {
+  const size = Number(sizeBytes || 0)
+  if (!Number.isFinite(size) || size <= 0) {
+    return '—'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = size
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
+  }
+
+  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(2)} ${units[index]}`
 }
 
 function getCronPreviewItems(ruleId: number) {

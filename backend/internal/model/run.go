@@ -63,6 +63,7 @@ type RunHistoryItem struct {
 	SuccessCount   int        `json:"success_count"`
 	SkipCount      int        `json:"skip_count"`
 	FailureCount   int        `json:"failure_count"`
+	SizeBytes      int64      `json:"size_bytes"`
 	Summary        string     `json:"summary"`
 	StartedAt      time.Time  `json:"started_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

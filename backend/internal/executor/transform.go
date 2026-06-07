@@ -147,6 +147,7 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 			s.appendLog(runID, "info", fmt.Sprintf("renamed directory %s -> %s", oldPath, newPath))
 		} else {
 			stats.CleanupRemovedFiles++
+			stats.SizeBytes += fileSizeOrZero(newPath)
 			s.persistRunHistory(runID, fmt.Sprintf("renamed file %s -> %s", oldPath, newPath), stats)
 			s.appendLog(runID, "info", fmt.Sprintf("renamed file %s -> %s", oldPath, newPath))
 		}
