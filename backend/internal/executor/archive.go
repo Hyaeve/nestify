@@ -794,7 +794,7 @@ func archiveParentRenameBaseName(targetDir, sourcePath string) string {
 func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool) (string, error) {
 	archiveName := filepath.Base(volumePath) + ".cbz"
 	if parentRenameEnabled {
-		if parentName := archiveParentRenameBaseName(targetDir, volumePath); parentName != "" {
+		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
 			archiveName = parentName + ".cbz"
 		}
 	}
