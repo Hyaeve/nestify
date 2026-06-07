@@ -7,11 +7,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 )
+
+var archivePartNumberPattern = regexp.MustCompile(`\d+`)
 
 type executionStats struct {
 	ProcessedFiles      int
@@ -659,7 +662,7 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
-	parentName := archiveParentRenameBaseNameForSource(sourcePath, targetDir)
+	parentName := archiveParentRenameBaseNameForSource(targetDir, sourcePath)
 	if parentName == "" {
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
@@ -817,19 +820,27 @@ func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
 	return parentName
 }
 
-func archiveParentRenameBaseNameForSource(sourcePath, targetDir string) string {
+func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
 	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
-	cleanTarget := filepath.Clean(strings.TrimSpace(targetDir))
 	if cleanSource == "" || cleanSource == "." {
 		return ""
 	}
 
 	parentDir := filepath.Dir(cleanSource)
-	if sameCleanPath(parentDir, cleanTarget) {
+	if cleanRoot == "" || cleanRoot == "." {
+		parentName := strings.TrimSpace(filepath.Base(parentDir))
+		if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+			return ""
+		}
+		return parentName
+	}
+
+	if sameCleanPath(parentDir, cleanRoot) {
 		return ""
 	}
 
-	relDir, err := filepath.Rel(cleanTarget, parentDir)
+	relDir, err := filepath.Rel(cleanRoot, parentDir)
 	if err == nil {
 		segments := splitArchivePathSegments(relDir)
 		if len(segments) > 0 {
@@ -851,10 +862,46 @@ func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirE
 	archiveName := filepath.Base(volumePath) + ".cbz"
 	if parentRenameEnabled {
 		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
-			archiveName = parentName + "-part1.cbz"
+			archiveName = buildParentRenamedCBZName(parentName, filepath.Base(volumePath))
 		}
 	}
 	return createCBZFromFiles(volumePath, files, targetDir, archiveName)
+}
+
+func buildParentRenamedCBZName(parentName, volumeName string) string {
+	trimmedParent := strings.TrimSpace(parentName)
+	if trimmedParent == "" {
+		return filepath.Base(strings.TrimSpace(volumeName)) + ".cbz"
+	}
+
+	partNumber := extractArchivePartNumber(volumeName)
+	if partNumber <= 0 {
+		partNumber = 1
+	}
+
+	return fmt.Sprintf("%s-part%d.cbz", trimmedParent, partNumber)
+}
+
+func extractArchivePartNumber(name string) int {
+	baseName := filepath.Base(strings.TrimSpace(name))
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		return 0
+	}
+
+	stem := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	matches := archivePartNumberPattern.FindAllString(stem, -1)
+	if len(matches) == 0 {
+		return 0
+	}
+
+	for index := len(matches) - 1; index >= 0; index-- {
+		value, err := strconv.Atoi(matches[index])
+		if err == nil && value > 0 {
+			return value
+		}
+	}
+
+	return 0
 }
 
 func buildArchiveDirectMatchers(filters []string) []fileNameMatcher {

@@ -322,6 +322,11 @@ func ParseTransformRulesJSON(raw string) []string {
 func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {
 	item := s.recordHistory(runID, summary, stats)
 	if stats != nil {
+		stats.ProcessedFiles = item.ProcessedFiles
+		stats.SuccessCount = item.SuccessCount
+		stats.SkipCount = item.SkipCount
+		stats.FailureCount = item.FailureCount
+		stats.SizeBytes = item.SizeBytes
 		stats.HistoryEvents++
 	}
 	if item == nil || s.store == nil {
