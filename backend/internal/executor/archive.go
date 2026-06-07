@@ -115,7 +115,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			if req.ArchiveMode == "package" && !flatArchive {
 				matchedTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
 			}
-			if err := s.moveMatchedArchiveFile(runID, entryPath, matchedTargetDir, req.ArchiveMode, matchArchiveParentRenameEnabled, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+			if err := s.moveMatchedArchiveFile(runID, sourceDir, entryPath, matchedTargetDir, req.ArchiveMode, matchArchiveParentRenameEnabled, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("move matched file %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched file %s failed: %v", entryPath, err))
@@ -363,7 +363,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			return err
 		}
 		stats.ProcessedFiles += len(imageFiles)
@@ -385,7 +385,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			return err
 		}
 		return nil
@@ -410,7 +410,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			if err := s.moveMatchedArchiveFile(runID, entryPath, targetSeriesDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+			if err := s.moveMatchedArchiveFile(runID, rootSourceDir, entryPath, targetSeriesDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("move matched series file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched series file %s failed: %v", entryPath, err))
@@ -508,7 +508,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			return err
 		}
 		stats.ProcessedFiles += len(imageFiles)
@@ -530,7 +530,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			return err
 		}
 		return nil
@@ -574,7 +574,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			if err := s.moveMatchedArchiveFile(runID, entryPath, fileTargetDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+			if err := s.moveMatchedArchiveFile(runID, rootSourceDir, entryPath, fileTargetDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err))
@@ -657,12 +657,12 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 	return nil
 }
 
-func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	if !parentRenameEnabled {
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
-	parentName := archiveParentRenameBaseNameForSource(targetDir, sourcePath)
+	parentName := archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath)
 	if parentName == "" {
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
@@ -672,7 +672,7 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 	}
 
 	ext := filepath.Ext(sourcePath)
-	targetPath, err := resolveParentRenamedPartPath(targetDir, parentName, filepath.Dir(sourcePath), ext)
+	targetPath, err := resolveParentRenamedPartPath(targetDir, parentName, filepath.Dir(sourcePath), ext, hasSiblingMatchedFiles(rootSourceDir, sourcePath))
 	if err != nil {
 		return err
 	}
@@ -763,10 +763,10 @@ func (s *Service) moveCoverFiles(runID, basePath string, files []os.DirEntry, ta
 	return nil
 }
 
-func (s *Service) moveMatchedArchiveEntries(runID, basePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+func (s *Service) moveMatchedArchiveEntries(runID, rootSourceDir, basePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	for _, entry := range files {
 		sourcePath := filepath.Join(basePath, entry.Name())
-		if err := s.moveMatchedArchiveFile(runID, sourcePath, targetDir, "package", parentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+		if err := s.moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, "package", parentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
 			return fmt.Errorf("move matched archive file %s: %w", sourcePath, err)
 		}
 	}
@@ -812,10 +812,17 @@ func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
 	return parentName
 }
 
-func resolveParentRenamedPartPath(targetDir, parentName, sourceDir, ext string) (string, error) {
+func resolveParentRenamedPartPath(targetDir, parentName, sourceDir, ext string, forcePartSuffix bool) (string, error) {
 	trimmedParent := strings.TrimSpace(parentName)
 	if trimmedParent == "" {
 		return filepath.Join(targetDir, filepath.Base(strings.TrimSpace(sourceDir))+ext), nil
+	}
+
+	if !forcePartSuffix && !parentRenamePartNameExists(targetDir, trimmedParent) {
+		plainPath := filepath.Join(targetDir, trimmedParent+ext)
+		if _, err := os.Stat(plainPath); os.IsNotExist(err) {
+			return plainPath, nil
+		}
 	}
 
 	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(sourceDir)
@@ -825,6 +832,36 @@ func resolveParentRenamedPartPath(targetDir, parentName, sourceDir, ext string) 
 	}
 
 	return filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", trimmedParent, partNumber, ext)), nil
+}
+
+func hasSiblingMatchedFiles(rootSourceDir, sourcePath string) bool {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanRoot == "" || cleanRoot == "." || cleanSource == "" || cleanSource == "." {
+		return false
+	}
+
+	baseParent := archiveParentRenameBaseNameForSource(cleanRoot, cleanSource)
+	if baseParent == "" {
+		return false
+	}
+
+	var found bool
+	filepath.WalkDir(cleanRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found || d == nil || d.IsDir() {
+			return nil
+		}
+		if sameCleanPath(path, cleanSource) {
+			return nil
+		}
+		if archiveParentRenameBaseNameForSource(cleanRoot, path) != baseParent {
+			return nil
+		}
+		found = true
+		return nil
+	})
+
+	return found
 }
 
 func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
