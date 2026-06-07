@@ -674,14 +674,10 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 	ext := filepath.Ext(sourcePath)
 	targetFileName := buildParentRenamedMatchedFileName(parentName, filepath.Dir(sourcePath), ext)
 	targetPath := filepath.Join(targetDir, targetFileName)
-	if _, err := os.Stat(targetPath); err == nil {
-		for index := 1; ; index++ {
-			candidate := filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", parentName, index, ext))
-			if _, statErr := os.Stat(candidate); os.IsNotExist(statErr) {
-				targetPath = candidate
-				break
-			}
-		}
+	if targetFileName == parentName+ext {
+		targetPath = nextParentRenamedPartPath(targetDir, parentName, ext)
+	} else if _, err := os.Stat(targetPath); err == nil {
+		targetPath = nextParentRenamedPartPath(targetDir, parentName, ext)
 	}
 
 	var err error
@@ -834,6 +830,15 @@ func buildParentRenamedMatchedFileName(parentName, sourceDir, ext string) string
 	return trimmedParent + ext
 }
 
+func nextParentRenamedPartPath(targetDir, parentName, ext string) string {
+	for index := 1; ; index++ {
+		candidate := filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", parentName, index, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
 func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
 	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
 	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
@@ -876,13 +881,13 @@ func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirE
 	archiveName := filepath.Base(volumePath) + ".cbz"
 	if parentRenameEnabled {
 		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
-			archiveName = buildParentRenamedCBZName(parentName, filepath.Base(volumePath))
+			archiveName = buildParentRenamedCBZName(targetDir, parentName, filepath.Base(volumePath))
 		}
 	}
 	return createCBZFromFiles(volumePath, files, targetDir, archiveName)
 }
 
-func buildParentRenamedCBZName(parentName, volumeName string) string {
+func buildParentRenamedCBZName(targetDir, parentName, volumeName string) string {
 	trimmedParent := strings.TrimSpace(parentName)
 	if trimmedParent == "" {
 		return filepath.Base(strings.TrimSpace(volumeName)) + ".cbz"
@@ -890,7 +895,12 @@ func buildParentRenamedCBZName(parentName, volumeName string) string {
 
 	partNumber := extractArchivePartNumber(volumeName)
 	if partNumber <= 0 {
-		partNumber = 1
+		for index := 1; ; index++ {
+			candidate := fmt.Sprintf("%s-part%d.cbz", trimmedParent, index)
+			if _, err := os.Stat(filepath.Join(targetDir, candidate)); os.IsNotExist(err) {
+				return candidate
+			}
+		}
 	}
 
 	return fmt.Sprintf("%s-part%d.cbz", trimmedParent, partNumber)
