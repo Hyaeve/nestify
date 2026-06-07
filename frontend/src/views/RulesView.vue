@@ -952,6 +952,9 @@ function normalizeRuleType(rule: RuleItem): RuleListType {
 function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePayload> = {}): UpdateRulePayload {
   const ruleType = normalizeRuleType(rule)
   const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
+  const purifyOptions = ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : null
+  const transformRules = parseFiltersText(parseFiltersJSON(rule.transform_rules_json))
+  const transformFilters = parseFiltersText(parseFiltersJSON(rule.transform_filters_json))
 
   return {
     name: rule.name,
@@ -968,7 +971,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
-    options: ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : {},
+    options: purifyOptions ?? {},
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
       ? normalizeFixedPackageOptions(parseOptionJSON(rule.package_options_json, createDefaultPackageOptions()))
       : {},
@@ -979,6 +982,8 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     whitelist: parseFiltersText(parseFiltersJSON(rule.whitelist_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
     nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
+    transform_rules: ruleType === 'cleanup' && rule.archive_mode === 'transform' && purifyOptions?.convert_matching_text ? transformRules : [],
+    transform_filters: ruleType === 'cleanup' && rule.archive_mode === 'transform' && purifyOptions?.filter_matching_text ? transformFilters : [],
     ...overrides,
   }
 }
