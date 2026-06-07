@@ -347,7 +347,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
-		archivePath, err := createCBZFromFiles(seriesPath, imageFiles, targetSeriesDir, filepath.Base(seriesPath)+".cbz")
+		archivePath, err := createPackageCBZFromFiles(rootSourceDir, seriesPath, imageFiles, targetSeriesDir, matchArchiveParentRenameEnabled)
 		if err != nil {
 			return err
 		}
@@ -491,7 +491,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
-		archivePath, err := createCBZFromFiles(volumePath, imageFiles, targetDir, filepath.Base(volumePath)+".cbz")
+		archivePath, err := createPackageCBZFromFiles(rootSourceDir, volumePath, imageFiles, targetDir, matchArchiveParentRenameEnabled)
 		if err != nil {
 			return err
 		}
@@ -655,8 +655,8 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
-	parentName := strings.TrimSpace(filepath.Base(filepath.Dir(sourcePath)))
-	if parentName == "" || parentName == "." || parentName == string(filepath.Separator) {
+	parentName := archiveParentRenameBaseName(targetDir, sourcePath)
+	if parentName == "" {
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
@@ -762,6 +762,43 @@ func (s *Service) moveMatchedArchiveEntries(runID, basePath string, files []os.D
 	}
 
 	return nil
+}
+
+func archiveParentRenameBaseName(targetDir, sourcePath string) string {
+	cleanTargetDir := filepath.Clean(strings.TrimSpace(targetDir))
+	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSourcePath == "" || cleanSourcePath == "." {
+		return ""
+	}
+
+	parentDir := filepath.Dir(cleanSourcePath)
+	if sameCleanPath(cleanTargetDir, parentDir) {
+		return ""
+	}
+
+	relDir, err := filepath.Rel(cleanTargetDir, parentDir)
+	if err == nil {
+		segments := splitArchivePathSegments(relDir)
+		if len(segments) > 0 {
+			return strings.TrimSpace(segments[0])
+		}
+	}
+
+	parentName := strings.TrimSpace(filepath.Base(parentDir))
+	if parentName == "" || parentName == "." || parentName == string(filepath.Separator) {
+		return ""
+	}
+	return parentName
+}
+
+func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool) (string, error) {
+	archiveName := filepath.Base(volumePath) + ".cbz"
+	if parentRenameEnabled {
+		if parentName := archiveParentRenameBaseName(targetDir, volumePath); parentName != "" {
+			archiveName = parentName + ".cbz"
+		}
+	}
+	return createCBZFromFiles(volumePath, files, targetDir, archiveName)
 }
 
 func buildArchiveDirectMatchers(filters []string) []fileNameMatcher {
