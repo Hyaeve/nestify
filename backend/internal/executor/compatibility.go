@@ -6,7 +6,13 @@ import (
 	"time"
 )
 
-var compatibilityReadTicker = time.NewTicker(time.Second / 3)
+const (
+	compatibilityReadInterval      = 1500 * time.Millisecond
+	compatibilityBatchReadLimit    = 32
+	compatibilityBatchProcessLimit = 12
+)
+
+var compatibilityReadTicker = time.NewTicker(compatibilityReadInterval)
 
 func isCompatibilityMode(mode string) bool {
 	return strings.TrimSpace(mode) == "compatibility"
@@ -31,4 +37,36 @@ func entryInfoWithMode(mode string, entry os.DirEntry) (os.FileInfo, error) {
 		<-compatibilityReadTicker.C
 	}
 	return entry.Info()
+}
+
+func limitEntriesForMode(mode string, entries []os.DirEntry) []os.DirEntry {
+	if !isCompatibilityMode(mode) {
+		return entries
+	}
+	if len(entries) <= compatibilityBatchReadLimit {
+		return entries
+	}
+	return entries[:compatibilityBatchReadLimit]
+}
+
+func processEntriesForMode(mode string, entries []os.DirEntry, handler func(os.DirEntry) error) error {
+	if !isCompatibilityMode(mode) {
+		for _, entry := range entries {
+			if err := handler(entry); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for i, entry := range entries {
+		if i > 0 && i%compatibilityBatchProcessLimit == 0 {
+			<-compatibilityReadTicker.C
+		}
+		if err := handler(entry); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

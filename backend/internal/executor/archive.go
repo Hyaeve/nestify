@@ -63,6 +63,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	if err != nil {
 		return stats, fmt.Errorf("read source dir: %w", err)
 	}
+	entries = limitEntriesForMode(req.CompatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount = 1
 		stats.Summary = "source directory is empty"
@@ -87,13 +88,13 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	} else if req.ArchiveMode == "collect" {
 		cleanupSourceAfterArchive = collectRemoveSourceEnabled
 	}
-	for _, entry := range entries {
+	err = processEntriesForMode(req.CompatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			stats.SkipCount++
 			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), &stats)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
-			continue
+			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
 			if err := s.removeFilteredArchiveFile(runID, entryPath, &stats); err != nil {
@@ -103,7 +104,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			} else {
 				stats.SkipCount++
 			}
-			continue
+			return nil
 		}
 		if matchArchiveEnabled && !entry.IsDir() && matchesArchiveDirectly(sourceDir, entryPath, directMatchers) {
 			matchedTargetDir := targetDir
@@ -115,7 +116,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				s.persistRunHistory(runID, fmt.Sprintf("move matched file %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched file %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 		if singleFileNestingEnabled && !entry.IsDir() && matchesArchiveDirectly(sourceDir, entryPath, nestMatchers) {
 			if err := s.moveLooseFileToOwnDir(runID, entryPath, targetDir, &stats); err != nil {
@@ -123,7 +124,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				s.persistRunHistory(runID, fmt.Sprintf("nest matched file %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("nest matched file %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 		if entry.IsDir() {
 			targetSeriesDir := filepath.Join(targetDir, entry.Name())
@@ -135,7 +136,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 
 		if err := s.moveLooseFile(runID, entryPath, targetDir, req.ArchiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
@@ -143,6 +144,10 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			s.persistRunHistory(runID, fmt.Sprintf("move file %s failed: %v", entryPath, err), &stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move file %s failed: %v", entryPath, err))
 		}
+		return nil
+	})
+	if err != nil {
+		return stats, err
 	}
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
@@ -210,18 +215,19 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 	if err != nil {
 		return fmt.Errorf("read link directory %s: %w", currentPath, err)
 	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
 
 	sortEntriesNaturally(entries)
-	for _, entry := range entries {
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		sourcePath := filepath.Join(currentPath, entry.Name())
 		relPath, relErr := filepath.Rel(rootPath, sourcePath)
 		if relErr != nil {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("resolve relative path for %s failed: %v", sourcePath, relErr))
-			continue
+			return nil
 		}
 		if relPath == "." {
-			continue
+			return nil
 		}
 
 		targetPath := filepath.Join(targetRoot, relPath)
@@ -229,53 +235,52 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 			if matchesFileName(entry.Name(), true, matchers) {
 				stats.SkipCount++
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted directory %s", sourcePath))
-				continue
+				return nil
 			}
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
 				stats.FailureCount++
 				s.appendLog(runID, "error", fmt.Sprintf("create link target directory %s failed: %v", targetPath, err))
-				continue
+				return nil
 			}
 			if err := s.linkDirectory(runID, rootPath, sourcePath, targetRoot, linkMode, compatibilityMode, matchers, stats); err != nil {
 				return err
 			}
-			continue
+			return nil
 		}
 
 		if matchesFileName(entry.Name(), entry.IsDir(), matchers) {
 			stats.SkipCount++
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted file %s", sourcePath))
-			continue
+			return nil
 		}
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("create link parent directory %s failed: %v", filepath.Dir(targetPath), err))
-			continue
+			return nil
 		}
 
 		if _, err := os.Lstat(targetPath); err == nil {
 			stats.SkipCount++
 			s.appendLog(runID, "info", fmt.Sprintf("skipped existing link target %s", targetPath))
-			continue
+			return nil
 		} else if !os.IsNotExist(err) {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("inspect link target %s failed: %v", targetPath, err))
-			continue
+			return nil
 		}
 
 		if err := createFileLink(sourcePath, targetPath, linkMode); err != nil {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("create link %s -> %s failed: %v", targetPath, sourcePath, err))
-			continue
+			return nil
 		}
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
 		s.appendLog(runID, "info", fmt.Sprintf("created link %s -> %s", targetPath, sourcePath))
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func createFileLink(sourcePath, targetPath, linkMode string) error {
@@ -297,6 +302,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
 	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount++
 		s.persistRunHistory(runID, fmt.Sprintf("skipped empty series %s", seriesPath), stats)
@@ -311,22 +317,22 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	matchedFiles := make([]os.DirEntry, 0, len(entries))
 	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
-	for _, entry := range entries {
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
-				continue
+				return nil
 			}
 			hasSubdirs = true
-			continue
+			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
 			matchedFiles = append(matchedFiles, entry)
-			continue
+			return nil
 		}
 		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
 			coverFiles = append(coverFiles, entry)
-			continue
+			return nil
 		}
 		files = append(files, entry)
 		if isImageFile(entry.Name()) {
@@ -334,6 +340,10 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		} else {
 			nonImageFiles = append(nonImageFiles, entry)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
@@ -376,13 +386,13 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		return nil
 	}
 
-	for _, entry := range entries {
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			stats.SkipCount++
 			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), stats)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
-			continue
+			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
 			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
@@ -392,7 +402,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			} else {
 				stats.SkipCount++
 			}
-			continue
+			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
 			if err := s.moveMatchedArchiveFile(runID, entryPath, targetSeriesDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
@@ -400,21 +410,21 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 				s.persistRunHistory(runID, fmt.Sprintf("move matched series file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched series file %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 		if entry.IsDir() {
 			if archiveMode == "collect" && !collectRecursiveEnabled {
 				stats.SkipCount++
 				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
-				continue
+				return nil
 			}
 			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 
 		if err := s.moveLooseFile(runID, entryPath, targetSeriesDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats); err != nil {
@@ -422,6 +432,10 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			s.persistRunHistory(runID, fmt.Sprintf("move series file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move series file %s failed: %v", entryPath, err))
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -432,6 +446,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
 	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount++
 		s.persistRunHistory(runID, fmt.Sprintf("skipped empty volume %s", volumePath), stats)
@@ -446,22 +461,22 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	matchedFiles := make([]os.DirEntry, 0, len(entries))
 	coverFiles := make([]os.DirEntry, 0, len(entries))
 	hasSubdirs := false
-	for _, entry := range entries {
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
-				continue
+				return nil
 			}
 			hasSubdirs = true
-			continue
+			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
 			matchedFiles = append(matchedFiles, entry)
-			continue
+			return nil
 		}
 		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
 			coverFiles = append(coverFiles, entry)
-			continue
+			return nil
 		}
 		files = append(files, entry)
 		if isImageFile(entry.Name()) {
@@ -469,6 +484,10 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		} else {
 			nonImageFiles = append(nonImageFiles, entry)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
@@ -530,13 +549,13 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		}
 	}
 
-	for _, entry := range entries {
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			stats.SkipCount++
 			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), stats)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
-			continue
+			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
 			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
@@ -546,7 +565,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			} else {
 				stats.SkipCount++
 			}
-			continue
+			return nil
 		}
 		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
 			if err := s.moveMatchedArchiveFile(runID, entryPath, fileTargetDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
@@ -554,21 +573,21 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 				s.persistRunHistory(runID, fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 		if entry.IsDir() {
 			if archiveMode == "collect" && !collectRecursiveEnabled {
 				stats.SkipCount++
 				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
-				continue
+				return nil
 			}
 			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
 			}
-			continue
+			return nil
 		}
 
 		if err := s.moveLooseFile(runID, entryPath, fileTargetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats); err != nil {
@@ -576,6 +595,10 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			s.persistRunHistory(runID, fmt.Sprintf("move nested file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("move nested file %s failed: %v", entryPath, err))
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

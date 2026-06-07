@@ -78,9 +78,10 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		s.appendLog(runID, "error", fmt.Sprintf("read cleanup directory %s failed: %v", currentPath, err))
 		return
 	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
 
 	sortEntriesNaturally(entries)
-	for _, entry := range entries {
+	_ = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
 			if cleanupMatchingFiles && matchesFileName(entry.Name(), true, matchers) {
@@ -95,7 +96,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					s.persistRunHistory(runID, fmt.Sprintf("removed matched directory %s", entryPath), stats)
 					s.appendLog(runID, "info", fmt.Sprintf("removed matched directory %s", entryPath))
 				}
-				continue
+				return nil
 			}
 			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, stats)
 			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), whitelist) {
@@ -112,18 +113,18 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					s.appendLog(runID, "info", fmt.Sprintf("removed empty directory %s", entryPath))
 				}
 			}
-			continue
+			return nil
 		}
 
 		if !cleanupMatchingFiles || !matchesFileName(entry.Name(), false, matchers) {
-			continue
+			return nil
 		}
 
 		if err := os.Remove(entryPath); err != nil {
 			stats.FailureCount++
 			s.persistRunHistory(runID, fmt.Sprintf("remove file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("remove file %s failed: %v", entryPath, err))
-			continue
+			return nil
 		}
 
 		stats.ProcessedFiles++
@@ -131,7 +132,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		stats.CleanupRemovedFiles++
 		s.persistRunHistory(runID, fmt.Sprintf("removed matched file %s", entryPath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("removed matched file %s", entryPath))
-	}
+		return nil
+	})
 }
 
 func removeDirIfEmptyWithMode(compatibilityMode, path string) (bool, error) {

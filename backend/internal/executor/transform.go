@@ -97,44 +97,46 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 		s.appendLog(runID, "error", fmt.Sprintf("read transform directory %s failed: %v", currentPath, err))
 		return
 	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
 
 	sortEntriesNaturally(entries)
-	for _, entry := range entries {
+	_ = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
 			s.transformDirectory(runID, entryPath, compatibilityMode, convertTraditional, convertCustom, filterCustom, rules, transformFilters, stats)
 		}
-	}
+		return nil
+	})
 
 	sort.SliceStable(entries, func(i, j int) bool {
 		return len(entries[i].Name()) > len(entries[j].Name())
 	})
 
-	for _, entry := range entries {
+	_ = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		oldName := entry.Name()
 		newName := applyRenameTransforms(oldName, entry.IsDir(), convertTraditional, convertCustom, filterCustom, rules, transformFilters)
 		if oldName == newName || strings.TrimSpace(newName) == "" {
-			continue
+			return nil
 		}
 
 		oldPath := filepath.Join(currentPath, oldName)
 		newPath := filepath.Join(currentPath, newName)
 		if sameCleanPath(oldPath, newPath) {
-			continue
+			return nil
 		}
 
 		if _, statErr := os.Stat(newPath); statErr == nil {
 			stats.FailureCount++
 			s.persistRunHistory(runID, fmt.Sprintf("rename target already exists %s", newPath), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("rename target already exists %s", newPath))
-			continue
+			return nil
 		}
 
 		if err := os.Rename(oldPath, newPath); err != nil {
 			stats.FailureCount++
 			s.persistRunHistory(runID, fmt.Sprintf("rename %s failed: %v", oldPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("rename %s failed: %v", oldPath, err))
-			continue
+			return nil
 		}
 
 		stats.ProcessedFiles++
@@ -148,7 +150,8 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 			s.persistRunHistory(runID, fmt.Sprintf("renamed file %s -> %s", oldPath, newPath), stats)
 			s.appendLog(runID, "info", fmt.Sprintf("renamed file %s -> %s", oldPath, newPath))
 		}
-	}
+		return nil
+	})
 }
 
 func parseRenameTransformRules(items []string) ([]renameTransformRule, error) {
