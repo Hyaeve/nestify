@@ -26,8 +26,9 @@ type renameTransformRule struct {
 }
 
 type transformFilterMatcher struct {
-	literal string
-	regex   *regexp.Regexp
+	literal       string
+	regex         *regexp.Regexp
+	targetDirOnly bool
 }
 
 func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
@@ -191,11 +192,21 @@ func parseTransformFilters(items []string) ([]transformFilterMatcher, error) {
 		if trimmed == "" {
 			continue
 		}
-		matcher := transformFilterMatcher{literal: trimmed}
-		if looksLikeRegexPattern(trimmed) {
-			compiled, err := regexp.Compile(trimmed)
+		targetDirOnly := false
+		pattern := trimmed
+		if strings.HasPrefix(trimmed, "<-") && strings.HasSuffix(trimmed, "->") {
+			targetDirOnly = true
+			pattern = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<-"), "->"))
+			if pattern == "" {
+				continue
+			}
+		}
+
+		matcher := transformFilterMatcher{literal: pattern, targetDirOnly: targetDirOnly}
+		if looksLikeRegexPattern(pattern) {
+			compiled, err := regexp.Compile(pattern)
 			if err != nil {
-				return nil, fmt.Errorf("invalid transform filter regex %q: %w", trimmed, err)
+				return nil, fmt.Errorf("invalid transform filter regex %q: %w", pattern, err)
 			}
 			matcher.regex = compiled
 		}
@@ -220,8 +231,14 @@ func applyRenameTransforms(name string, isDir bool, convertTraditional, convertC
 			result = strings.ReplaceAll(result, rule.pattern, rule.replacement)
 		}
 	}
-	if isDir && filterCustom {
+	if filterCustom {
 		for _, filter := range transformFilters {
+			if filter.targetDirOnly && !isDir {
+				continue
+			}
+			if !filter.targetDirOnly && isDir {
+				continue
+			}
 			if filter.regex != nil {
 				result = filter.regex.ReplaceAllString(result, "")
 				continue

@@ -77,7 +77,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	sortEntriesNaturally(entries)
 	matchers := buildFileNameMatchers(req.Filters)
 	matchArchiveEnabled := req.ArchiveMode == "package" && req.PackageOptions["match_archive"]
-	matchArchiveParentRenameEnabled := req.ArchiveMode == "package" && matchArchiveEnabled && req.PackageOptions["match_archive_parent_rename"]
+	matchArchiveParentRenameEnabled := req.ArchiveMode == "package" && req.PackageOptions["match_archive_parent_rename"]
 	directMatchers := buildArchiveDirectMatchers(req.MatchFilters)
 	singleFileNestingEnabled := req.ArchiveMode == "package" && req.PackageOptions["single_file_nesting"]
 	nestMatchers := buildArchiveDirectMatchers(req.NestFilters)
