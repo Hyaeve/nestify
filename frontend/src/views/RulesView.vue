@@ -629,7 +629,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；支持普通文本与正则；仅对文件夹重命名生效，命中后会从文件夹名称中清除匹配内容。" />
+            <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -694,7 +694,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="一行一个；支持普通文本与正则；仅对文件夹重命名生效，命中后会从文件夹名称中清除匹配内容。" />
+            <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
@@ -786,7 +786,7 @@ const cleanupRuleMatcherPlaceholder = '文件匹配：待匹配\n扩展名匹配
 
 const packageModeOptions = [
   { key: 'match_archive', label: '匹配归档', description: '按四元规则匹配文件名、扩展名、文件夹名或全局规则，命中后直接转移到目标路径，不参与打包。' },
-  { key: 'match_archive_parent_rename', label: '父级重名', description: '需先开启匹配归档。\n命中项以父目录名重命名；扁平归档开启时直接输出到目标路径。\n同一父级多个命中项时，按数字顺序追加 -part1、-part2、-part3、-part4……' },
+  { key: 'match_archive_parent_rename', label: '父级重名', description: '可独立开启。\n对打包生成的 CBZ 按父目录名重命名；若同时开启匹配归档，则命中项也会按父目录名重命名。\n扁平归档开启时直接输出到目标路径；同一父级多个命中项时，按数字顺序追加 -part1、-part2、-part3、-part4……' },
   { key: 'flat_archive', label: '扁平归档', description: '勾选后直接输出到目标路径；取消勾选时默认额外套一层源文件夹后再生成 CBZ。' },
   { key: 'single_file_nesting', label: '单件归巢', description: '对监控目录下裸露文件按规则命中后，以文件名创建同名目录再转移进去。' },
   { key: 'package_nested_folders', label: '嵌套打包', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
@@ -1200,18 +1200,6 @@ function resetEditForm() {
   editForm.match_filters_text = ''
   editForm.nest_filters_text = ''
 }
-
-watch(() => createForm.package_options.match_archive, (enabled) => {
-  if (!enabled) {
-    createForm.package_options.match_archive_parent_rename = false
-  }
-})
-
-watch(() => editForm.package_options.match_archive, (enabled) => {
-  if (!enabled) {
-    editForm.package_options.match_archive_parent_rename = false
-  }
-})
 
 function resetCreatePurifyForm() {
   createPurifyForm.name = ''
@@ -2102,15 +2090,25 @@ async function toggleRuleEnabled(rule: RuleItem) {
   const ruleType = normalizeRuleType(rule)
   const nextEnabled = !rule.enabled
   const loadingSet = new Set(updatingRuleStatusIds.value)
+  let overrides: Partial<UpdateRulePayload> = { enabled: nextEnabled }
+
+  if (ruleType !== 'archive') {
+    const options = parseOptionJSON(rule.options_json, createDefaultPurifyOptions())
+    if (!nextEnabled && rule.archive_mode === 'transform' && options.filter_matching_text) {
+      overrides = {
+        ...overrides,
+        transform_filters: parseFiltersText(parseFiltersJSON(rule.transform_filters_json)),
+        transform_rules: options.convert_matching_text ? parseFiltersText(parseFiltersJSON(rule.transform_rules_json)) : [],
+      }
+    }
+  }
 
   loadingSet.add(rule.id)
   updatingRuleStatusIds.value = loadingSet
   errorMessage.value = ''
 
   try {
-    await updateRule(rule.id, buildRuleUpdatePayload(rule, {
-      enabled: nextEnabled,
-    }))
+    await updateRule(rule.id, buildRuleUpdatePayload(rule, overrides))
     ElMessage.success(nextEnabled ? '规则已启用' : '规则已停用')
     await refreshRuleList(ruleType)
   } catch (error) {
