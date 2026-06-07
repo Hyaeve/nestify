@@ -491,7 +491,12 @@
             <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <template>
+        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+        </button>
+        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -547,7 +552,12 @@
             <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <template>
+        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+        </button>
+        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
