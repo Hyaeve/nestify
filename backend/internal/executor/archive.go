@@ -672,15 +672,11 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 	}
 
 	ext := filepath.Ext(sourcePath)
-	targetFileName := buildParentRenamedMatchedFileName(parentName, filepath.Dir(sourcePath), ext)
-	targetPath := filepath.Join(targetDir, targetFileName)
-	if targetFileName == parentName+ext {
-		targetPath = nextParentRenamedPartPath(targetDir, parentName, ext)
-	} else if _, err := os.Stat(targetPath); err == nil {
-		targetPath = nextParentRenamedPartPath(targetDir, parentName, ext)
+	targetPath, err := resolveParentRenamedPartPath(targetDir, parentName, filepath.Dir(sourcePath), ext)
+	if err != nil {
+		return err
 	}
 
-	var err error
 	if cleanupSourceAfterArchive {
 		err = moveFile(sourcePath, targetPath)
 	} else {
@@ -816,27 +812,19 @@ func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
 	return parentName
 }
 
-func buildParentRenamedMatchedFileName(parentName, sourceDir, ext string) string {
+func resolveParentRenamedPartPath(targetDir, parentName, sourceDir, ext string) (string, error) {
 	trimmedParent := strings.TrimSpace(parentName)
 	if trimmedParent == "" {
-		return trimmedParent + ext
+		return filepath.Join(targetDir, filepath.Base(strings.TrimSpace(sourceDir))+ext), nil
 	}
 
-	partNumber := extractArchivePartNumber(filepath.Base(strings.TrimSpace(sourceDir)))
-	if partNumber > 0 {
-		return fmt.Sprintf("%s-part%d%s", trimmedParent, partNumber, ext)
+	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(sourceDir)
+	partNumber, err := allocateParentRenamePartNumber(targetDir, trimmedParent, preferredPartNumber, usePreferredPartNumber)
+	if err != nil {
+		return "", err
 	}
 
-	return trimmedParent + ext
-}
-
-func nextParentRenamedPartPath(targetDir, parentName, ext string) string {
-	for index := 1; ; index++ {
-		candidate := filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", parentName, index, ext))
-		if _, err := os.Stat(candidate); os.IsNotExist(err) {
-			return candidate
-		}
-	}
+	return filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", trimmedParent, partNumber, ext)), nil
 }
 
 func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
@@ -893,17 +881,135 @@ func buildParentRenamedCBZName(targetDir, parentName, volumeName string) string 
 		return filepath.Base(strings.TrimSpace(volumeName)) + ".cbz"
 	}
 
-	partNumber := extractArchivePartNumber(volumeName)
-	if partNumber <= 0 {
-		for index := 1; ; index++ {
-			candidate := fmt.Sprintf("%s-part%d.cbz", trimmedParent, index)
-			if _, err := os.Stat(filepath.Join(targetDir, candidate)); os.IsNotExist(err) {
-				return candidate
-			}
-		}
+	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(volumeName)
+	partNumber, err := allocateParentRenamePartNumber(targetDir, trimmedParent, preferredPartNumber, usePreferredPartNumber)
+	if err != nil {
+		return fmt.Sprintf("%s-part1.cbz", trimmedParent)
 	}
 
 	return fmt.Sprintf("%s-part%d.cbz", trimmedParent, partNumber)
+}
+
+func preferredArchivePartNumber(path string) (int, bool) {
+	baseName := filepath.Base(strings.TrimSpace(path))
+	partNumber := extractArchivePartNumber(baseName)
+	if partNumber <= 0 {
+		return 0, false
+	}
+
+	parentDir := filepath.Dir(strings.TrimSpace(path))
+	if parentDir == "" || parentDir == "." || parentDir == string(filepath.Separator) {
+		return 0, false
+	}
+
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return 0, false
+	}
+
+	numericNames := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name())
+		if archivePartNumberPattern.MatchString(name) {
+			numericNames = append(numericNames, name)
+		}
+	}
+
+	if !isStrictSequentialNumericNames(numericNames) {
+		return 0, false
+	}
+
+	return partNumber, true
+}
+
+func isStrictSequentialNumericNames(names []string) bool {
+	if len(names) == 0 {
+		return false
+	}
+
+	width := len(names[0])
+	numbers := make([]int, 0, len(names))
+	seen := make(map[int]struct{}, len(names))
+	for _, name := range names {
+		if len(name) != width || !archivePartNumberPattern.MatchString(name) {
+			return false
+		}
+		value, err := strconv.Atoi(name)
+		if err != nil || value <= 0 {
+			return false
+		}
+		if _, exists := seen[value]; exists {
+			return false
+		}
+		seen[value] = struct{}{}
+		numbers = append(numbers, value)
+	}
+
+	sort.Ints(numbers)
+	for index, value := range numbers {
+		if value != index+1 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func allocateParentRenamePartNumber(targetDir, parentName string, preferredPartNumber int, allowPreferred bool) (int, error) {
+	used, err := collectParentRenameUsedPartNumbers(targetDir, parentName)
+	if err != nil {
+		return 0, err
+	}
+
+	if allowPreferred && preferredPartNumber > 0 {
+		if _, exists := used[preferredPartNumber]; !exists {
+			return preferredPartNumber, nil
+		}
+	}
+
+	for index := 1; ; index++ {
+		if _, exists := used[index]; !exists {
+			return index, nil
+		}
+	}
+}
+
+func collectParentRenameUsedPartNumbers(targetDir, parentName string) (map[int]struct{}, error) {
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[int]struct{}{}, nil
+		}
+		return nil, fmt.Errorf("read target dir: %w", err)
+	}
+
+	used := make(map[int]struct{})
+	trimmedParent := strings.TrimSpace(parentName)
+	prefix := strings.ToLower(trimmedParent + "-part")
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		lowerName := strings.ToLower(name)
+		if !strings.HasPrefix(lowerName, prefix) {
+			continue
+		}
+
+		suffix := name[len(trimmedParent+"-part"):]
+		suffix = strings.TrimSuffix(suffix, filepath.Ext(suffix))
+		if !archivePartNumberPattern.MatchString(suffix) {
+			continue
+		}
+
+		partNumber, err := strconv.Atoi(suffix)
+		if err != nil || partNumber <= 0 {
+			continue
+		}
+		used[partNumber] = struct{}{}
+	}
+
+	return used, nil
 }
 
 func extractArchivePartNumber(name string) int {
