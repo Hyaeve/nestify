@@ -351,7 +351,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
-		archivePath, err := createPackageCBZFromFiles(rootSourceDir, seriesPath, imageFiles, targetSeriesDir, matchArchiveParentRenameEnabled)
+		archivePath, err := createPackageCBZFromFiles(rootSourceDir, seriesPath, imageFiles, targetSeriesDir, matchArchiveParentRenameEnabled, false)
 		if err != nil {
 			return err
 		}
@@ -496,7 +496,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	}
 
 	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
-		archivePath, err := createPackageCBZFromFiles(rootSourceDir, volumePath, imageFiles, targetDir, matchArchiveParentRenameEnabled)
+		archivePath, err := createPackageCBZFromFiles(rootSourceDir, volumePath, imageFiles, targetDir, matchArchiveParentRenameEnabled, shouldUsePlainParentCBZName(rootSourceDir, volumePath))
 		if err != nil {
 			return err
 		}
@@ -865,20 +865,29 @@ func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) stri
 	return parentName
 }
 
-func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool) (string, error) {
+func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool, preferPlainParentName bool) (string, error) {
 	archiveName := filepath.Base(volumePath) + ".cbz"
 	if parentRenameEnabled {
 		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
-			archiveName = buildParentRenamedCBZName(targetDir, parentName, filepath.Base(volumePath))
+			archiveName = buildParentRenamedCBZName(targetDir, parentName, filepath.Base(volumePath), preferPlainParentName)
 		}
 	}
 	return createCBZFromFiles(volumePath, files, targetDir, archiveName)
 }
 
-func buildParentRenamedCBZName(targetDir, parentName, volumeName string) string {
+func buildParentRenamedCBZName(targetDir, parentName, volumeName string, preferPlainParentName bool) string {
 	trimmedParent := strings.TrimSpace(parentName)
 	if trimmedParent == "" {
 		return filepath.Base(strings.TrimSpace(volumeName)) + ".cbz"
+	}
+
+	if preferPlainParentName {
+		plainName := trimmedParent + ".cbz"
+		if !parentRenamePartNameExists(targetDir, trimmedParent) {
+			if _, err := os.Stat(filepath.Join(targetDir, plainName)); os.IsNotExist(err) {
+				return plainName
+			}
+		}
 	}
 
 	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(volumeName)
@@ -888,6 +897,45 @@ func buildParentRenamedCBZName(targetDir, parentName, volumeName string) string 
 	}
 
 	return fmt.Sprintf("%s-part%d.cbz", trimmedParent, partNumber)
+}
+
+func shouldUsePlainParentCBZName(rootSourceDir, volumePath string) bool {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanVolume := filepath.Clean(strings.TrimSpace(volumePath))
+	if cleanRoot == "" || cleanRoot == "." || cleanVolume == "" || cleanVolume == "." {
+		return false
+	}
+
+	parentDir := filepath.Dir(cleanVolume)
+	if sameCleanPath(parentDir, cleanRoot) {
+		return false
+	}
+
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return false
+	}
+
+	visibleSubdirs := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		visibleSubdirs++
+		if visibleSubdirs > 1 {
+			return false
+		}
+	}
+
+	return visibleSubdirs == 1
+}
+
+func parentRenamePartNameExists(targetDir, parentName string) bool {
+	used, err := collectParentRenameUsedPartNumbers(targetDir, parentName)
+	if err != nil {
+		return true
+	}
+	return len(used) > 0
 }
 
 func preferredArchivePartNumber(path string) (int, bool) {
