@@ -14,7 +14,7 @@ import (
 	"unicode"
 )
 
-var archivePartNumberPattern = regexp.MustCompile(`\d+`)
+var archivePartNumberPattern = regexp.MustCompile(`^0*[1-9]\d*$`)
 
 type executionStats struct {
 	ProcessedFiles      int
@@ -672,7 +672,7 @@ func (s *Service) moveMatchedArchiveFile(runID, sourcePath, targetDir, archiveMo
 	}
 
 	ext := filepath.Ext(sourcePath)
-	targetFileName := parentName + ext
+	targetFileName := buildParentRenamedMatchedFileName(parentName, filepath.Dir(sourcePath), ext)
 	targetPath := filepath.Join(targetDir, targetFileName)
 	if _, err := os.Stat(targetPath); err == nil {
 		for index := 1; ; index++ {
@@ -820,6 +820,20 @@ func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
 	return parentName
 }
 
+func buildParentRenamedMatchedFileName(parentName, sourceDir, ext string) string {
+	trimmedParent := strings.TrimSpace(parentName)
+	if trimmedParent == "" {
+		return trimmedParent + ext
+	}
+
+	partNumber := extractArchivePartNumber(filepath.Base(strings.TrimSpace(sourceDir)))
+	if partNumber > 0 {
+		return fmt.Sprintf("%s-part%d%s", trimmedParent, partNumber, ext)
+	}
+
+	return trimmedParent + ext
+}
+
 func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
 	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
 	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
@@ -889,16 +903,13 @@ func extractArchivePartNumber(name string) int {
 	}
 
 	stem := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	matches := archivePartNumberPattern.FindAllString(stem, -1)
-	if len(matches) == 0 {
+	if !archivePartNumberPattern.MatchString(stem) {
 		return 0
 	}
 
-	for index := len(matches) - 1; index >= 0; index-- {
-		value, err := strconv.Atoi(matches[index])
-		if err == nil && value > 0 {
-			return value
-		}
+	value, err := strconv.Atoi(stem)
+	if err == nil && value > 0 {
+		return value
 	}
 
 	return 0
