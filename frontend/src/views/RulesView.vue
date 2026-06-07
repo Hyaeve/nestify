@@ -451,7 +451,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="createForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包归档</el-radio-button><el-radio-button value="collect">收集归档</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="createForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -491,7 +491,7 @@
             <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <template v-if="createForm.archive_mode === 'package' ? createForm.package_options.match_archive || createForm.package_options.single_file_nesting || createForm.filters_text : createForm.filters_text">
+        <template>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -507,7 +507,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="editForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包归档</el-radio-button><el-radio-button value="collect">收集归档</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="editForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -547,7 +547,7 @@
             <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
-        <template v-if="editForm.archive_mode === 'package' ? editForm.package_options.match_archive || editForm.package_options.single_file_nesting || editForm.filters_text : editForm.filters_text">
+        <template>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>

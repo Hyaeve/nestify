@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -54,8 +55,9 @@ func (s *Service) reloadAutomationLocked() error {
 	}
 
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-	cronRunner := cron.New(cron.WithParser(parser))
+	cronRunner := cron.New(cron.WithParser(parser), cron.WithLocation(time.Local))
 	hasCron := false
+	log.Printf("executor: cron scheduler location=%s", time.Local.String())
 
 	for _, rule := range rules {
 		if !rule.Enabled {
