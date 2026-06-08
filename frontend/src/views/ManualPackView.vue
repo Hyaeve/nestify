@@ -336,6 +336,7 @@ const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const selectedRows = ref<FileManagerEntry[]>([])
+const searchKeyword = ref('')
 const sortBy = ref<SortBy>('modified_at')
 const sortOrder = ref<SortOrder>('desc')
 const starredFolders = ref<string[]>([])
@@ -378,12 +379,19 @@ const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 
 const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
 const sortedEntries = computed(() => [...entries.value].sort(compareEntries))
+const filteredEntries = computed(() => {
+	const keyword = searchKeyword.value.trim().toLowerCase()
+	if (!keyword) {
+		return sortedEntries.value
+	}
+	return sortedEntries.value.filter((entry) => entry.name.toLowerCase().includes(keyword) || entry.path.toLowerCase().includes(keyword))
+})
 const pageSizeOptions = [25, 50, 100]
 const pageSize = ref(25)
 const currentPage = ref(1)
 const pagedEntries = computed(() => {
 	const start = (currentPage.value - 1) * pageSize.value
-	return sortedEntries.value.slice(start, start + pageSize.value)
+	return filteredEntries.value.slice(start, start + pageSize.value)
 })
 
 const pickerInitialPath = computed(() => {
@@ -1173,6 +1181,14 @@ onBeforeUnmount(() => {
   margin-bottom: 18px;
 }
 
+.toolbar-row__search {
+  margin-left: auto;
+}
+
+.toolbar-row__search-input {
+  width: 220px;
+}
+
 .toolbar-row__split {
   width: 1px;
   height: 28px;
@@ -1295,16 +1311,6 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.summary-row__search {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.summary-row__search-input {
-  width: 220px;
 }
 
 .summary-row__sort-select {
