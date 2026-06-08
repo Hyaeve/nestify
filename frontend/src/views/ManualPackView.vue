@@ -13,7 +13,7 @@
         <div class="toolbar-row">
           <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
           <el-button type="primary" @click="triggerUpload">上传</el-button>
-          <el-button :loading="loading" @click="reloadEntries">刷新</el-button>
+          <el-button class="toolbar-action toolbar-action--refresh" :loading="loading" @click="reloadEntries">刷新</el-button>
           <el-dropdown trigger="click" :disabled="recentVisitedPaths.length === 0" @command="handleRecentVisitedCommand">
             <el-button>最近访问</el-button>
             <template #dropdown>
@@ -1193,6 +1193,13 @@ onBeforeUnmount(() => {
   color: #1f9d8b;
   border-color: #9be7d7;
   background: #effcf8;
+}
+
+.toolbar-action--refresh:not(.is-disabled):hover,
+.toolbar-action--refresh:not(.is-disabled):focus-visible {
+  color: #e67e22;
+  border-color: #ffbf80;
+  background: #fff3e8;
 }
 
 .toolbar-action--copy:not(.is-disabled):hover,

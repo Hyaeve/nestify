@@ -374,9 +374,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
 		for _, entry := range nonImageFiles {
 			sourcePath := filepath.Join(seriesPath, entry.Name())
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("skipped non-image file %s", sourcePath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("skipped non-image file %s: not included in package archive", sourcePath))
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
 		}
 		return nil
 	}
@@ -519,9 +517,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
 		for _, entry := range nonImageFiles {
 			sourcePath := filepath.Join(volumePath, entry.Name())
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("skipped non-image file %s", sourcePath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("skipped non-image file %s: not included in package archive", sourcePath))
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
 		}
 		return nil
 	}
