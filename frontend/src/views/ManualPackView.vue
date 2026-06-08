@@ -23,14 +23,14 @@
             </template>
           </el-dropdown>
           <span class="toolbar-row__split" />
-          <el-button :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
-          <el-button :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
-          <el-button :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" @click="extractSelectedArchives()">解压</el-button>
-          <el-button type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
+          <el-button class="toolbar-action toolbar-action--move" :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
+          <el-button class="toolbar-action toolbar-action--copy" :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
+          <el-button class="toolbar-action toolbar-action--extract" :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" @click="extractSelectedArchives()">解压</el-button>
+          <el-button class="toolbar-action toolbar-action--collect" :disabled="!canCollectSelectedFolders || collecting" :loading="collecting" @click="collectSelectedFolders()">收集</el-button>
+          <el-button class="toolbar-action toolbar-action--delete" type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
           <span class="toolbar-row__split" />
           <el-button @click="openPicker('browse')">选择目录</el-button>
           <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
-          <el-button type="success" plain :loading="preflighting" @click="handlePreflight">执行预检</el-button>
         </div>
 
         <div class="path-row">
@@ -52,7 +52,7 @@
         <div class="summary-row">
           <span>当前目录：{{ currentPathDisplay }}</span>
           <span>已选择 {{ selectedCount }} 项</span>
-          <span>{{ entries.length }} 个项目</span>
+          <span>{{ sortedEntries.length }} 个项目</span>
           <span class="summary-row__sort">
             文件排序：
             <el-select v-model="sortBy" size="small" class="summary-row__sort-select">
@@ -65,13 +65,12 @@
               <el-option label="正序" value="asc" />
             </el-select>
           </span>
-          <span v-if="latestRun">最近任务：{{ latestRun.status }} / {{ latestRun.stage }}</span>
         </div>
 
         <el-table
           ref="tableRef"
           v-loading="loading"
-          :data="sortedEntries"
+          :data="pagedEntries"
           row-key="path"
           :row-class-name="getRowClassName"
           @selection-change="handleSelectionChange"
@@ -148,7 +147,19 @@
           </el-table-column>
         </el-table>
 
-        <div class="footer-count">{{ entries.length }} 个项目</div>
+        <div class="table-pagination">
+          <span class="footer-count">共 {{ sortedEntries.length }} 条</span>
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            background
+            layout="sizes, prev, pager, next"
+            :page-sizes="pageSizeOptions"
+            :total="sortedEntries.length"
+            @current-change="handleCurrentPageChange"
+            @size-change="handlePageSizeChange"
+          />
+        </div>
 
         <input ref="uploadInputRef" type="file" multiple class="file-upload-input" @change="handleUploadSelected" />
       </div>
@@ -209,9 +220,9 @@
     <el-dialog v-model="copyDialogVisible" title="复制所选项目" width="620px">
       <el-form label-position="top">
         <el-form-item label="目标目录">
-          <el-input v-model="copyTargetPath" placeholder="请输入或选择目标目录">
+          <el-input v-model="copyTargetPath" class="path-action-input" placeholder="请输入或选择目标目录">
             <template #append>
-              <el-button @click="openPicker('copy')">选择目录</el-button>
+              <el-button class="path-action-input__button" @click="openPicker('copy')">选择目录</el-button>
             </template>
           </el-input>
         </el-form-item>
@@ -230,9 +241,9 @@
     <el-dialog v-model="moveDialogVisible" title="移动所选项目" width="620px">
       <el-form label-position="top">
         <el-form-item label="目标目录">
-          <el-input v-model="moveTargetPath" placeholder="请输入或选择目标目录">
+          <el-input v-model="moveTargetPath" class="path-action-input" placeholder="请输入或选择目标目录">
             <template #append>
-              <el-button @click="openPicker('move')">选择目录</el-button>
+              <el-button class="path-action-input__button" @click="openPicker('move')">选择目录</el-button>
             </template>
           </el-input>
         </el-form-item>
@@ -251,9 +262,9 @@
     <el-dialog v-model="packDialogVisible" title="打包为 CBZ" width="620px">
       <el-form label-position="top">
         <el-form-item label="输出目录">
-          <el-input v-model="packOutputDir" placeholder="请输入或选择输出目录">
+          <el-input v-model="packOutputDir" class="path-action-input" placeholder="请输入或选择输出目录">
             <template #append>
-              <el-button @click="openPicker('pack')">选择目录</el-button>
+              <el-button class="path-action-input__button" @click="openPicker('pack')">选择目录</el-button>
             </template>
           </el-input>
         </el-form-item>
@@ -283,16 +294,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Document, Files, Folder, FolderOpened, MoreFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import {
-  fetchRunLogs,
-  prepareManualPreflight,
-  type ManualPreflightResult,
-  type RunInstance,
-  type RunLogEntry,
-} from '../api/executions'
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import {
   browseDirectories,
+  collectItems,
   copyItems,
   createFolder,
   deleteItems,
@@ -324,12 +329,9 @@ const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
 const pickerMode = ref<PickerMode>('browse')
 const loading = ref(false)
-const preflighting = ref(false)
 const extracting = ref(false)
+const collecting = ref(false)
 const errorMessage = ref('')
-const preflightResult = ref<ManualPreflightResult | null>(null)
-const latestRun = ref<RunInstance | null>(null)
-const latestLogs = ref<RunLogEntry[]>([])
 const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
@@ -373,8 +375,16 @@ const selectedCount = computed(() => selectedRows.value.length)
 const currentPathDisplay = computed(() => directoryPath.value || '未选择')
 const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => item.path)))
 const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
+const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
 const sortedEntries = computed(() => [...entries.value].sort(compareEntries))
+const pageSizeOptions = [25, 50, 100]
+const pageSize = ref(25)
+const currentPage = ref(1)
+const pagedEntries = computed(() => {
+	const start = (currentPage.value - 1) * pageSize.value
+	return sortedEntries.value.slice(start, start + pageSize.value)
+})
 
 const pickerInitialPath = computed(() => {
   switch (pickerMode.value) {
@@ -516,6 +526,15 @@ function compareByName(a: FileManagerEntry, b: FileManagerEntry) {
 
 function applySortOrder(result: number) {
   return sortOrder.value === 'asc' ? result : -result
+}
+
+function handleCurrentPageChange(page: number) {
+	currentPage.value = page
+}
+
+function handlePageSizeChange(size: number) {
+	pageSize.value = size
+	currentPage.value = 1
 }
 
 function compareByModifiedAt(a: FileManagerEntry, b: FileManagerEntry) {
@@ -733,6 +752,7 @@ async function openCurrentPath() {
     if (directoryPath.value) {
       persistRecentVisitedPath(directoryPath.value)
     }
+    currentPage.value = 1
     clearSelection()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '目录加载失败'
@@ -1001,6 +1021,16 @@ async function extractSelectedArchives(entry?: FileManagerEntry) {
     return
   }
 
+  try {
+    await ElMessageBox.confirm(`确认解压 ${items.length} 个压缩包到当前目录吗？`, '解压确认', {
+      type: 'warning',
+      confirmButtonText: '解压',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+
   extracting.value = true
   errorMessage.value = ''
 
@@ -1012,6 +1042,54 @@ async function extractSelectedArchives(entry?: FileManagerEntry) {
     errorMessage.value = error instanceof Error ? error.message : '解压失败'
   } finally {
     extracting.value = false
+  }
+}
+
+async function collectSelectedFolders(entry?: FileManagerEntry) {
+  const items = getSelection(entry)
+  if (items.length === 0) {
+    ElMessage.warning('请先选择文件夹')
+    return
+  }
+
+  const invalidItem = items.find((item) => !item.is_dir)
+  if (invalidItem) {
+    ElMessage.warning('收集功能仅支持文件夹')
+    return
+  }
+
+  let removeSubfolders = false
+
+  try {
+    const value = await ElMessageBox.prompt(
+      `确认收集 ${items.length} 个文件夹下的所有子文件到各自根目录吗？\n输入 yes 表示收集后删除子文件夹，直接确认则保留子文件夹。`,
+      '收集确认',
+      {
+        type: 'warning',
+        confirmButtonText: '开始收集',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true,
+        inputPlaceholder: '可留空，输入 yes 删除子文件夹',
+        inputValidator: (input) => input.trim() === '' || /^yes$/i.test(input.trim()),
+        inputErrorMessage: '仅支持留空或输入 yes',
+      },
+    )
+    removeSubfolders = /^yes$/i.test(value.value.trim())
+  } catch {
+    return
+  }
+
+  collecting.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await collectItems(items.map((item) => item.path), removeSubfolders)
+    ElMessage.success(`已完成 ${response.data?.total ?? items.length} 个文件夹的收集`)
+    await openCurrentPath()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '收集失败'
+  } finally {
+    collecting.value = false
   }
 }
 
@@ -1035,36 +1113,6 @@ async function removeItems(entry?: FileManagerEntry) {
     if (error instanceof Error && error.message) {
       errorMessage.value = error.message
     }
-  }
-}
-
-async function handlePreflight() {
-  if (!directoryPath.value) {
-    errorMessage.value = '请先选择目录'
-    return
-  }
-
-  preflighting.value = true
-  errorMessage.value = ''
-
-  try {
-    const response = await prepareManualPreflight(directoryPath.value)
-    preflightResult.value = response.data?.preflight ?? null
-    latestRun.value = response.data?.run ?? null
-
-    if (latestRun.value) {
-      const logsResponse = await fetchRunLogs(latestRun.value.id)
-      latestLogs.value = logsResponse.data?.items ?? []
-    }
-
-    ElMessage.success('目录预检完成')
-  } catch (error) {
-    preflightResult.value = null
-    latestRun.value = null
-    latestLogs.value = []
-    errorMessage.value = error instanceof Error ? error.message : '目录预检失败'
-  } finally {
-    preflighting.value = false
   }
 }
 
@@ -1129,6 +1177,50 @@ onBeforeUnmount(() => {
   width: 1px;
   height: 28px;
   background: var(--el-border-color-lighter);
+}
+
+.toolbar-action {
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toolbar-action:not(.is-disabled):hover,
+.toolbar-action:not(.is-disabled):focus-visible {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.toolbar-action--move:not(.is-disabled):hover,
+.toolbar-action--move:not(.is-disabled):focus-visible {
+  color: #1f9d8b;
+  border-color: #9be7d7;
+  background: #effcf8;
+}
+
+.toolbar-action--copy:not(.is-disabled):hover,
+.toolbar-action--copy:not(.is-disabled):focus-visible {
+  color: #2f6fd6;
+  border-color: #b7d8ff;
+  background: #edf7ff;
+}
+
+.toolbar-action--extract:not(.is-disabled):hover,
+.toolbar-action--extract:not(.is-disabled):focus-visible {
+  color: #b7791f;
+  border-color: #f5d27b;
+  background: #fff8dc;
+}
+
+.toolbar-action--collect:not(.is-disabled):hover,
+.toolbar-action--collect:not(.is-disabled):focus-visible {
+  color: #7c52c8;
+  border-color: #d9c2ff;
+  background: #f5efff;
+}
+
+.toolbar-action--delete:not(.is-disabled):hover,
+.toolbar-action--delete:not(.is-disabled):focus-visible {
+  color: #e35d6a;
+  border-color: #f4c2c8;
+  background: #fff1f3;
 }
 
 .path-row {
@@ -1298,10 +1390,18 @@ onBeforeUnmount(() => {
   color: #f59e0b;
 }
 
+.table-pagination {
+	margin-top: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
 .footer-count {
-  margin-top: 16px;
-  color: var(--text-secondary);
-  font-size: 14px;
+	color: var(--text-secondary);
+	font-size: 14px;
 }
 
 .pack-form__hint {
@@ -1309,6 +1409,22 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+:deep(.path-action-input .el-input-group__append) {
+  padding: 0;
+  overflow: hidden;
+}
+
+:deep(.path-action-input .el-input-group__append .el-button) {
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.path-action-input__button {
+  min-width: 110px;
 }
 
 .file-upload-input {

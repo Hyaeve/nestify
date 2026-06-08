@@ -128,6 +128,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/files/move", api.handleMoveItems)
 	mux.HandleFunc("/api/v1/files/delete", api.handleDeleteItems)
 	mux.HandleFunc("/api/v1/files/pack-cbz", api.handlePackCBZ)
+	mux.HandleFunc("/api/v1/files/collect", api.handleCollectItems)
 	mux.HandleFunc("/api/v1/files/extract", api.handleExtractArchives)
 	mux.HandleFunc("/api/v1/manual/preflight", api.handleManualPreflight)
 	mux.HandleFunc("/api/v1/executions/prepare-rule", api.handlePrepareRuleExecution)
@@ -172,6 +173,7 @@ type fileMutationRequest struct {
 	OutputDir        string   `json:"output_dir"`
 	ArchiveName      string   `json:"archive_name"`
 	NestSourceFolder *bool    `json:"nest_source_folder,omitempty"`
+	RemoveSubfolders bool     `json:"remove_subfolders"`
 }
 
 type updateAdminAccountRequest struct {
@@ -590,6 +592,32 @@ func (a *apiHandler) handleExtractArchives(w http.ResponseWriter, r *http.Reques
 	a.executor.RecordManualExtractRun(input.Paths, input.OutputDir, items)
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Archives extracted", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
+}
+
+func (a *apiHandler) handleCollectItems(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input fileMutationRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	items, err := a.pathBrowse.CollectItems(input.Paths, input.RemoveSubfolders)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "COLLECT_FAILED", Message: err.Error()})
+		return
+	}
+	a.executor.RecordManualCollectRun(input.Paths, items, input.RemoveSubfolders)
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "Items collected", Data: model.FileItemsMutationResponse{Items: items, Total: len(items)}})
 }
 
 func (a *apiHandler) handleManualPreflight(w http.ResponseWriter, r *http.Request) {

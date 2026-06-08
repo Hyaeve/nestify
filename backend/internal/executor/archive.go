@@ -334,7 +334,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			matchedFiles = append(matchedFiles, entry)
 			return nil
 		}
-		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
+		if archiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
 			coverFiles = append(coverFiles, entry)
 			return nil
 		}
@@ -479,7 +479,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			matchedFiles = append(matchedFiles, entry)
 			return nil
 		}
-		if archiveMode == "package" && isCoverImageFile(entry.Name()) {
+		if archiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
 			coverFiles = append(coverFiles, entry)
 			return nil
 		}
@@ -1596,6 +1596,8 @@ func isCoverImageFile(name string) bool {
 		return false
 	}
 
-	baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(name)), filepath.Ext(name))
+	lowerBaseName := strings.ToLower(filepath.Base(name))
+	lowerExt := strings.ToLower(filepath.Ext(name))
+	baseName := strings.TrimSuffix(lowerBaseName, lowerExt)
 	return strings.Contains(baseName, "cover")
 }

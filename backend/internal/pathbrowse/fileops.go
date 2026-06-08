@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -330,6 +331,87 @@ func (s *Service) ExtractArchives(paths []string, outputDir string) ([]string, e
 	}
 
 	return extractedPaths, nil
+}
+
+func (s *Service) CollectItems(paths []string, removeSubfolders bool) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("paths are required")
+	}
+
+	collectedRoots := make([]string, 0, len(paths))
+	for _, itemPath := range paths {
+		rootPath, err := s.resolveAllowedPath(itemPath)
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := os.Stat(rootPath)
+		if err != nil {
+			return nil, fmt.Errorf("stat collect root: %w", err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("%s 不是文件夹", filepath.Base(rootPath))
+		}
+
+		files, dirs, err := scanNestedFiles(rootPath)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, filePath := range files {
+			targetPath := uniqueDestinationPath(rootPath, filepath.Base(filePath))
+			if err := os.Rename(filePath, targetPath); err != nil {
+				if err := copyPathContents(filePath, targetPath); err != nil {
+					return nil, fmt.Errorf("collect file: %w", err)
+				}
+				if err := os.Remove(filePath); err != nil {
+					return nil, fmt.Errorf("remove source file after collect: %w", err)
+				}
+			}
+		}
+
+		if removeSubfolders {
+			sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+			for _, dirPath := range dirs {
+				if samePath(dirPath, rootPath) {
+					continue
+				}
+				if err := os.Remove(dirPath); err != nil && !os.IsNotExist(err) {
+					return nil, fmt.Errorf("remove subfolder: %w", err)
+				}
+			}
+		}
+
+		collectedRoots = append(collectedRoots, rootPath)
+	}
+
+	return collectedRoots, nil
+}
+
+func scanNestedFiles(rootPath string) ([]string, []string, error) {
+	files := make([]string, 0)
+	dirs := make([]string, 0)
+	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if samePath(path, rootPath) {
+			return nil
+		}
+		if info.IsDir() {
+			dirs = append(dirs, path)
+			return nil
+		}
+		if samePath(filepath.Dir(path), rootPath) {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("scan nested files: %w", err)
+	}
+	return files, dirs, nil
 }
 
 func (s *Service) resolveAllowedPath(path string) (string, error) {

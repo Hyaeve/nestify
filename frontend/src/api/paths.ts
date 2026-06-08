@@ -48,6 +48,7 @@ export interface FileMutationPayload {
 	output_dir?: string
 	archive_name?: string
 	nest_source_folder?: boolean
+	remove_subfolders?: boolean
 }
 
 export interface RenameItemPayload {
@@ -122,6 +123,13 @@ export function extractArchives(paths: string[], outputDir?: string) {
     paths,
     output_dir: outputDir || '',
   })
+}
+
+export function collectItems(paths: string[], removeSubfolders = false) {
+	return postJSON<FileMutationResult>('/api/v1/files/collect', {
+		paths,
+		remove_subfolders: removeSubfolders,
+	})
 }
 
 export async function uploadFiles(destinationPath: string, files: File[]): Promise<ApiResponse<FileMutationResult>> {

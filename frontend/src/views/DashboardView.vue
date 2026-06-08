@@ -95,7 +95,7 @@
 
           <el-card class="page-card dashboard-card task-preview-card">
             <div class="task-preview-card__header">
-              <h3 class="page-section-title">进行中任务预览</h3>
+              <h3 class="page-section-title">任务预览</h3>
               <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="plain" size="small">
                 {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
               </el-tag>
@@ -173,7 +173,7 @@ const formatMemorySummary = computed(() => {
 
 const totalRuleCount = computed(() => rules.value.length)
 const enabledRuleCount = computed(() => rules.value.filter((item) => item.enabled).length)
-const runningPreviewItems = computed(() => runningRuns.value.slice(0, 3))
+const runningPreviewItems = computed(() => runningRuns.value.slice(0, 2))
 
 const todayRunCount = computed(() => {
   const today = new Date()
