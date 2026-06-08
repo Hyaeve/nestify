@@ -143,6 +143,20 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			return nil
 		}
 
+		if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), &stats)
+			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+			return nil
+		}
+
+		if req.ArchiveMode == "package" {
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath), &stats)
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath))
+			return nil
+		}
+
 		if err := s.moveLooseFile(runID, entryPath, targetDir, req.ArchiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
 			stats.FailureCount++
 			s.persistRunHistory(runID, fmt.Sprintf("move file %s failed: %v", entryPath, err), &stats)
@@ -430,6 +444,18 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			return nil
 		}
 
+		if archiveMode == "package" && isImageFile(entry.Name()) {
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+			return nil
+		}
+
+		if archiveMode == "package" {
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: package mode only moves matched custom archive targets", entryPath))
+			return nil
+		}
+
 		if err := s.moveLooseFile(runID, entryPath, targetSeriesDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			stats.FailureCount++
 			s.persistRunHistory(runID, fmt.Sprintf("move series file %s failed: %v", entryPath, err), stats)
@@ -589,6 +615,18 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
 			}
+			return nil
+		}
+
+		if archiveMode == "package" && isImageFile(entry.Name()) {
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+			return nil
+		}
+
+		if archiveMode == "package" {
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: package mode only moves matched custom archive targets", entryPath))
 			return nil
 		}
 

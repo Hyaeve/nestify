@@ -298,7 +298,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Document, Files, Folder, FolderOpened, MoreFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -1074,23 +1074,31 @@ async function collectSelectedFolders(entry?: FileManagerEntry) {
     return
   }
 
-  let removeSubfolders = false
+  const removeSubfolders = ref(false)
 
   try {
-    const value = await ElMessageBox.prompt(
-      `确认收集 ${items.length} 个文件夹下的所有子文件到各自根目录吗？\n输入 yes 表示收集后删除子文件夹，直接确认则保留子文件夹。`,
+    await ElMessageBox.confirm(
+      h('div', { class: 'collect-confirm' }, [
+        h('div', { class: 'collect-confirm__text' }, `确认收集 ${items.length} 个文件夹下的所有子文件到各自根目录吗？`),
+        h('label', { class: 'collect-confirm__checkbox' }, [
+          h('input', {
+            type: 'checkbox',
+            checked: removeSubfolders.value,
+            onChange: (event: Event) => {
+              removeSubfolders.value = (event.target as HTMLInputElement).checked
+            },
+          }),
+          h('span', '是否删除子文件夹'),
+        ]),
+      ]),
       '收集确认',
       {
         type: 'warning',
         confirmButtonText: '开始收集',
         cancelButtonText: '取消',
         distinguishCancelAndClose: true,
-        inputPlaceholder: '可留空，输入 yes 删除子文件夹',
-        inputValidator: (input) => input.trim() === '' || /^yes$/i.test(input.trim()),
-        inputErrorMessage: '仅支持留空或输入 yes',
       },
     )
-    removeSubfolders = /^yes$/i.test(value.value.trim())
   } catch {
     return
   }
@@ -1099,7 +1107,7 @@ async function collectSelectedFolders(entry?: FileManagerEntry) {
   errorMessage.value = ''
 
   try {
-    const response = await collectItems(items.map((item) => item.path), removeSubfolders)
+    const response = await collectItems(items.map((item) => item.path), removeSubfolders.value)
     ElMessage.success(`已完成 ${response.data?.total ?? items.length} 个文件夹的收集`)
     await openCurrentPath()
   } catch (error) {
@@ -1440,6 +1448,24 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
+}
+
+:deep(.collect-confirm) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+:deep(.collect-confirm__text) {
+  line-height: 1.7;
+}
+
+:deep(.collect-confirm__checkbox) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  cursor: pointer;
 }
 
 :deep(.path-action-input .el-input-group__append) {
