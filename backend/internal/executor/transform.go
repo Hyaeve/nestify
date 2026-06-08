@@ -49,7 +49,8 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 	convertTraditional := req.Options["convert_traditional_to_simplified"]
 	convertCustom := req.Options["convert_matching_text"]
 	filterCustom := req.Options["filter_matching_text"]
-	if !convertTraditional && !convertCustom && !filterCustom {
+	mergeSameNameDirs := req.Options["merge_same_name_dirs"]
+	if !convertTraditional && !convertCustom && !filterCustom && !mergeSameNameDirs {
 		stats.SkipCount = 1
 		stats.Summary = "no transform actions enabled"
 		return stats, nil
@@ -74,7 +75,7 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 		return stats, nil
 	}
 
-	s.transformDirectory(runID, sourceDir, req.CompatibilityMode, convertTraditional, convertCustom, filterCustom, rules, transformFilters, &stats)
+	s.transformDirectory(runID, sourceDir, req.CompatibilityMode, convertTraditional, convertCustom, filterCustom, mergeSameNameDirs, rules, transformFilters, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -90,7 +91,7 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 	return stats, nil
 }
 
-func (s *Service) transformDirectory(runID, currentPath, compatibilityMode string, convertTraditional, convertCustom, filterCustom bool, rules []renameTransformRule, transformFilters []transformFilterMatcher, stats *executionStats) {
+func (s *Service) transformDirectory(runID, currentPath, compatibilityMode string, convertTraditional, convertCustom, filterCustom, mergeSameNameDirs bool, rules []renameTransformRule, transformFilters []transformFilterMatcher, stats *executionStats) {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
@@ -104,7 +105,7 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 	_ = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			s.transformDirectory(runID, entryPath, compatibilityMode, convertTraditional, convertCustom, filterCustom, rules, transformFilters, stats)
+			s.transformDirectory(runID, entryPath, compatibilityMode, convertTraditional, convertCustom, filterCustom, mergeSameNameDirs, rules, transformFilters, stats)
 		}
 		return nil
 	})
@@ -127,10 +128,29 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 		}
 
 		if _, statErr := os.Stat(newPath); statErr == nil {
-			stats.FailureCount++
-			s.persistRunHistory(runID, fmt.Sprintf("rename target already exists %s", newPath), stats)
-			s.appendLog(runID, "error", fmt.Sprintf("rename target already exists %s", newPath))
-			return nil
+			if entry.IsDir() && mergeSameNameDirs {
+				if err := mergeDirectories(oldPath, newPath); err != nil {
+					stats.FailureCount++
+					s.persistRunHistory(runID, fmt.Sprintf("merge directory %s into %s failed: %v", oldPath, newPath, err), stats)
+					s.appendLog(runID, "error", fmt.Sprintf("merge directory %s into %s failed: %v", oldPath, newPath, err))
+					return nil
+				}
+				stats.ProcessedFiles++
+				stats.SuccessCount++
+				stats.CleanupRemovedDirs++
+				s.persistRunHistory(runID, fmt.Sprintf("merged directory %s -> %s", oldPath, newPath), stats)
+				s.appendLog(runID, "info", fmt.Sprintf("merged directory %s -> %s", oldPath, newPath))
+				return nil
+			}
+
+			fallbackPath := uniqueTransformRenameSuffixPath(currentPath, newName)
+			if fallbackPath == "" || sameCleanPath(oldPath, fallbackPath) {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("rename target already exists %s", newPath), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("rename target already exists %s", newPath))
+				return nil
+			}
+			newPath = fallbackPath
 		}
 
 		if err := os.Rename(oldPath, newPath); err != nil {
@@ -213,6 +233,61 @@ func parseTransformFilters(items []string) ([]transformFilterMatcher, error) {
 		filters = append(filters, matcher)
 	}
 	return filters, nil
+}
+
+func uniqueTransformRenameSuffixPath(dir, name string) string {
+	baseName := filepath.Base(strings.TrimSpace(name))
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		baseName = "item"
+	}
+
+	ext := filepath.Ext(baseName)
+	stem := strings.TrimSuffix(baseName, ext)
+	firstCandidate := filepath.Join(dir, fmt.Sprintf("%s-re%s", stem, ext))
+	if _, err := os.Stat(firstCandidate); os.IsNotExist(err) {
+		return firstCandidate
+	}
+
+	for index := 1; ; index++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-re%d%s", stem, index, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
+func mergeDirectories(sourceDir, targetDir string) error {
+	entries, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		sourcePath := filepath.Join(sourceDir, entry.Name())
+		targetPath := filepath.Join(targetDir, entry.Name())
+
+		if entry.IsDir() {
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return err
+			}
+			if err := mergeDirectories(sourcePath, targetPath); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if _, err := os.Stat(targetPath); err == nil {
+			targetPath = uniqueTransformRenameSuffixPath(targetDir, entry.Name())
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+
+		if err := moveFile(sourcePath, targetPath); err != nil {
+			return err
+		}
+	}
+
+	return os.Remove(sourceDir)
 }
 
 func applyRenameTransforms(name string, isDir bool, convertTraditional, convertCustom, filterCustom bool, rules []renameTransformRule, transformFilters []transformFilterMatcher) string {

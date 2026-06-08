@@ -32,7 +32,10 @@
             <div v-for="item in summaryItems" :key="item.id" class="summary-item">
               <div class="summary-item__header">
                 <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
-                <el-tag :type="getStatusType(item.status)" effect="plain" size="small">{{ getStatusText(item.status) }}</el-tag>
+                <div class="summary-item__badges">
+                  <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                  <el-tag :type="getStatusType(item.status)" effect="plain" size="small">{{ getStatusText(item.status) }}</el-tag>
+                </div>
               </div>
               <div class="summary-item__meta">
                 <span>{{ formatDate(item.started_at) }}</span>
@@ -101,12 +104,16 @@
             <div v-if="runningPreviewItems.length" class="task-preview-list">
               <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
                 <div class="task-preview-item__header">
-                  <div>
-                    <div class="task-preview-item__name">{{ item.name }}</div>
-                    <div class="task-preview-item__meta">{{ archiveModeText(item.archive_mode) }} · {{ runModeText(item.run_mode) }}</div>
+                    <div>
+                      <div class="task-preview-item__name">{{ item.name }}</div>
+                      <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ runModeText(item.run_mode) }}</div>
+                      <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
+                    </div>
+                    <div class="task-preview-item__badges">
+                      <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                      <el-tag type="warning" effect="plain" size="small">进行中</el-tag>
+                    </div>
                   </div>
-                  <el-tag type="warning" effect="plain" size="small">进行中</el-tag>
-                </div>
 
                 <el-progress :percentage="estimateProgress(item)" :stroke-width="8" :show-text="false" status="success" />
 
@@ -216,7 +223,33 @@ function formatPercentage(value?: number) {
 function archiveModeText(mode: RuleItem['archive_mode']) {
   if (mode === 'package') return '打包'
   if (mode === 'collect') return '收集'
-  return '清理'
+  if (mode === 'cleanup') return '清理'
+  if (mode === 'transform') return '转换'
+  if (mode === 'link') return '链路'
+  return '未知'
+}
+
+function dashboardModeText(mode?: string) {
+  if (mode === 'package') return '打包'
+  if (mode === 'collect') return '收集'
+  if (mode === 'cleanup') return '清理'
+  if (mode === 'transform') return '转换'
+  if (mode === 'link') return '链路'
+  return '未知'
+}
+
+function dashboardModeTagClass(mode?: string) {
+  if (mode === 'package') return 'dashboard-mode-tag--package'
+  if (mode === 'collect') return 'dashboard-mode-tag--collect'
+  if (mode === 'cleanup') return 'dashboard-mode-tag--cleanup'
+  if (mode === 'transform') return 'dashboard-mode-tag--transform'
+  if (mode === 'link') return 'dashboard-mode-tag--hardlink'
+  return ''
+}
+
+function runDetailText(item: RuleItem) {
+  const currentPath = item.source_dir || '未配置源路径'
+  return `当前执行：${currentPath} · ${dashboardModeText(item.archive_mode)}`
 }
 
 function runModeText(mode: RuleItem['run_mode']) {
@@ -253,7 +286,7 @@ async function loadSummary() {
   try {
     const items = (await fetchRunHistory()).data?.items ?? []
     runHistoryItems.value = items
-    summaryItems.value = items.slice(0, 5)
+    summaryItems.value = items.slice(0, 6)
   } catch {
     runHistoryItems.value = []
     summaryItems.value = []
@@ -370,10 +403,35 @@ onMounted(() => {
   gap: 12px;
 }
 
+.summary-item__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .summary-item__name {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+.dashboard-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  font-size: 12px;
+  line-height: 1.2;
+  background: #fff;
+}
+
+.dashboard-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
+.dashboard-mode-tag--collect { color: #8a74d6; background: rgba(138, 116, 214, 0.1); }
+.dashboard-mode-tag--cleanup { color: #5f9f45; background: rgba(95, 159, 69, 0.12); }
+.dashboard-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
+.dashboard-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 
 .summary-item__meta {
   display: flex;
@@ -495,6 +553,12 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 
+.task-preview-item__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .task-preview-item__name {
   font-size: 15px;
   font-weight: 700;
@@ -505,6 +569,13 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.task-preview-item__detail {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
 }
 
 .task-preview-item__stats {

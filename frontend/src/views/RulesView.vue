@@ -30,7 +30,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="模式" width="78">
+        <el-table-column label="模式" width="110">
           <template #default="scope">
             <span class="custom-mode-tag" :class="scope.row.archive_mode === 'package' ? 'custom-mode-tag--package' : 'custom-mode-tag--collect'">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</span>
           </template>
@@ -242,7 +242,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="模式" width="78">
+        <el-table-column label="模式" width="110">
           <template #default="scope">
             <span class="custom-mode-tag" :class="scope.row.archive_mode === 'transform' ? 'custom-mode-tag--transform' : 'custom-mode-tag--cleanup'">
               {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
@@ -352,7 +352,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="模式" width="78">
+        <el-table-column label="模式" width="110">
           <template #default="scope">
             <span class="custom-mode-tag" :class="scope.row.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'">
               {{ scope.row.link_mode === 'hard' ? '硬链' : '软链' }}
@@ -762,7 +762,7 @@ type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
 type CollectOptionKey = 'recursive_collect' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
-type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text'
+type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text' | 'merge_same_name_dirs'
 type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
@@ -799,6 +799,7 @@ const transformModeOptions = [
   { key: 'convert_traditional_to_simplified', label: '繁简转换', description: '将监控目录下文件和文件夹名称中的中文繁体字转换为简体字，其他字符保持不变。' },
   { key: 'convert_matching_text', label: '匹配转换', description: '按自定义规则重命名文件和文件夹名称，支持关键词部分匹配与正则转换。' },
   { key: 'filter_matching_text', label: '匹配过滤', description: '按自定义规则过滤文件夹名称中的指定片段，支持普通文本与正则匹配，命中后会在重命名结果中移除匹配内容。' },
+  { key: 'merge_same_name_dirs', label: '同名合并', description: '默认不勾选；关闭时文件夹转换后若出现同名冲突，则自动追加 -re、-re1、-re2……；开启后会将转换后同名的文件夹自动合并为一个目录。' },
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
@@ -818,7 +819,7 @@ function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
 }
 
 function createDefaultTransformOptions(): Record<TransformOptionKey, boolean> {
-  return { convert_traditional_to_simplified: true, convert_matching_text: false, filter_matching_text: false }
+	return { convert_traditional_to_simplified: true, convert_matching_text: false, filter_matching_text: false, merge_same_name_dirs: false }
 }
 
 function createDefaultPurifyOptions(): PurifyOptions {
@@ -2275,7 +2276,7 @@ onMounted(() => {
 .custom-mode-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 62px; padding: 4px 12px; border-radius: 8px; border: 1px solid currentColor; font-size: 14px; line-height: 1.2; background: #fff; }
 .custom-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
 .custom-mode-tag--collect { color: #8a74d6; background: rgba(138, 116, 214, 0.1); }
-.custom-mode-tag--cleanup { color: #8bcf3f; background: rgba(139, 207, 63, 0.12); }
+.custom-mode-tag--cleanup { color: #5f9f45; background: rgba(95, 159, 69, 0.12); }
 .custom-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
