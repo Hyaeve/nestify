@@ -1410,7 +1410,7 @@ func uniqueArchiveDestinationPath(dir, name string) string {
 
 func resolveCollectTargetPath(sourcePath, targetDir, archiveMode string, collectDeduplicateEnabled bool) (string, string, error) {
 	baseName := filepath.Base(strings.TrimSpace(sourcePath))
-	if archiveMode != "collect" || !collectDeduplicateEnabled {
+	if (archiveMode != "collect" && archiveMode != "package") || !collectDeduplicateEnabled {
 		return uniqueArchiveDestinationPath(targetDir, baseName), "", nil
 	}
 
