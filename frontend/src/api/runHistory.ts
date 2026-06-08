@@ -43,6 +43,7 @@ export interface FetchRunHistoryParams {
   keyword?: string
   status?: RunHistoryStatus
   archive_mode?: RunHistoryArchiveMode
+  rule_type?: 'archive' | 'cleanup' | 'link'
   sort_by?: 'name' | 'modified_at'
   sort_order?: 'asc' | 'desc'
 }
@@ -68,6 +69,10 @@ function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
 
   if (params.archive_mode) {
     query.set('archive_mode', params.archive_mode)
+  }
+
+  if (params.rule_type) {
+    query.set('rule_type', params.rule_type)
   }
 
   if (params.sort_by) {

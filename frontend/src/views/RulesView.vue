@@ -23,7 +23,7 @@
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass(scope.row.compatibility_mode)" aria-label="拖拽排序" title="拖拽排序">
                 ⋮⋮
               </button>
               <span class="rule-name-cell__text">{{ scope.row.name }}</span>
@@ -32,14 +32,7 @@
         </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
-            <el-tag type="info" effect="plain">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="执行模式" width="110">
-          <template #default="scope">
-            <el-tag :type="scope.row.compatibility_mode === 'compatibility' ? 'warning' : 'success'" effect="plain">
-              {{ scope.row.compatibility_mode === 'compatibility' ? '兼容模式' : '本地模式' }}
-            </el-tag>
+            <span class="custom-mode-tag" :class="scope.row.archive_mode === 'package' ? 'custom-mode-tag--package' : 'custom-mode-tag--collect'">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
@@ -159,6 +152,12 @@
                 <el-option label="失败" value="failed" />
                 <el-option label="跳过" value="skip" />
               </el-select>
+              <el-select v-model="historyRuleTypeFilter" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
+                <el-option label="全部规则" value="all" />
+                <el-option label="归档规则" value="archive" />
+                <el-option label="净化规则" value="cleanup" />
+                <el-option label="链路规则" value="link" />
+              </el-select>
             </span>
           </div>
           <div class="history-search">
@@ -173,20 +172,25 @@
           </div>
         </div>
 
-      <el-table v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
-        <el-table-column label="规则 / 摘要" min-width="360">
-          <template #default="scope">
-            <div class="history-rule">
-              <div class="history-rule__title">{{ scope.row.rule_name || '未知规则' }}</div>
-              <div class="history-rule__desc">{{ scope.row.summary || '—' }}</div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="scope">
-            <span class="history-status" :class="`is-${scope.row.status}`">{{ scope.row.status }}</span>
-          </template>
-        </el-table-column>
+        <el-table v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
+          <el-table-column label="规则 / 摘要" min-width="360">
+            <template #default="scope">
+              <div class="history-rule">
+                <div class="history-rule__title">{{ scope.row.rule_name || '未知规则' }}</div>
+                <div class="history-rule__desc">{{ scope.row.summary || '—' }}</div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="模式" width="120">
+            <template #default="scope">
+              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row.archive_mode)">{{ historyModeLabel(scope.row.archive_mode) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="scope">
+              <span class="history-status" :class="`is-${scope.row.status}`">{{ scope.row.status }}</span>
+            </template>
+          </el-table-column>
         <el-table-column label="统计" width="140">
           <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
         </el-table-column>
@@ -231,7 +235,7 @@
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass(scope.row.compatibility_mode)" aria-label="拖拽排序" title="拖拽排序">
                 ⋮⋮
               </button>
               <span class="rule-name-cell__text">{{ scope.row.name }}</span>
@@ -240,15 +244,8 @@
         </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
-            <el-tag :type="scope.row.archive_mode === 'transform' ? 'primary' : 'warning'" effect="plain">
+            <el-tag :type="scope.row.archive_mode === 'transform' ? 'primary' : 'danger'" effect="plain">
               {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="执行模式" width="110">
-          <template #default="scope">
-            <el-tag :type="scope.row.compatibility_mode === 'compatibility' ? 'warning' : 'success'" effect="plain">
-              {{ scope.row.compatibility_mode === 'compatibility' ? '兼容模式' : '本地模式' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -348,7 +345,7 @@
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" aria-label="拖拽排序" title="拖拽排序">
+              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass('local')" aria-label="拖拽排序" title="拖拽排序">
                 ⋮⋮
               </button>
               <span class="rule-name-cell__text">{{ scope.row.name }}</span>
@@ -357,14 +354,9 @@
         </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
-            <el-tag :type="scope.row.link_mode === 'hard' ? 'danger' : 'primary'" effect="plain">
+            <span class="custom-mode-tag" :class="scope.row.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'">
               {{ scope.row.link_mode === 'hard' ? '硬链' : '软链' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="执行模式" width="110">
-          <template #default>
-            <el-tag type="success" effect="plain">本地模式</el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
@@ -793,14 +785,10 @@ const packageModeOptions = [
   { key: 'cleanup_source_after_archive', label: '清理源件', description: '确认已归档后再清理原目录中的已处理源件。' },
 ] as const
 
-const packageModeFixedNotice = '打包模式固定启用同名去重：相同文件保留已有文件；不同同名文件首个追加 -re，后续无论扩展名依次追加 -re1、-re2、-re3……'
-
 const collectModeOptions = [
   { key: 'recursive_collect', label: '递归收集', description: '默认递归扫描监控目录下的全部子目录，并将父目录中的所有文件统一收集到目标目录对应的同名文件夹下。' },
   { key: 'cleanup_source_after_archive', label: '清理源件', description: '默认勾选；收集完成后删除已成功归档的源件，关闭后保留原始文件。' },
 ] as const
-
-const collectModeFixedNotice = '收集模式固定启用同名去重：相同文件保留已有文件；不同同名文件首个追加 -re，后续无论扩展名依次追加 -re1、-re2、-re3……'
 
 const cleanupModeOptions = [
   { key: 'cleanup_empty_dirs', label: '清理空夹', description: '递归删除监控目录中的空文件夹。' },
@@ -913,6 +901,10 @@ function formatHistorySize(sizeBytes?: number) {
   }
 
   return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(2)} ${units[index]}`
+}
+
+function dragHandleModeClass(mode?: string) {
+  return mode === 'compatibility' ? 'is-compatibility' : 'is-local'
 }
 
 function getCronPreviewItems(ruleId: number) {
@@ -1048,6 +1040,7 @@ const historyKeyword = ref('')
 const historySortBy = ref<'name' | 'modified_at'>('modified_at')
 const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
+const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1619,6 +1612,7 @@ async function loadHistory() {
       page_size: historyPageSize.value,
       keyword: historyKeyword.value || undefined,
       status: historyStatusFilter.value === 'all' ? undefined : historyStatusFilter.value,
+      rule_type: historyRuleTypeFilter.value === 'all' ? undefined : historyRuleTypeFilter.value,
       sort_by: historySortBy.value,
       sort_order: historySortOrder.value,
     })
@@ -1718,6 +1712,45 @@ function handleHistorySortChange() {
 function handleHistoryStatusChange() {
 	historyCurrentPage.value = 1
 	void loadHistory()
+}
+
+function handleHistoryRuleTypeChange() {
+	historyCurrentPage.value = 1
+	void loadHistory()
+}
+
+function historyModeLabel(mode?: string) {
+	switch (mode) {
+	case 'package':
+		return '打包'
+	case 'collect':
+		return '收集'
+	case 'cleanup':
+		return '清理'
+	case 'transform':
+		return '转换'
+	case 'link':
+		return '硬链/软链'
+	default:
+		return '—'
+	}
+}
+
+function historyModeTagClass(mode?: string) {
+	switch (mode) {
+	case 'package':
+		return 'custom-mode-tag--package'
+	case 'collect':
+		return 'custom-mode-tag--collect'
+	case 'cleanup':
+		return 'custom-mode-tag--cleanup'
+	case 'transform':
+		return 'custom-mode-tag--transform'
+	case 'link':
+		return 'custom-mode-tag--hardlink'
+	default:
+		return ''
+	}
 }
 
 async function submitCreateRule() {
@@ -2239,9 +2272,18 @@ onMounted(() => {
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
 .rule-actions :deep(.el-button + .el-button) { margin-left: 0; }
+.custom-mode-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 62px; padding: 4px 12px; border-radius: 8px; border: 1px solid currentColor; font-size: 14px; line-height: 1.2; background: #fff; }
+.custom-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
+.custom-mode-tag--collect { color: #8a74d6; background: rgba(138, 116, 214, 0.1); }
+.custom-mode-tag--cleanup { color: #e06b45; background: rgba(224, 107, 69, 0.1); }
+.custom-mode-tag--transform { color: #409eff; background: rgba(64, 158, 255, 0.1); }
+.custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
+.custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }
+.rule-drag-handle.is-local { color: #8fce7a; }
+.rule-drag-handle.is-compatibility { color: #e3a257; }
 .rule-drag-handle:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
 .rule-drag-handle:active { cursor: grabbing; }
 .editable-cron { min-height: 32px; display: flex; align-items: center; cursor: pointer; }

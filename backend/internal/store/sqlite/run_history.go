@@ -130,7 +130,7 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	return items, nil
 }
 
-func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -138,7 +138,7 @@ func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveM
 		pageSize = 25
 	}
 
-	whereClause, args := buildRunHistoryWhereClause(keyword, status, archiveMode)
+	whereClause, args := buildRunHistoryWhereClause(keyword, status, archiveMode, ruleType)
 
 	countQuery := `SELECT COUNT(*) FROM run_history` + whereClause
 	var total int
@@ -235,9 +235,9 @@ func (s *Store) ClearRunHistory() error {
 	return nil
 }
 
-func buildRunHistoryWhereClause(keyword, status, archiveMode string) (string, []any) {
-	clauses := make([]string, 0, 3)
-	args := make([]any, 0, 7)
+func buildRunHistoryWhereClause(keyword, status, archiveMode, ruleType string) (string, []any) {
+	clauses := make([]string, 0, 4)
+	args := make([]any, 0, 8)
 
 	trimmedStatus := strings.TrimSpace(status)
 	if trimmedStatus != "" {
@@ -249,6 +249,18 @@ func buildRunHistoryWhereClause(keyword, status, archiveMode string) (string, []
 	if trimmedArchiveMode != "" {
 		clauses = append(clauses, `archive_mode = ?`)
 		args = append(args, trimmedArchiveMode)
+	}
+
+	trimmedRuleType := strings.TrimSpace(ruleType)
+	if trimmedRuleType != "" {
+		switch trimmedRuleType {
+		case "archive":
+			clauses = append(clauses, `(archive_mode = 'package' OR archive_mode = 'collect')`)
+		case "cleanup":
+			clauses = append(clauses, `(archive_mode = 'cleanup' OR archive_mode = 'transform')`)
+		case "link":
+			clauses = append(clauses, `archive_mode = 'link'`)
+		}
 	}
 
 	trimmedKeyword := strings.ToLower(strings.TrimSpace(keyword))

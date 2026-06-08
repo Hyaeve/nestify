@@ -820,10 +820,11 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 		status := strings.TrimSpace(r.URL.Query().Get("status"))
 		archiveMode := strings.TrimSpace(r.URL.Query().Get("archive_mode"))
+		ruleType := strings.TrimSpace(r.URL.Query().Get("rule_type"))
 		sortBy := strings.TrimSpace(r.URL.Query().Get("sort_by"))
 		sortOrder := strings.TrimSpace(r.URL.Query().Get("sort_order"))
 
-		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode", "sort_by", "sort_order")
+		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode", "rule_type", "sort_by", "sort_order")
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{
 				Success: false,
@@ -834,7 +835,7 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if paged {
-			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, sortBy, sortOrder)
+			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
 			if err != nil {
 				writeInternalError(w, err)
 				return
