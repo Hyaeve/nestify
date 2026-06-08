@@ -86,6 +86,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	collectRecursiveEnabled := req.ArchiveMode != "collect" || req.CollectOptions["recursive_collect"]
 	collectDeduplicateEnabled := req.ArchiveMode == "collect"
 	collectRemoveSourceEnabled := req.ArchiveMode != "collect" || req.CollectOptions["cleanup_source_after_archive"]
+	topLevelImageFiles := make([]os.DirEntry, 0, len(entries))
+	topLevelCoverFiles := make([]os.DirEntry, 0, len(entries))
+	topLevelMatchedFiles := make([]os.DirEntry, 0, len(entries))
 	cleanupSourceAfterArchive := false
 	if req.ArchiveMode == "package" {
 		cleanupSourceAfterArchive = req.PackageOptions["cleanup_source_after_archive"]
@@ -114,6 +117,10 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			matchedTargetDir := targetDir
 			if req.ArchiveMode == "package" && !flatArchive {
 				matchedTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
+			}
+			if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
+				topLevelMatchedFiles = append(topLevelMatchedFiles, entry)
+				return nil
 			}
 			if err := s.moveMatchedArchiveFile(runID, sourceDir, entryPath, matchedTargetDir, req.ArchiveMode, matchArchiveParentRenameEnabled, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
 				stats.FailureCount++
@@ -144,9 +151,12 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		}
 
 		if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), &stats)
-			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+			topLevelImageFiles = append(topLevelImageFiles, entry)
+			return nil
+		}
+
+		if req.ArchiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
+			topLevelCoverFiles = append(topLevelCoverFiles, entry)
 			return nil
 		}
 
@@ -166,6 +176,37 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	})
 	if err != nil {
 		return stats, err
+	}
+
+	if req.ArchiveMode == "package" && len(topLevelImageFiles) > 0 {
+		archiveTargetDir := targetDir
+		if !flatArchive {
+			archiveTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
+		}
+		archivePath, packErr := createPackageCBZFromFiles(sourceDir, sourceDir, topLevelImageFiles, archiveTargetDir, matchArchiveParentRenameEnabled, false)
+		if packErr != nil {
+			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr), &stats)
+			s.appendLog(runID, "error", fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr))
+		} else {
+			if cleanupSourceAfterArchive {
+				if removeErr := removePackedSourceFiles(sourceDir, topLevelImageFiles); removeErr != nil {
+					return stats, fmt.Errorf("remove packed root source files: %w", removeErr)
+				}
+			}
+			if err := s.moveCoverFiles(runID, sourceDir, topLevelCoverFiles, archiveTargetDir, &stats); err != nil {
+				return stats, err
+			}
+			if err := s.moveMatchedArchiveEntries(runID, sourceDir, sourceDir, topLevelMatchedFiles, archiveTargetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+				return stats, err
+			}
+			stats.ProcessedFiles += len(topLevelImageFiles)
+			stats.SuccessCount++
+			stats.PackedVolumes++
+			stats.SizeBytes += fileSizeOrZero(archivePath)
+			s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath), &stats)
+			s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath))
+		}
 	}
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
@@ -364,7 +405,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		return err
 	}
 
-	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
+	if archiveMode == "package" && len(imageFiles) > 0 {
 		archivePath, err := createPackageCBZFromFiles(rootSourceDir, seriesPath, imageFiles, targetSeriesDir, matchArchiveParentRenameEnabled, false)
 		if err != nil {
 			return err
@@ -389,6 +430,18 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		for _, entry := range nonImageFiles {
 			sourcePath := filepath.Join(seriesPath, entry.Name())
 			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
+		}
+		if hasSubdirs && !packageNestedFolders {
+			for _, entry := range entries {
+				if !entry.IsDir() || matchesFileName(entry.Name(), true, matchers) {
+					continue
+				}
+				entryPath := filepath.Join(seriesPath, entry.Name())
+				stats.SkipCount++
+				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath), stats)
+				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath))
+			}
+			return nil
 		}
 		return nil
 	}
@@ -519,7 +572,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		return err
 	}
 
-	if archiveMode == "package" && !hasSubdirs && len(imageFiles) > 0 {
+	if archiveMode == "package" && len(imageFiles) > 0 {
 		archivePath, err := createPackageCBZFromFiles(rootSourceDir, volumePath, imageFiles, targetDir, matchArchiveParentRenameEnabled, shouldUsePlainParentCBZName(rootSourceDir, volumePath))
 		if err != nil {
 			return err
@@ -544,6 +597,18 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 		for _, entry := range nonImageFiles {
 			sourcePath := filepath.Join(volumePath, entry.Name())
 			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
+		}
+		if hasSubdirs && !packageNestedFolders {
+			for _, entry := range entries {
+				if !entry.IsDir() || matchesFileName(entry.Name(), true, matchers) {
+					continue
+				}
+				entryPath := filepath.Join(volumePath, entry.Name())
+				stats.SkipCount++
+				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath), stats)
+				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath))
+			}
+			return nil
 		}
 		return nil
 	}
