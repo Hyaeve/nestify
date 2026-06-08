@@ -31,6 +31,14 @@
           <span class="toolbar-row__split" />
           <el-button @click="openPicker('browse')">选择目录</el-button>
           <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
+          <div class="toolbar-row__search">
+            <el-input
+              v-model="searchKeyword"
+              clearable
+              class="toolbar-row__search-input"
+              placeholder="搜索当前层级文件或文件夹"
+            />
+          </div>
         </div>
 
         <div class="path-row">
@@ -52,7 +60,7 @@
         <div class="summary-row">
           <span>当前目录：{{ currentPathDisplay }}</span>
           <span>已选择 {{ selectedCount }} 项</span>
-          <span>{{ sortedEntries.length }} 个项目</span>
+          <span>{{ filteredEntries.length }} 个项目</span>
           <span class="summary-row__sort">
             文件排序：
             <el-select v-model="sortBy" size="small" class="summary-row__sort-select">
@@ -148,14 +156,14 @@
         </el-table>
 
         <div class="table-pagination">
-          <span class="footer-count">共 {{ sortedEntries.length }} 条</span>
+          <span class="footer-count">共 {{ filteredEntries.length }} 条</span>
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
             background
             layout="sizes, prev, pager, next"
             :page-sizes="pageSizeOptions"
-            :total="sortedEntries.length"
+            :total="filteredEntries.length"
             @current-change="handleCurrentPageChange"
             @size-change="handlePageSizeChange"
           />
