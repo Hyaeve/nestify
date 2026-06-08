@@ -84,7 +84,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	packageNestedFolders := req.PackageOptions["package_nested_folders"]
 	flatArchive := req.PackageOptions["flat_archive"]
 	collectRecursiveEnabled := req.ArchiveMode != "collect" || req.CollectOptions["recursive_collect"]
-	collectDeduplicateEnabled := req.ArchiveMode == "collect" && req.CollectOptions["deduplicate_same_name"]
+	collectDeduplicateEnabled := req.ArchiveMode == "collect"
 	collectRemoveSourceEnabled := req.ArchiveMode != "collect" || req.CollectOptions["cleanup_source_after_archive"]
 	cleanupSourceAfterArchive := false
 	if req.ArchiveMode == "package" {
@@ -650,7 +650,7 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 	}
 	message := fmt.Sprintf("%s file %s -> %s", verb, sourcePath, targetPath)
 	if actionSummary == "renamed-re" {
-		message += " (renamed with -re suffix due to different file with same name)"
+		message += " (renamed with -re/-reN suffix due to different file with same name)"
 	}
 	s.persistRunHistory(runID, message, stats)
 	s.appendLog(runID, "info", message)
@@ -1445,8 +1445,35 @@ func uniqueArchiveReSuffixPath(dir, name string) string {
 		return firstCandidate
 	}
 
-	for index := 2; ; index++ {
-		candidate := filepath.Join(dir, fmt.Sprintf("%s-re-%d%s", stem, index, ext))
+	used := map[int]struct{}{0: {}}
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			entryName := entry.Name()
+			entryExt := filepath.Ext(entryName)
+			entryStem := strings.TrimSuffix(entryName, entryExt)
+			if entryStem == stem+"-re" {
+				used[0] = struct{}{}
+				continue
+			}
+			if strings.HasPrefix(entryStem, stem+"-re") {
+				suffix := strings.TrimPrefix(entryStem, stem+"-re")
+				value, convErr := strconv.Atoi(suffix)
+				if convErr == nil && value > 0 {
+					used[value] = struct{}{}
+				}
+			}
+		}
+	}
+
+	for index := 1; ; index++ {
+		if _, exists := used[index]; exists {
+			continue
+		}
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-re%d%s", stem, index, ext))
 		if _, err := os.Stat(candidate); os.IsNotExist(err) {
 			return candidate
 		}

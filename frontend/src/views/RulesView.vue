@@ -470,7 +470,7 @@
           <el-collapse-transition>
             <div v-show="createArchiveOptionsExpanded" class="mode-config-panel">
               <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact" :class="{ 'is-disabled': option.key === 'match_archive_parent_rename' && !createForm.package_options.match_archive }"><el-checkbox v-model="createForm.package_options[option.key]" :disabled="option.key === 'match_archive_parent_rename' && !createForm.package_options.match_archive">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col><el-col :span="24"><div class="mode-option-card mode-option-card--compact mode-option-card--notice"><div class="mode-option-card__title">固定功能</div><div class="mode-option-card__description">{{ collectModeFixedNotice }}</div></div></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
@@ -531,7 +531,7 @@
           <el-collapse-transition>
             <div v-show="editArchiveOptionsExpanded" class="mode-config-panel">
               <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact" :class="{ 'is-disabled': option.key === 'match_archive_parent_rename' && !editForm.package_options.match_archive }"><el-checkbox v-model="editForm.package_options[option.key]" :disabled="option.key === 'match_archive_parent_rename' && !editForm.package_options.match_archive">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col><el-col :span="24"><div class="mode-option-card mode-option-card--compact mode-option-card--notice"><div class="mode-option-card__title">固定功能</div><div class="mode-option-card__description">{{ collectModeFixedNotice }}</div></div></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
@@ -768,7 +768,7 @@ import {
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
-type CollectOptionKey = 'recursive_collect' | 'deduplicate_same_name' | 'cleanup_source_after_archive'
+type CollectOptionKey = 'recursive_collect' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text'
 type PurifyArchiveMode = 'cleanup' | 'transform'
@@ -795,9 +795,10 @@ const packageModeOptions = [
 
 const collectModeOptions = [
   { key: 'recursive_collect', label: '递归收集', description: '默认递归扫描监控目录下的全部子目录，并将父目录中的所有文件统一收集到目标目录对应的同名文件夹下。' },
-  { key: 'deduplicate_same_name', label: '同名去重', description: '默认勾选；遇到同名文件时会判断是否为同一文件：相同则保留最新版本，不同则为其中一个追加 “-re” 后缀以避免覆盖。' },
   { key: 'cleanup_source_after_archive', label: '清理源件', description: '默认勾选；收集完成后删除已成功归档的源件，关闭后保留原始文件。' },
 ] as const
+
+const collectModeFixedNotice = '收集模式固定启用同名去重：相同文件保留已有文件；不同同名文件首个追加 -re，后续无论扩展名依次追加 -re1、-re2、-re3……'
 
 const cleanupModeOptions = [
   { key: 'cleanup_empty_dirs', label: '清理空夹', description: '递归删除监控目录中的空文件夹。' },
@@ -819,7 +820,7 @@ function normalizeFixedPackageOptions(options: Record<PackageOptionKey, boolean>
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
-  return { recursive_collect: true, deduplicate_same_name: true, cleanup_source_after_archive: true }
+	return { recursive_collect: true, cleanup_source_after_archive: true }
 }
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {

@@ -12,6 +12,7 @@ services:
       - ./data:/data
       - ./logs:/logs
     environment:
+      TZ: "Asia/Shanghai"
       NESTIFY_HTTP_ADDR: ":8080"
       NESTIFY_CONFIG_PATH: "/config/config.yaml"
       NESTIFY_WEB_DIR: "/app/web"
