@@ -244,9 +244,9 @@
         </el-table-column>
         <el-table-column label="模式" width="78">
           <template #default="scope">
-            <el-tag :type="scope.row.archive_mode === 'transform' ? 'primary' : 'danger'" effect="plain">
+            <span class="custom-mode-tag" :class="scope.row.archive_mode === 'transform' ? 'custom-mode-tag--transform' : 'custom-mode-tag--cleanup'">
               {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
-            </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="source_dir" label="监控目录" min-width="420" show-overflow-tooltip />
@@ -2275,8 +2275,8 @@ onMounted(() => {
 .custom-mode-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 62px; padding: 4px 12px; border-radius: 8px; border: 1px solid currentColor; font-size: 14px; line-height: 1.2; background: #fff; }
 .custom-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
 .custom-mode-tag--collect { color: #8a74d6; background: rgba(138, 116, 214, 0.1); }
-.custom-mode-tag--cleanup { color: #e06b45; background: rgba(224, 107, 69, 0.1); }
-.custom-mode-tag--transform { color: #409eff; background: rgba(64, 158, 255, 0.1); }
+.custom-mode-tag--cleanup { color: #8bcf3f; background: rgba(139, 207, 63, 0.12); }
+.custom-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
