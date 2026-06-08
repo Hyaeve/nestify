@@ -105,8 +105,8 @@
               <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
                 <div class="task-preview-item__header">
                     <div>
-                      <div class="task-preview-item__name">{{ item.name }}</div>
-                      <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ runModeText(item.run_mode) }}</div>
+                      <div class="task-preview-item__name">{{ item.ruleName }}</div>
+                      <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ item.runModeText }}</div>
                       <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
                     </div>
                     <div class="task-preview-item__badges">
@@ -115,15 +115,15 @@
                     </div>
                   </div>
 
-                <el-progress :percentage="estimateProgress(item)" :stroke-width="8" :show-text="false" status="success" />
+                <el-progress :percentage="estimateRunProgress(item)" :stroke-width="8" :show-text="false" status="success" />
 
                 <div class="task-preview-item__stats">
-                  <span>成功 {{ item.last_success_count }}</span>
-                  <span>跳过 {{ item.last_skip_count }}</span>
-                  <span>失败 {{ item.last_failure_count }}</span>
+                  <span>成功 {{ item.success_count }}</span>
+                  <span>跳过 {{ item.skip_count }}</span>
+                  <span>失败 {{ item.failure_count }}</span>
                 </div>
 
-                <div class="task-preview-item__path" :title="item.source_dir">{{ item.source_dir || '未配置源路径' }}</div>
+                <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
               </div>
             </div>
 
@@ -138,6 +138,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
+import { fetchRun, fetchRunLogs, type RunInstance } from '../api/executions'
 import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResourcePayload } from '../api/system'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { fetchRules, type RuleItem } from '../api/rules'
@@ -149,6 +150,8 @@ const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const systemResource = ref<SystemResourcePayload | null>(null)
 const rules = ref<RuleItem[]>([])
 const runHistoryItems = ref<RunHistoryItem[]>(emptyRunHistory())
+type RunningPreviewItem = RunInstance & { ruleName: string; runModeText: string; sourceDir: string }
+const runningRuns = ref<RunningPreviewItem[]>([])
 
 const healthStatus = computed(() => {
   if (loading.value) return '检查中'
@@ -169,7 +172,7 @@ const formatMemorySummary = computed(() => {
 
 const totalRuleCount = computed(() => rules.value.length)
 const enabledRuleCount = computed(() => rules.value.filter((item) => item.enabled).length)
-const runningPreviewItems = computed(() => rules.value.filter((item) => item.last_run_status === 'running').slice(0, 3))
+const runningPreviewItems = computed(() => runningRuns.value.slice(0, 3))
 
 const todayRunCount = computed(() => {
   const today = new Date()
@@ -193,7 +196,7 @@ const todayProcessedCount = computed(() => {
     .reduce((total, item) => total + (item.processed_files || 0), 0)
 })
 
-const runningTaskCount = computed(() => rules.value.filter((item) => item.last_run_status === 'running').length)
+const runningTaskCount = computed(() => runningRuns.value.length)
 const runningTaskHint = computed(() => (runningTaskCount.value > 0 ? '存在正在执行的规则任务' : '当前没有活跃任务'))
 
 function getStatusType(status: string) {
@@ -247,9 +250,9 @@ function dashboardModeTagClass(mode?: string) {
   return ''
 }
 
-function runDetailText(item: RuleItem) {
-  const currentPath = item.source_dir || '未配置源路径'
-  return `当前执行：${currentPath} · ${dashboardModeText(item.archive_mode)}`
+function runDetailText(item: RunningPreviewItem) {
+	const currentTarget = item.current_volume_or_dir || item.current_series || '正在扫描源目录'
+	return `当前执行：${currentTarget} · ${dashboardModeText(item.archive_mode)}`
 }
 
 function runModeText(mode: RuleItem['run_mode']) {
@@ -265,6 +268,15 @@ function estimateProgress(item: RuleItem) {
   }
 
   return Math.min(92, Math.max(18, total % 100))
+}
+
+function estimateRunProgress(item: RunningPreviewItem) {
+	const total = item.success_count + item.skip_count + item.failure_count
+	if (total <= 0) {
+		return 12
+	}
+
+	return Math.min(92, Math.max(18, total % 100))
 }
 
 async function loadHealth() {
@@ -296,8 +308,28 @@ async function loadSummary() {
 async function loadRules() {
   try {
     rules.value = (await fetchRules()).data?.items ?? []
+    const runningRuleItems = rules.value.filter((item) => item.last_run_status === 'running').slice(0, 6)
+    const loadedRuns = await Promise.all(runningRuleItems.map(async (item) => {
+      try {
+        const logs = await fetchRunLogs(String(item.id))
+        const runID = logs.data?.items?.[0]?.run_id
+        if (!runID) return null
+        const run = await fetchRun(runID)
+        if (!run.data) return null
+        return {
+          ...run.data,
+          ruleName: item.name,
+          runModeText: runModeText(item.run_mode),
+          sourceDir: item.source_dir,
+        }
+      } catch {
+        return null
+      }
+    }))
+    runningRuns.value = loadedRuns.filter((item): item is RunningPreviewItem => item !== null && item.status === 'running')
   } catch {
     rules.value = []
+    runningRuns.value = []
   }
 }
 

@@ -2378,7 +2378,7 @@ onMounted(() => {
 .mode-option-card.is-disabled { cursor: not-allowed; opacity: 0.68; }
 .mode-option-card.is-disabled:hover { border-color: var(--el-border-color); }
 .mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
-:global(.mode-option-tooltip) { max-width: 360px; line-height: 1.6; white-space: pre-line; }
+:global(.mode-option-tooltip) { max-width: 18em; line-height: 1.6; white-space: pre-line; word-break: break-all; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 900px) {
