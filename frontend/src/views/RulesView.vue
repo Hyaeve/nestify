@@ -461,8 +461,8 @@
           </button>
           <el-collapse-transition>
             <div v-show="createArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
@@ -522,8 +522,8 @@
           </button>
           <el-collapse-transition>
             <div v-show="editArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
@@ -583,7 +583,7 @@
           </button>
           <el-collapse-transition>
             <div v-show="createPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
@@ -648,7 +648,7 @@
           </button>
           <el-collapse-transition>
             <div v-show="editPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip :content="option.description" placement="top" effect="light" :show-after="750"><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
+              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
@@ -1752,6 +1752,23 @@ function historyModeTagClass(mode?: string) {
 	default:
 		return ''
 	}
+}
+
+function formatModeOptionDescription(description: string) {
+	const lines = description.split('\n')
+	return lines.map((line) => splitDescriptionLine(line.trim(), 18)).join('\n')
+}
+
+function splitDescriptionLine(line: string, maxChars: number) {
+	if (line.length <= maxChars) {
+		return line
+	}
+
+	const result: string[] = []
+	for (let index = 0; index < line.length; index += maxChars) {
+		result.push(line.slice(index, index + maxChars))
+	}
+	return result.join('\n')
 }
 
 async function submitCreateRule() {

@@ -152,6 +152,7 @@ const rules = ref<RuleItem[]>([])
 const runHistoryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 type RunningPreviewItem = RunInstance & { ruleName: string; runModeText: string; sourceDir: string }
 const runningRuns = ref<RunningPreviewItem[]>([])
+const dashboardExecutionHints = ref<Record<number, string>>({})
 
 const healthStatus = computed(() => {
   if (loading.value) return '检查中'
@@ -251,7 +252,8 @@ function dashboardModeTagClass(mode?: string) {
 }
 
 function runDetailText(item: RunningPreviewItem) {
-	const currentTarget = item.current_volume_or_dir || item.current_series || '正在扫描源目录'
+	const executionHint = item.rule_id ? dashboardExecutionHints.value[item.rule_id] : ''
+	const currentTarget = executionHint || item.current_volume_or_dir || item.current_series || '正在扫描源目录'
 	return `当前执行：${currentTarget} · ${dashboardModeText(item.archive_mode)}`
 }
 
@@ -309,9 +311,15 @@ async function loadRules() {
   try {
     rules.value = (await fetchRules()).data?.items ?? []
     const runningRuleItems = rules.value.filter((item) => item.last_run_status === 'running').slice(0, 6)
+    const nextHints: Record<number, string> = {}
     const loadedRuns = await Promise.all(runningRuleItems.map(async (item) => {
       try {
         const logs = await fetchRunLogs(String(item.id))
+        const logItems = logs.data?.items ?? []
+        const latestProcessingLog = [...logItems].reverse().find((entry) => /packed|moved|copied|renamed|removed|process|nested|series|volume/i.test(entry.message))
+        if (latestProcessingLog?.message) {
+          nextHints[item.id] = latestProcessingLog.message
+        }
         const runID = logs.data?.items?.[0]?.run_id
         if (!runID) return null
         const run = await fetchRun(runID)
@@ -326,10 +334,12 @@ async function loadRules() {
         return null
       }
     }))
+    dashboardExecutionHints.value = nextHints
     runningRuns.value = loadedRuns.filter((item): item is RunningPreviewItem => item !== null && item.status === 'running')
   } catch {
     rules.value = []
     runningRuns.value = []
+    dashboardExecutionHints.value = {}
   }
 }
 
@@ -552,8 +562,8 @@ onMounted(() => {
 }
 
 .task-preview-card {
-  flex: none;
-  min-height: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .task-preview-card__header {
