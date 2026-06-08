@@ -290,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Document, Files, Folder, FolderOpened, MoreFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -1295,6 +1295,16 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.summary-row__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-row__search-input {
+  width: 220px;
 }
 
 .summary-row__sort-select {
