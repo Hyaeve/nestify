@@ -741,10 +741,18 @@ func (a *apiHandler) handleRuns(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/runs/")
 	path = strings.Trim(path, "/")
 	if path == "" {
-		writeJSON(w, http.StatusBadRequest, jsonResponse{
-			Success: false,
-			Code:    "INVALID_RUN_ID",
-			Message: "missing run id",
+		if r.Method != http.MethodGet {
+			writeMethodNotAllowed(w)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Runs loaded",
+			Data: map[string]any{
+				"items": a.executor.ListRuns(),
+			},
 		})
 		return
 	}

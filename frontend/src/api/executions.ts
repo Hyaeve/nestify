@@ -60,6 +60,10 @@ export interface RunLogsPayload {
   total: number
 }
 
+export interface RunsListPayload {
+  items: RunInstance[]
+}
+
 export function prepareManualPreflight(sourceDir: string, outputDir?: string) {
   return postJSON<ManualPreflightPayload>('/api/v1/manual/preflight', {
     source_dir: sourceDir,
@@ -76,6 +80,10 @@ export function prepareRuleExecution(ruleID: number, triggerMode = 'once') {
 
 export function fetchRun(runID: string) {
   return getJSON<RunInstance>(`/api/v1/runs/${runID}`)
+}
+
+export function fetchRuns() {
+  return getJSON<RunsListPayload>('/api/v1/runs/')
 }
 
 export function fetchRunLogs(runID: string) {

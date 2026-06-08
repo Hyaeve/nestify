@@ -1755,20 +1755,7 @@ function historyModeTagClass(mode?: string) {
 }
 
 function formatModeOptionDescription(description: string) {
-	const lines = description.split('\n')
-	return lines.map((line) => splitDescriptionLine(line.trim(), 18)).join('\n')
-}
-
-function splitDescriptionLine(line: string, maxChars: number) {
-	if (line.length <= maxChars) {
-		return line
-	}
-
-	const result: string[] = []
-	for (let index = 0; index < line.length; index += maxChars) {
-		result.push(line.slice(index, index + maxChars))
-	}
-	return result.join('\n')
+	return description
 }
 
 async function submitCreateRule() {
@@ -2395,7 +2382,8 @@ onMounted(() => {
 .mode-option-card.is-disabled { cursor: not-allowed; opacity: 0.68; }
 .mode-option-card.is-disabled:hover { border-color: var(--el-border-color); }
 .mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
-:global(.mode-option-tooltip) { max-width: 18em; line-height: 1.6; white-space: pre-line; word-break: break-all; }
+.mode-option-tooltip__content { max-width: 18em; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+:global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 900px) {

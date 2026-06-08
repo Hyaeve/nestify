@@ -138,7 +138,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
-import { fetchRun, fetchRunLogs, type RunInstance } from '../api/executions'
+import { fetchRuns, type RunInstance } from '../api/executions'
 import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResourcePayload } from '../api/system'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { fetchRules, type RuleItem } from '../api/rules'
@@ -310,32 +310,23 @@ async function loadSummary() {
 async function loadRules() {
   try {
     rules.value = (await fetchRules()).data?.items ?? []
-    const runningRuleItems = rules.value.filter((item) => item.last_run_status === 'running').slice(0, 6)
-    const nextHints: Record<number, string> = {}
-    const loadedRuns = await Promise.all(runningRuleItems.map(async (item) => {
-      try {
-        const logs = await fetchRunLogs(String(item.id))
-        const logItems = logs.data?.items ?? []
-        const latestProcessingLog = [...logItems].reverse().find((entry) => /packed|moved|copied|renamed|removed|process|nested|series|volume/i.test(entry.message))
-        if (latestProcessingLog?.message) {
-          nextHints[item.id] = latestProcessingLog.message
-        }
-        const runID = logs.data?.items?.[0]?.run_id
-        if (!runID) return null
-        const run = await fetchRun(runID)
-        if (!run.data) return null
+    const runs = (await fetchRuns()).data?.items ?? []
+    const runningRuleItems = rules.value.reduce<Record<number, RuleItem>>((map, item) => {
+      map[item.id] = item
+      return map
+    }, {})
+    runningRuns.value = runs
+      .filter((item) => item.status === 'running' && typeof item.rule_id === 'number')
+      .map((item) => {
+        const rule = item.rule_id ? runningRuleItems[item.rule_id] : undefined
         return {
-          ...run.data,
-          ruleName: item.name,
-          runModeText: runModeText(item.run_mode),
-          sourceDir: item.source_dir,
+          ...item,
+          ruleName: rule?.name || item.rule_name || '未知规则',
+          runModeText: rule ? runModeText(rule.run_mode) : (item.trigger_mode === 'cron' ? '定时模式' : item.trigger_mode === 'watch' ? '监听模式' : '手动模式'),
+          sourceDir: rule?.source_dir || '',
         }
-      } catch {
-        return null
-      }
-    }))
-    dashboardExecutionHints.value = nextHints
-    runningRuns.value = loadedRuns.filter((item): item is RunningPreviewItem => item !== null && item.status === 'running')
+      })
+    dashboardExecutionHints.value = {}
   } catch {
     rules.value = []
     runningRuns.value = []

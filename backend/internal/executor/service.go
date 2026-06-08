@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -149,6 +150,20 @@ func (s *Service) GetRun(runID string) (*model.RunInstance, bool) {
 	}
 
 	return s.cloneRun(run), true
+}
+
+func (s *Service) ListRuns() []*model.RunInstance {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]*model.RunInstance, 0, len(s.runs))
+	for _, run := range s.runs {
+		items = append(items, s.cloneRun(run))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	return items
 }
 
 func (s *Service) ListRunLogs(runID string) []model.RunLogEntry {
