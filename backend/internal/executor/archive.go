@@ -11,10 +11,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
 var archivePartNumberPattern = regexp.MustCompile(`^0*[1-9]\d*$`)
+
+const packageTrashRoot = "data/staging/trash"
 
 type executionStats struct {
 	ProcessedFiles      int
@@ -28,6 +31,14 @@ type executionStats struct {
 	SizeBytes           int64
 	HistoryEvents       int
 	Summary             string
+}
+
+type packageStageResult struct {
+	imageFiles   []os.DirEntry
+	coverFiles   []os.DirEntry
+	matchedFiles []os.DirEntry
+	hasSubdirs   bool
+	fileCount    int
 }
 
 func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
@@ -98,16 +109,20 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	err = processEntriesForMode(req.CompatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), &stats)
-			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
+			if err := s.trashFilteredArchiveItem(runID, entryPath, true, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
 			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.removeFilteredArchiveFile(runID, entryPath, &stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, entryPath, false, &stats); err != nil {
 				stats.FailureCount++
-				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), &stats)
-				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
 			}
@@ -150,14 +165,15 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			return nil
 		}
 
-		if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
-			topLevelImageFiles = append(topLevelImageFiles, entry)
-			return nil
-		}
-
-		if req.ArchiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
-			topLevelCoverFiles = append(topLevelCoverFiles, entry)
-			return nil
+		if req.ArchiveMode == "package" {
+			if isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
+				topLevelCoverFiles = append(topLevelCoverFiles, entry)
+				return nil
+			}
+			if isImageFile(entry.Name()) {
+				topLevelImageFiles = append(topLevelImageFiles, entry)
+				return nil
+			}
 		}
 
 		if req.ArchiveMode == "package" {
@@ -370,115 +386,38 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	}
 
 	sortEntriesNaturally(entries)
-	files := make([]os.DirEntry, 0, len(entries))
-	imageFiles := make([]os.DirEntry, 0, len(entries))
-	nonImageFiles := make([]os.DirEntry, 0, len(entries))
-	matchedFiles := make([]os.DirEntry, 0, len(entries))
-	coverFiles := make([]os.DirEntry, 0, len(entries))
-	hasSubdirs := false
-	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
-		entryPath := filepath.Join(seriesPath, entry.Name())
-		if entry.IsDir() {
-			if matchesFileName(entry.Name(), true, matchers) {
-				return nil
-			}
-			hasSubdirs = true
-			return nil
-		}
-		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			matchedFiles = append(matchedFiles, entry)
-			return nil
-		}
-		if archiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
-			coverFiles = append(coverFiles, entry)
-			return nil
-		}
-		files = append(files, entry)
-		if isImageFile(entry.Name()) {
-			imageFiles = append(imageFiles, entry)
-		} else {
-			nonImageFiles = append(nonImageFiles, entry)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if archiveMode == "package" && len(imageFiles) > 0 {
-		archivePath, err := createPackageCBZFromFiles(rootSourceDir, seriesPath, imageFiles, targetSeriesDir, matchArchiveParentRenameEnabled, false)
+	if archiveMode == "package" {
+		stageResult, err := s.scanAndStagePackageEntries(runID, rootSourceDir, seriesPath, compatibilityMode, matchers, matchArchiveEnabled, directMatchers, stats)
 		if err != nil {
 			return err
 		}
-		if cleanupSourceAfterArchive {
-			if err := removePackedSourceFiles(seriesPath, imageFiles); err != nil {
-				return fmt.Errorf("remove packed source files: %w", err)
-			}
-		}
-		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, seriesPath, targetSeriesDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, false, stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
-			return err
-		}
-		stats.ProcessedFiles += len(imageFiles)
-		stats.SuccessCount++
-		stats.PackedVolumes++
-		stats.SizeBytes += fileSizeOrZero(archivePath)
-		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", seriesPath, archivePath))
-		for _, entry := range nonImageFiles {
-			sourcePath := filepath.Join(seriesPath, entry.Name())
-			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
-		}
-		if hasSubdirs && !packageNestedFolders {
-			for _, entry := range entries {
-				if !entry.IsDir() || matchesFileName(entry.Name(), true, matchers) {
-					continue
-				}
-				entryPath := filepath.Join(seriesPath, entry.Name())
-				stats.SkipCount++
-				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath), stats)
-				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath))
-			}
+		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
 			return nil
 		}
-		return nil
-	}
-
-	if archiveMode == "package" && !hasSubdirs && len(files) == 0 && (len(coverFiles) > 0 || len(matchedFiles) > 0) {
-		if err := s.moveCoverFiles(runID, seriesPath, coverFiles, targetSeriesDir, stats); err != nil {
-			return err
-		}
-		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, seriesPath, matchedFiles, targetSeriesDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
-			return err
-		}
-		return nil
 	}
 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
-			return nil
-		}
-		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, entryPath, true, stats); err != nil {
 				stats.FailureCount++
-				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), stats)
-				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
 			}
 			return nil
 		}
-		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			if err := s.moveMatchedArchiveFile(runID, rootSourceDir, entryPath, targetSeriesDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, entryPath, false, stats); err != nil {
 				stats.FailureCount++
-				s.persistRunHistory(runID, fmt.Sprintf("move matched series file %s failed: %v", entryPath, err), stats)
-				s.appendLog(runID, "error", fmt.Sprintf("move matched series file %s failed: %v", entryPath, err))
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
 			}
 			return nil
 		}
@@ -497,10 +436,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			return nil
 		}
 
-		if archiveMode == "package" && isImageFile(entry.Name()) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+		if archiveMode == "package" && (isImageFile(entry.Name()) || (matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers)) || isCoverImageFile(entry.Name())) {
 			return nil
 		}
 
@@ -537,93 +473,22 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	}
 
 	sortEntriesNaturally(entries)
-	files := make([]os.DirEntry, 0, len(entries))
-	imageFiles := make([]os.DirEntry, 0, len(entries))
-	nonImageFiles := make([]os.DirEntry, 0, len(entries))
-	matchedFiles := make([]os.DirEntry, 0, len(entries))
-	coverFiles := make([]os.DirEntry, 0, len(entries))
-	hasSubdirs := false
-	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
-		entryPath := filepath.Join(volumePath, entry.Name())
-		if entry.IsDir() {
-			if matchesFileName(entry.Name(), true, matchers) {
-				return nil
-			}
-			hasSubdirs = true
-			return nil
-		}
-		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			matchedFiles = append(matchedFiles, entry)
-			return nil
-		}
-		if archiveMode == "package" && isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
-			coverFiles = append(coverFiles, entry)
-			return nil
-		}
-		files = append(files, entry)
-		if isImageFile(entry.Name()) {
-			imageFiles = append(imageFiles, entry)
-		} else {
-			nonImageFiles = append(nonImageFiles, entry)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	if archiveMode == "package" && len(imageFiles) > 0 {
-		archivePath, err := createPackageCBZFromFiles(rootSourceDir, volumePath, imageFiles, targetDir, matchArchiveParentRenameEnabled, shouldUsePlainParentCBZName(rootSourceDir, volumePath))
+	var packageStage *packageStageResult
+	if archiveMode == "package" {
+		stageResult, err := s.scanAndStagePackageEntries(runID, rootSourceDir, volumePath, compatibilityMode, matchers, matchArchiveEnabled, directMatchers, stats)
 		if err != nil {
 			return err
 		}
-		if cleanupSourceAfterArchive {
-			if err := removePackedSourceFiles(volumePath, imageFiles); err != nil {
-				return fmt.Errorf("remove packed source files: %w", err)
-			}
-		}
-		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
+		packageStage = &stageResult
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, volumePath, targetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, shouldUsePlainParentCBZName(rootSourceDir, volumePath), stats); err != nil {
 			return err
 		}
-		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
-			return err
-		}
-		stats.ProcessedFiles += len(imageFiles)
-		stats.SuccessCount++
-		stats.PackedVolumes++
-		stats.SizeBytes += fileSizeOrZero(archivePath)
-		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", volumePath, archivePath))
-		for _, entry := range nonImageFiles {
-			sourcePath := filepath.Join(volumePath, entry.Name())
-			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: not included in package archive; expected to be handled by other rules/modules", sourcePath))
-		}
-		if hasSubdirs && !packageNestedFolders {
-			for _, entry := range entries {
-				if !entry.IsDir() || matchesFileName(entry.Name(), true, matchers) {
-					continue
-				}
-				entryPath := filepath.Join(volumePath, entry.Name())
-				stats.SkipCount++
-				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath), stats)
-				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", entryPath))
-			}
+		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
 			return nil
 		}
-		return nil
 	}
 
-	if archiveMode == "package" && !hasSubdirs && len(files) == 0 && (len(coverFiles) > 0 || len(matchedFiles) > 0) {
-		if err := s.moveCoverFiles(runID, volumePath, coverFiles, filepath.Join(targetDir, filepath.Base(volumePath)), stats); err != nil {
-			return err
-		}
-		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, volumePath, matchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	if archiveMode == "package" && hasSubdirs && !packageNestedFolders {
+	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs && !packageNestedFolders {
 		stats.SkipCount++
 		s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s", volumePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", volumePath))
@@ -632,7 +497,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 
 	nextTargetDir := targetDir
 	fileTargetDir := targetDir
-	if archiveMode == "package" && hasSubdirs {
+	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs {
 		if flatArchive {
 			nextTargetDir = targetDir
 			fileTargetDir = targetDir
@@ -645,26 +510,22 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("skipped filtered archive directory %s", entryPath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("skipped filtered archive directory %s", entryPath))
-			return nil
-		}
-		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.removeFilteredArchiveFile(runID, entryPath, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, entryPath, true, stats); err != nil {
 				stats.FailureCount++
-				s.persistRunHistory(runID, fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err), stats)
-				s.appendLog(runID, "error", fmt.Sprintf("remove filtered archive file %s failed: %v", entryPath, err))
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
 			}
 			return nil
 		}
-		if archiveMode == "package" && matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
-			if err := s.moveMatchedArchiveFile(runID, rootSourceDir, entryPath, fileTargetDir, archiveMode, matchArchiveParentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, entryPath, false, stats); err != nil {
 				stats.FailureCount++
-				s.persistRunHistory(runID, fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err), stats)
-				s.appendLog(runID, "error", fmt.Sprintf("move matched nested file %s failed: %v", entryPath, err))
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
 			}
 			return nil
 		}
@@ -683,10 +544,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			return nil
 		}
 
-		if archiveMode == "package" && isImageFile(entry.Name()) {
-			stats.SkipCount++
-			s.persistRunHistory(runID, fmt.Sprintf("deferred image file %s for package processing", entryPath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("deferred image file %s for package processing", entryPath))
+		if archiveMode == "package" && (isImageFile(entry.Name()) || (matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers)) || isCoverImageFile(entry.Name())) {
 			return nil
 		}
 
@@ -830,17 +688,135 @@ func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, sta
 	return nil
 }
 
-func (s *Service) removeFilteredArchiveFile(runID, sourcePath string, stats *executionStats) error {
-	if err := os.Remove(sourcePath); err != nil {
+func (s *Service) trashFilteredArchiveItem(runID, sourcePath string, isDir bool, stats *executionStats) error {
+	trashedPath, err := moveFilteredArchiveItemToTrash(sourcePath)
+	if err != nil {
 		return err
 	}
 
 	stats.ProcessedFiles++
-	stats.CleanupRemovedFiles++
-	stats.SizeBytes += fileSizeOrZero(sourcePath)
-	s.persistRunHistory(runID, fmt.Sprintf("removed filtered archive file %s", sourcePath), stats)
-	s.appendLog(runID, "info", fmt.Sprintf("removed filtered archive file %s", sourcePath))
+	if isDir {
+		stats.CleanupRemovedDirs++
+	} else {
+		stats.CleanupRemovedFiles++
+	}
+	stats.SizeBytes += fileSizeOrZero(trashedPath)
+	itemType := "file"
+	if isDir {
+		itemType = "directory"
+	}
+	s.persistRunHistory(runID, fmt.Sprintf("trashed filtered archive %s %s -> %s (original path: %s)", itemType, sourcePath, trashedPath, sourcePath), stats)
+	s.appendLog(runID, "info", fmt.Sprintf("trashed filtered archive %s %s -> %s (original path: %s)", itemType, sourcePath, trashedPath, sourcePath))
 	return nil
+}
+
+func (s *Service) scanAndStagePackageEntries(runID, rootSourceDir, dirPath, compatibilityMode string, matchers []fileNameMatcher, matchArchiveEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) (packageStageResult, error) {
+	result := packageStageResult{}
+	entries, err := readDirWithMode(compatibilityMode, dirPath)
+	if err != nil {
+		return result, fmt.Errorf("read package directory %s: %w", dirPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+	sortEntriesNaturally(entries)
+	result.imageFiles = make([]os.DirEntry, 0, len(entries))
+	result.coverFiles = make([]os.DirEntry, 0, len(entries))
+	result.matchedFiles = make([]os.DirEntry, 0, len(entries))
+
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(dirPath, entry.Name())
+		if entry.IsDir() {
+			if matchesFileName(entry.Name(), true, matchers) {
+				return nil
+			}
+			result.hasSubdirs = true
+			return nil
+		}
+		result.fileCount++
+		if matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
+			result.matchedFiles = append(result.matchedFiles, entry)
+			return nil
+		}
+		if isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
+			result.coverFiles = append(result.coverFiles, entry)
+			return nil
+		}
+		if isImageFile(entry.Name()) {
+			result.imageFiles = append(result.imageFiles, entry)
+		}
+		return nil
+	})
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, targetDir string, stage packageStageResult, parentRenameEnabled bool, cleanupSourceAfterArchive bool, preferPlainParentName bool, stats *executionStats) error {
+	if len(stage.matchedFiles) > 0 {
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, dirPath, stage.matchedFiles, targetDir, parentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+			return err
+		}
+	}
+
+	coverTargetDir := targetDir
+	if !sameCleanPath(rootSourceDir, dirPath) {
+		coverTargetDir = filepath.Join(targetDir, filepath.Base(dirPath))
+	}
+	if len(stage.coverFiles) > 0 {
+		if err := s.moveCoverFiles(runID, dirPath, stage.coverFiles, coverTargetDir, stats); err != nil {
+			return err
+		}
+	}
+
+	if len(stage.imageFiles) == 0 {
+		return nil
+	}
+
+	archivePath, err := createPackageCBZFromFiles(rootSourceDir, dirPath, stage.imageFiles, targetDir, parentRenameEnabled, preferPlainParentName)
+	if err != nil {
+		return err
+	}
+	if cleanupSourceAfterArchive {
+		if err := removePackedSourceFiles(dirPath, stage.imageFiles); err != nil {
+			return fmt.Errorf("remove packed source files: %w", err)
+		}
+	}
+	stats.ProcessedFiles += len(stage.imageFiles)
+	stats.SuccessCount++
+	stats.PackedVolumes++
+	stats.SizeBytes += fileSizeOrZero(archivePath)
+	if sameCleanPath(rootSourceDir, dirPath) {
+		s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath))
+	} else if filepath.Base(dirPath) == filepath.Base(rootSourceDir) {
+		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", dirPath, archivePath))
+	} else {
+		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath))
+	}
+
+	return nil
+}
+
+func moveFilteredArchiveItemToTrash(sourcePath string) (string, error) {
+	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSourcePath == "" || cleanSourcePath == "." {
+		return "", fmt.Errorf("invalid filtered archive source path")
+	}
+
+	trashDir := filepath.Join(packageTrashRoot, time.Now().Format("20060102"))
+	if err := os.MkdirAll(trashDir, 0o755); err != nil {
+		return "", fmt.Errorf("create package trash dir: %w", err)
+	}
+
+	targetPath := uniqueArchiveDestinationPath(trashDir, filepath.Base(cleanSourcePath))
+	if err := moveFile(cleanSourcePath, targetPath); err != nil {
+		return "", fmt.Errorf("move filtered archive item to trash: %w", err)
+	}
+
+	return targetPath, nil
 }
 
 func fileSizeOrZero(path string) int64 {
