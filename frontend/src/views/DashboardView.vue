@@ -96,9 +96,12 @@
           <el-card class="page-card dashboard-card task-preview-card">
             <div class="task-preview-card__header">
               <h3 class="page-section-title">任务预览</h3>
-              <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="plain" size="small">
-                {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
-              </el-tag>
+              <div class="task-preview-card__actions">
+                <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="plain" size="small">
+                  {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
+                </el-tag>
+                <el-button text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
+              </div>
             </div>
 
             <div v-if="runningPreviewItems.length" class="task-preview-list">
@@ -124,6 +127,15 @@
                 </div>
 
                 <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
+                <div class="task-preview-item__logs">
+                  <div v-if="previewLogsLoadingMap[item.id]" class="task-preview-item__logs-loading">执行情况加载中...</div>
+                  <template v-else>
+                    <div v-for="log in getPreviewLogs(item.id)" :key="log.id" class="task-preview-item__log-line">
+                      {{ formatRunLogLine(log) }}
+                    </div>
+                    <div v-if="!getPreviewLogs(item.id).length" class="task-preview-item__logs-empty">暂无执行日志</div>
+                  </template>
+                </div>
               </div>
             </div>
 
@@ -136,9 +148,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { fetchRuns, type RunInstance } from '../api/executions'
+import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
 import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResourcePayload } from '../api/system'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { fetchRules, type RuleItem } from '../api/rules'
@@ -153,6 +165,10 @@ const runHistoryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 type RunningPreviewItem = RunInstance & { ruleName: string; runModeText: string; sourceDir: string }
 const runningRuns = ref<RunningPreviewItem[]>([])
 const dashboardExecutionHints = ref<Record<number, string>>({})
+const previewRefreshing = ref(false)
+const previewLogsMap = ref<Record<string, RunLogEntry[]>>({})
+const previewLogsLoadingMap = ref<Record<string, boolean>>({})
+let previewPollTimer: number | null = null
 
 const healthStatus = computed(() => {
   if (loading.value) return '检查中'
@@ -281,6 +297,15 @@ function estimateRunProgress(item: RunningPreviewItem) {
 	return Math.min(92, Math.max(18, total % 100))
 }
 
+function getPreviewLogs(runID: string) {
+	return previewLogsMap.value[runID] ?? []
+}
+
+function formatRunLogLine(log: RunLogEntry) {
+	const time = new Date(log.created_at).toLocaleTimeString('zh-CN', { hour12: false })
+	return `[${time}] ${log.message}`
+}
+
 async function loadHealth() {
   loading.value = true
   healthError.value = ''
@@ -327,11 +352,57 @@ async function loadRules() {
         }
       })
     dashboardExecutionHints.value = {}
+    await loadRunningPreviewLogs(runningRuns.value)
   } catch {
     rules.value = []
     runningRuns.value = []
     dashboardExecutionHints.value = {}
+    previewLogsMap.value = {}
+    previewLogsLoadingMap.value = {}
   }
+}
+
+async function loadRunningPreviewLogs(items: RunningPreviewItem[]) {
+	const nextLogsMap: Record<string, RunLogEntry[]> = { ...previewLogsMap.value }
+	const nextLoadingMap: Record<string, boolean> = { ...previewLogsLoadingMap.value }
+
+	await Promise.all(items.map(async (item) => {
+		nextLoadingMap[item.id] = true
+		try {
+			const response = await fetchRunLogs(item.id)
+			nextLogsMap[item.id] = (response.data?.items ?? []).slice(-5)
+		} catch {
+			nextLogsMap[item.id] = []
+		} finally {
+			nextLoadingMap[item.id] = false
+		}
+	}))
+
+	previewLogsMap.value = nextLogsMap
+	previewLogsLoadingMap.value = nextLoadingMap
+}
+
+async function refreshRunningPreview() {
+	previewRefreshing.value = true
+	try {
+		await loadRules()
+	} finally {
+		previewRefreshing.value = false
+	}
+}
+
+function startPreviewPolling() {
+	stopPreviewPolling()
+	previewPollTimer = window.setInterval(() => {
+		void refreshRunningPreview()
+	}, 5000)
+}
+
+function stopPreviewPolling() {
+	if (previewPollTimer !== null) {
+		window.clearInterval(previewPollTimer)
+		previewPollTimer = null
+	}
 }
 
 async function loadSystemResource() {
@@ -348,6 +419,11 @@ onMounted(() => {
   void loadSummary()
   void loadSystemResource()
   void loadRules()
+  startPreviewPolling()
+})
+
+onBeforeUnmount(() => {
+	stopPreviewPolling()
 })
 </script>
 
@@ -565,6 +641,12 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
+.task-preview-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .task-preview-list {
   display: flex;
   flex-direction: column;
@@ -628,6 +710,28 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-preview-item__logs {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-preview-item__log-line {
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.task-preview-item__logs-loading,
+.task-preview-item__logs-empty {
+  color: var(--text-tertiary);
 }
 
 .task-preview-empty {
