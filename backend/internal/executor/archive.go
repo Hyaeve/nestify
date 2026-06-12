@@ -11,13 +11,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 )
 
 var archivePartNumberPattern = regexp.MustCompile(`^0*[1-9]\d*$`)
 
-const packageTrashRoot = "data/staging/trash"
+const packageTrashRoot = "data/recycle"
 
 type executionStats struct {
 	ProcessedFiles      int
@@ -81,7 +80,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	entries = limitEntriesForMode(req.CompatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount = 1
-		stats.Summary = "source directory is empty"
+		stats.Summary = "源目录为空"
 		return stats, nil
 	}
 
@@ -109,7 +108,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	err = processEntriesForMode(req.CompatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, true, &stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, sourceDir, entryPath, true, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
@@ -119,7 +118,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, false, &stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, sourceDir, entryPath, false, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
@@ -227,9 +226,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
-		stats.Summary = "no supported archive items found"
+		stats.Summary = "未发现可归档项目"
 	} else {
-		stats.Summary = fmt.Sprintf("packed %d volumes, moved %d files, skipped %d, failed %d", stats.PackedVolumes, stats.MovedFiles, stats.SkipCount, stats.FailureCount)
+		stats.Summary = fmt.Sprintf("归档完成：打包 %d 卷、移动 %d 个文件、跳过 %d 项、失败 %d 项", stats.PackedVolumes, stats.MovedFiles, stats.SkipCount, stats.FailureCount)
 	}
 
 	if stats.FailureCount > 0 {
@@ -269,13 +268,13 @@ func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executi
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
-		stats.Summary = "no linkable files found"
+		stats.Summary = "未发现可建立链路的文件"
 	} else {
-		modeLabel := "soft"
+		modeLabel := "软链"
 		if strings.EqualFold(strings.TrimSpace(req.LinkMode), "hard") {
-			modeLabel = "hard"
+			modeLabel = "硬链"
 		}
-		stats.Summary = fmt.Sprintf("created %d %s links, skipped %d, failed %d", stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
+		stats.Summary = fmt.Sprintf("链路完成：创建 %d 个%s，跳过 %d 项，失败 %d 项", stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
 	}
 
 	if stats.FailureCount > 0 {
@@ -402,7 +401,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, true, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
@@ -412,7 +411,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, false, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, false, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
@@ -510,7 +509,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, true, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
@@ -520,7 +519,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			return nil
 		}
 		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
-			if err := s.trashFilteredArchiveItem(runID, entryPath, false, stats); err != nil {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, false, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
@@ -688,8 +687,8 @@ func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, sta
 	return nil
 }
 
-func (s *Service) trashFilteredArchiveItem(runID, sourcePath string, isDir bool, stats *executionStats) error {
-	trashedPath, err := moveFilteredArchiveItemToTrash(sourcePath)
+func (s *Service) trashFilteredArchiveItem(runID, rootSourceDir, sourcePath string, isDir bool, stats *executionStats) error {
+	trashedPath, err := moveFilteredArchiveItemToTrash(rootSourceDir, sourcePath)
 	if err != nil {
 		return err
 	}
@@ -800,18 +799,43 @@ func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, target
 	return nil
 }
 
-func moveFilteredArchiveItemToTrash(sourcePath string) (string, error) {
+func moveFilteredArchiveItemToTrash(rootSourceDir, sourcePath string) (string, error) {
+	cleanRootSourceDir := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	if cleanRootSourceDir == "" || cleanRootSourceDir == "." {
+		return "", fmt.Errorf("invalid filtered archive root source path")
+	}
+
 	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
 	if cleanSourcePath == "" || cleanSourcePath == "." {
 		return "", fmt.Errorf("invalid filtered archive source path")
 	}
+	if sameCleanPath(cleanRootSourceDir, cleanSourcePath) {
+		return "", fmt.Errorf("filtered archive source path cannot equal root source path")
+	}
 
-	trashDir := filepath.Join(packageTrashRoot, time.Now().Format("20060102"))
+	relPath, err := filepath.Rel(filepath.Dir(cleanRootSourceDir), cleanSourcePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve filtered archive relative path: %w", err)
+	}
+	cleanRelPath := filepath.Clean(relPath)
+	if cleanRelPath == "." || cleanRelPath == "" {
+		return "", fmt.Errorf("invalid filtered archive relative path")
+	}
+	rootBaseName := filepath.Base(cleanRootSourceDir)
+	if !sameCleanPath(cleanRelPath, rootBaseName) && !strings.HasPrefix(strings.ToLower(cleanRelPath), strings.ToLower(rootBaseName)+string(filepath.Separator)) {
+		return "", fmt.Errorf("filtered archive source path is outside root source path")
+	}
+
+	trashDir := packageTrashRoot
 	if err := os.MkdirAll(trashDir, 0o755); err != nil {
 		return "", fmt.Errorf("create package trash dir: %w", err)
 	}
 
-	targetPath := uniqueArchiveDestinationPath(trashDir, filepath.Base(cleanSourcePath))
+	targetPath := filepath.Join(trashDir, cleanRelPath)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return "", fmt.Errorf("create filtered archive trash parent dir: %w", err)
+	}
+	targetPath = uniqueArchiveDestinationPath(filepath.Dir(targetPath), filepath.Base(targetPath))
 	if err := moveFile(cleanSourcePath, targetPath); err != nil {
 		return "", fmt.Errorf("move filtered archive item to trash: %w", err)
 	}

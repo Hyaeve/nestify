@@ -12,6 +12,7 @@ type fileNameMatcher struct {
 	target  ruleMatcherTarget
 	literal string
 	regex   *regexp.Regexp
+	fuzzy   bool
 }
 
 type ruleMatcherTarget int
@@ -58,9 +59,9 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
-		stats.Summary = "no matching cleanup items found"
+		stats.Summary = "未发现可清理项目"
 	} else {
-		stats.Summary = fmt.Sprintf("removed %d files and %d directories, failed %d", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
+		stats.Summary = fmt.Sprintf("清理完成：删除 %d 个文件、%d 个文件夹，失败 %d 项", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
 	}
 
 	if stats.FailureCount > 0 {
@@ -182,6 +183,7 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 			continue
 		}
 		target := ruleMatcherFileName
+		fuzzy := false
 		if len(value) >= 3 && strings.HasPrefix(value, "/") && strings.HasSuffix(value, "/") {
 			target = ruleMatcherGlobal
 			value = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(value, "/"), "/"))
@@ -191,6 +193,10 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 		} else if strings.HasPrefix(value, ".") {
 			target = ruleMatcherExtension
 		}
+		if target != ruleMatcherExtension && strings.HasPrefix(value, "*") {
+			fuzzy = true
+			value = strings.TrimSpace(strings.TrimPrefix(value, "*"))
+		}
 		if value == "" {
 			continue
 		}
@@ -198,12 +204,12 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 		if looksLikeRegexPattern(value) {
 			compiled, err := regexp.Compile(value)
 			if err == nil {
-				items = append(items, fileNameMatcher{target: target, regex: compiled})
+				items = append(items, fileNameMatcher{target: target, regex: compiled, fuzzy: fuzzy})
 				continue
 			}
 		}
 
-		items = append(items, fileNameMatcher{target: target, literal: strings.ToLower(value)})
+		items = append(items, fileNameMatcher{target: target, literal: strings.ToLower(value), fuzzy: fuzzy})
 	}
 
 	return items
@@ -292,7 +298,13 @@ func matchesFileName(name string, isDir bool, matchers []fileNameMatcher) bool {
 			continue
 		}
 		for _, literalCandidate := range literalCandidates {
-			if strings.Contains(literalCandidate, matcher.literal) {
+			if matcher.fuzzy {
+				if strings.Contains(literalCandidate, matcher.literal) {
+					return true
+				}
+				continue
+			}
+			if literalCandidate == matcher.literal {
 				return true
 			}
 		}

@@ -31,6 +31,16 @@
           <span class="toolbar-row__split" />
           <el-button @click="openPicker('browse')">选择目录</el-button>
           <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
+          <el-button class="toolbar-action toolbar-action--recycle" circle aria-label="回收站" title="回收站" @click="openRecycleBin">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--recycle">
+              <path d="M9 4.5h6" />
+              <path d="M10 3h4a1 1 0 0 1 1 1v.5H9V4a1 1 0 0 1 1-1Z" />
+              <path d="M5.5 6.5h13" />
+              <path d="M7 6.5l.8 11.2A2 2 0 0 0 9.79 19.5h4.42a2 2 0 0 0 1.99-1.8L17 6.5" />
+              <path d="M10 10v6" />
+              <path d="M14 10v6" />
+            </svg>
+          </el-button>
           <div class="toolbar-row__search">
             <el-input
               v-model="searchKeyword"
@@ -475,6 +485,11 @@ function handleWindowKeyDown(event: KeyboardEvent) {
 function openPicker(mode: PickerMode) {
   pickerMode.value = mode
   directoryPickerVisible.value = true
+}
+
+async function openRecycleBin() {
+  directoryPath.value = '/data/recycle'
+  await openCurrentPath()
 }
 
 function getSelection(entry?: FileManagerEntry) {
@@ -1260,6 +1275,31 @@ onBeforeUnmount(() => {
   color: #e35d6a;
   border-color: #f4c2c8;
   background: #fff1f3;
+}
+
+.toolbar-action--recycle {
+  padding: 8px;
+}
+
+.toolbar-action__icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.toolbar-action__icon--recycle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toolbar-action--recycle:not(.is-disabled):hover,
+.toolbar-action--recycle:not(.is-disabled):focus-visible {
+  color: #e67e22;
+  border-color: #ffd2a6;
+  background: #fff7ed;
 }
 
 .path-row {

@@ -89,8 +89,8 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 		return nil, fmt.Errorf("rule is already running")
 	}
 	run := s.newRun(triggerMode, archiveMode, &ruleID, req.RuleName)
-	s.appendLog(run.ID, "info", fmt.Sprintf("prepared %s execution skeleton for rule %q", archiveMode, req.RuleName))
-	s.appendLog(run.ID, "info", fmt.Sprintf("source=%s target=%s", req.SourceDir, req.TargetDir))
+	s.appendLog(run.ID, "info", fmt.Sprintf("规则“%s”已进入执行队列（模式：%s）", req.RuleName, archiveMode))
+	s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", req.SourceDir, req.TargetDir))
 	s.runExecution(run.ID, req)
 
 	return s.cloneRun(run), nil
@@ -122,22 +122,22 @@ func (s *Service) RecordManualExtractRun(sourcePaths []string, outputDir string,
 	s.mu.Unlock()
 
 	if len(cleanSources) > 0 {
-		s.appendLog(run.ID, "info", fmt.Sprintf("manual extract requested for %d archive(s)", len(cleanSources)))
+		s.appendLog(run.ID, "info", fmt.Sprintf("手动解压任务已提交，共 %d 个压缩包", len(cleanSources)))
 		for _, path := range cleanSources {
-			s.appendLog(run.ID, "info", fmt.Sprintf("source archive: %s", path))
+			s.appendLog(run.ID, "info", fmt.Sprintf("源压缩包：%s", path))
 		}
 	}
 	if strings.TrimSpace(outputDir) != "" {
-		s.appendLog(run.ID, "info", fmt.Sprintf("extract output directory: %s", outputDir))
+		s.appendLog(run.ID, "info", fmt.Sprintf("解压输出目录：%s", outputDir))
 	}
 	for _, path := range extractedPaths {
-		s.appendLog(run.ID, "info", fmt.Sprintf("extracted archive to %s", path))
+		s.appendLog(run.ID, "info", fmt.Sprintf("已解压到：%s", path))
 	}
 
-	s.persistRunHistory(run.ID, fmt.Sprintf("manual extract completed: %d archive(s) -> %d directorie(s)", len(cleanSources), len(extractedPaths)), &executionStats{
+	s.persistRunHistory(run.ID, fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)), &executionStats{
 		ProcessedFiles: len(cleanSources),
 		SuccessCount:   len(extractedPaths),
-		Summary:        fmt.Sprintf("manual extract completed: %d archive(s) -> %d directorie(s)", len(cleanSources), len(extractedPaths)),
+		Summary:        fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)),
 	})
 }
 
@@ -231,8 +231,8 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		s.appendLog(runID, "info", "dispatching execution")
 		prepared, err := PrepareMode(req)
 		if err != nil {
-			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("execution failed: %v", err))
-			s.persistRunHistory(runID, fmt.Sprintf("execution failed: %v", err), nil)
+			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("执行失败：%v", err))
+			s.persistRunHistory(runID, fmt.Sprintf("执行失败：%v", err), nil)
 			return
 		}
 
@@ -264,7 +264,7 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		} else {
 			s.appendLog(runID, "info", prepared.Summary)
 			s.appendLog(runID, "info", stats.Summary)
-			s.appendLog(runID, "info", "execution completed")
+			s.appendLog(runID, "info", "执行完成")
 		}
 
 		if req.RuleID > 0 && s.store != nil {

@@ -79,9 +79,9 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
-		stats.Summary = "no matching transform items found"
+		stats.Summary = "未发现可转换项目"
 	} else {
-		stats.Summary = fmt.Sprintf("renamed %d files and %d directories, failed %d", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
+		stats.Summary = fmt.Sprintf("转换完成：重命名 %d 个文件、%d 个文件夹，失败 %d 项", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
 	}
 
 	if stats.FailureCount > 0 {
@@ -223,8 +223,13 @@ func parseTransformFilters(items []string) ([]transformFilterMatcher, error) {
 		}
 
 		matcher := transformFilterMatcher{literal: pattern, targetDirOnly: targetDirOnly}
-		if looksLikeRegexPattern(pattern) {
-			compiled, err := regexp.Compile(pattern)
+		if len(pattern) >= 2 && strings.HasPrefix(pattern, "/") && strings.HasSuffix(pattern, "/") {
+			regexPattern := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(pattern, "/"), "/"))
+			if regexPattern == "" {
+				continue
+			}
+			matcher.literal = regexPattern
+			compiled, err := regexp.Compile(regexPattern)
 			if err != nil {
 				return nil, fmt.Errorf("invalid transform filter regex %q: %w", pattern, err)
 			}

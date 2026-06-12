@@ -22,7 +22,7 @@ func (s *Service) PrepareManualPreflight(req model.ManualPreflightRequest) (*mod
 
 	run := s.newRun(model.TriggerModeManual, "manual", nil, "manual-preflight")
 	run.Stage = model.RunStagePreflight
-	s.appendLog(run.ID, "info", fmt.Sprintf("prepared manual preflight skeleton for %s", sourceDir))
+	s.appendLog(run.ID, "info", fmt.Sprintf("已生成手动预检任务：%s", sourceDir))
 
 	result := &model.ManualPreflightResult{
 		SourceDir:         sourceDir,
@@ -60,18 +60,18 @@ func (s *Service) RecordManualCollectRun(sourcePaths []string, collectedPaths []
 	}
 	s.mu.Unlock()
 
-	s.appendLog(run.ID, "info", fmt.Sprintf("manual collect requested for %d folder(s)", len(cleanSources)))
+	s.appendLog(run.ID, "info", fmt.Sprintf("手动收集任务已提交，共 %d 个文件夹", len(cleanSources)))
 	for _, path := range cleanSources {
-		s.appendLog(run.ID, "info", fmt.Sprintf("collect root: %s", path))
+		s.appendLog(run.ID, "info", fmt.Sprintf("收集根目录：%s", path))
 	}
-	s.appendLog(run.ID, "info", fmt.Sprintf("remove subfolders: %t", removeSubfolders))
+	s.appendLog(run.ID, "info", fmt.Sprintf("收集后清理子文件夹：%t", removeSubfolders))
 	for _, path := range collectedPaths {
-		s.appendLog(run.ID, "info", fmt.Sprintf("collected files into %s", path))
+		s.appendLog(run.ID, "info", fmt.Sprintf("文件已收集至：%s", path))
 	}
 
-	s.persistRunHistory(run.ID, fmt.Sprintf("manual collect completed: %d folder(s)", len(collectedPaths)), &executionStats{
+	s.persistRunHistory(run.ID, fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)), &executionStats{
 		ProcessedFiles: len(cleanSources),
 		SuccessCount:   len(collectedPaths),
-		Summary:        fmt.Sprintf("manual collect completed: %d folder(s)", len(collectedPaths)),
+		Summary:        fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)),
 	})
 }

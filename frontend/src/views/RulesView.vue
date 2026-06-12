@@ -470,7 +470,7 @@
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配归档规则</div></div>
+            <div><div class="mode-config-panel__title">匹配归档</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -479,7 +479,7 @@
         </template>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">单件归巢规则</div></div>
+            <div><div class="mode-config-panel__title">单件归巢</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -487,13 +487,13 @@
           </el-form-item>
         </template>
         <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
         <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
@@ -531,7 +531,7 @@
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配归档规则</div></div>
+            <div><div class="mode-config-panel__title">匹配归档</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -540,7 +540,7 @@
         </template>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">单件归巢规则</div></div>
+            <div><div class="mode-config-panel__title">单件归巢</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -548,13 +548,13 @@
           </el-form-item>
         </template>
         <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤名单</div></div>
+          <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
         <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
@@ -590,7 +590,7 @@
         <el-form-item label="监控目录"><el-input v-model="createPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配规则</div></div>
+            <div><div class="mode-config-panel__title">匹配清理</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -655,7 +655,7 @@
         <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配规则</div></div>
+            <div><div class="mode-config-panel__title">匹配清理</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
@@ -772,9 +772,9 @@ type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
 
 const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
-const ruleMatcherPlaceholder = '一行一个规则：无前缀匹配文件名，如 漫画；. 前缀匹配扩展名，如 .mp4；/ 前缀匹配文件夹名，如 /合集；/内容/ 全局匹配文件名、扩展名、文件夹名，如 /mp4/。'
-const archiveRuleMatcherPlaceholder = '文件匹配：待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n全局匹配：/待匹配/'
-const cleanupRuleMatcherPlaceholder = '文件匹配：待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n全局匹配：/待匹配/'
+const ruleMatcherPlaceholder = '一行一个规则：无前缀默认全称匹配文件名，如 漫画；* 前缀匹配文件关键词，如 *漫画；. 前缀匹配扩展名，如 .mp4；/ 前缀匹配文件夹全称，如 /合集；/* 前缀匹配文件夹关键词，如 /*合集；/内容/ 全局全称匹配文件或文件夹，如 /mp4/；/*内容/ 全局关键词匹配文件或文件夹，如 /*mp4/。'
+const archiveRuleMatcherPlaceholder = '文件匹配：待匹配\n文件关键词匹配：*待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n文件夹关键词匹配：/*待匹配\n全局匹配：/待匹配/\n全局关键词匹配：/*待匹配/'
+const cleanupRuleMatcherPlaceholder = '文件匹配：待匹配\n文件关键词匹配：*待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n文件夹关键词匹配：/*待匹配\n全局匹配：/待匹配/\n全局关键词匹配：/*待匹配/'
 
 const packageModeOptions = [
   { key: 'match_archive', label: '匹配归档', description: '按四元规则匹配文件名、扩展名、文件夹名或全局规则，命中后直接转移到目标路径，不参与打包。' },

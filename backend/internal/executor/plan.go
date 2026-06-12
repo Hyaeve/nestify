@@ -17,7 +17,7 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
-			Summary:     joinPreparedSummary("package mode skeleton prepared", targetDirSummary),
+			Summary:     joinPreparedSummary("打包模式任务已准备就绪", targetDirSummary),
 		}, nil
 	case "collect":
 		return &PreparedMode{
@@ -25,7 +25,7 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
-			Summary:     joinPreparedSummary("collect mode skeleton prepared", targetDirSummary),
+			Summary:     joinPreparedSummary("收集模式任务已准备就绪", targetDirSummary),
 		}, nil
 	case "cleanup":
 		actions := make([]string, 0, 2)
@@ -35,9 +35,9 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 		if req.Options["cleanup_matching_files"] {
 			actions = append(actions, fmt.Sprintf("matched files (%d filters)", len(req.Filters)))
 		}
-		summary := "cleanup mode skeleton prepared"
+		summary := "清理模式任务已准备就绪"
 		if len(actions) > 0 {
-			summary = fmt.Sprintf("cleanup mode skeleton prepared: %s", strings.Join(actions, ", "))
+			summary = fmt.Sprintf("清理模式任务已准备就绪：%s", strings.Join(actions, "，"))
 		}
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
@@ -54,9 +54,9 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 		if req.Options["convert_matching_text"] {
 			actions = append(actions, fmt.Sprintf("匹配转换（%d 条规则）", len(req.TransformRules)))
 		}
-		summary := "transform mode skeleton prepared"
+		summary := "转换模式任务已准备就绪"
 		if len(actions) > 0 {
-			summary = fmt.Sprintf("transform mode skeleton prepared: %s", strings.Join(actions, ", "))
+			summary = fmt.Sprintf("转换模式任务已准备就绪：%s", strings.Join(actions, "，"))
 		}
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
