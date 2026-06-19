@@ -183,7 +183,7 @@
           </el-table-column>
           <el-table-column label="模式" width="120">
             <template #default="scope">
-              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row.archive_mode)">{{ historyModeLabel(scope.row.archive_mode) }}</span>
+              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="100">
@@ -1720,8 +1720,8 @@ function handleHistoryRuleTypeChange() {
 	void loadHistory()
 }
 
-function historyModeLabel(mode?: string) {
-	switch (mode) {
+function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
+	switch (item?.archive_mode) {
 	case 'package':
 		return '打包'
 	case 'collect':
@@ -1731,14 +1731,14 @@ function historyModeLabel(mode?: string) {
 	case 'transform':
 		return '转换'
 	case 'link':
-		return '硬链/软链'
+		return item?.link_mode === 'soft' ? '软链' : '硬链'
 	default:
 		return '—'
 	}
 }
 
-function historyModeTagClass(mode?: string) {
-	switch (mode) {
+function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string }) {
+	switch (item?.archive_mode) {
 	case 'package':
 		return 'custom-mode-tag--package'
 	case 'collect':
@@ -1748,7 +1748,7 @@ function historyModeTagClass(mode?: string) {
 	case 'transform':
 		return 'custom-mode-tag--transform'
 	case 'link':
-		return 'custom-mode-tag--hardlink'
+		return item?.link_mode === 'soft' ? 'custom-mode-tag--softlink' : 'custom-mode-tag--hardlink'
 	default:
 		return ''
 	}

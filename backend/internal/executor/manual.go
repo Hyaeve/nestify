@@ -20,7 +20,7 @@ func (s *Service) PrepareManualPreflight(req model.ManualPreflightRequest) (*mod
 		outputDir = filepath.Dir(sourceDir)
 	}
 
-	run := s.newRun(model.TriggerModeManual, "manual", nil, "manual-preflight")
+	run := s.newRun(model.TriggerModeManual, "manual", "", nil, "manual-preflight")
 	run.Stage = model.RunStagePreflight
 	s.appendLog(run.ID, "info", fmt.Sprintf("已生成手动预检任务：%s", sourceDir))
 
@@ -44,7 +44,7 @@ func (s *Service) RecordManualCollectRun(sourcePaths []string, collectedPaths []
 		}
 	}
 
-	run := s.newRun(model.TriggerModeManual, "collect", nil, "manual-collect")
+	run := s.newRun(model.TriggerModeManual, "collect", "", nil, "manual-collect")
 	now := time.Now().UTC()
 
 	s.mu.Lock()

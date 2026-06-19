@@ -43,18 +43,32 @@
           <span class="toolbar-row__split" />
           <el-tooltip content="移动" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--move" :disabled="!selectedCount" circle aria-label="移动" @click="openMoveDialog()">
-              <el-icon><Right /></el-icon>
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--move">
+                <path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" />
+                <path d="M10.5 13.25h9" />
+                <path d="m16.75 9.5 3.75 3.75L16.75 17" />
+                <path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" />
+              </svg>
             </el-button>
           </el-tooltip>
           <el-tooltip content="复制" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--copy" :disabled="!selectedCount" circle aria-label="复制" @click="openCopyDialog()">
-              <el-icon><CopyDocument /></el-icon>
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--copy">
+                <rect x="8" y="7" width="10" height="12" rx="2" />
+                <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+              </svg>
             </el-button>
           </el-tooltip>
           <el-tooltip content="解压" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--extract" :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" circle aria-label="解压" @click="extractSelectedArchives()">
               <template v-if="!extracting">
-                <el-icon><Download /></el-icon>
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--extract">
+                  <path d="M5 6.5h14" />
+                  <path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" />
+                  <path d="M10 4h4" />
+                  <path d="M12 8.75v5.25" />
+                  <path d="m9.75 12.25 2.25 2.25 2.25-2.25" />
+                </svg>
               </template>
             </el-button>
           </el-tooltip>
@@ -77,7 +91,12 @@
           <span class="toolbar-row__split" />
           <el-tooltip content="选择目录" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--browse" circle aria-label="选择目录" @click="openPicker('browse')">
-              <el-icon><Folder /></el-icon>
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--browse">
+                <rect x="4.25" y="4.25" width="6.25" height="6.25" rx="1.2" />
+                <rect x="13.5" y="4.25" width="6.25" height="6.25" rx="1.2" />
+                <rect x="4.25" y="13.5" width="6.25" height="6.25" rx="1.2" />
+                <rect x="13.5" y="13.5" width="6.25" height="6.25" rx="1.2" />
+              </svg>
             </el-button>
           </el-tooltip>
           <el-tooltip content="上级目录" placement="top" :show-after="500">
@@ -88,12 +107,12 @@
           <el-tooltip content="回收站" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--recycle" circle aria-label="回收站" @click="openRecycleBin">
               <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--recycle">
-                <path d="M9 4.5h6" />
-                <path d="M10 3h4a1 1 0 0 1 1 1v.5H9V4a1 1 0 0 1 1-1Z" />
-                <path d="M5.5 6.5h13" />
-                <path d="M7 6.5l.8 11.2A2 2 0 0 0 9.79 19.5h4.42a2 2 0 0 0 1.99-1.8L17 6.5" />
-                <path d="M10 10v6" />
-                <path d="M14 10v6" />
+                <path d="M8 5.25h8" />
+                <path d="M9 3.5h6l.75 1.75H8.25L9 3.5Z" />
+                <path d="M5.25 7h13.5" />
+                <path d="M7.25 7.5h9.5l-.7 10.05A2 2 0 0 1 14.05 19.5H9.95a2 2 0 0 1-1.99-1.95L7.25 7.5Z" />
+                <path d="M10 10.25v5.5" />
+                <path d="M14 10.25v5.5" />
               </svg>
             </el-button>
           </el-tooltip>
@@ -213,10 +232,10 @@
                   </el-button>
                   <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item command="rename"><el-icon><EditPen /></el-icon>重命名</el-dropdown-item>
-                        <el-dropdown-item command="move"><el-icon><Right /></el-icon>移动</el-dropdown-item>
-                        <el-dropdown-item command="copy"><el-icon><CopyDocument /></el-icon>复制</el-dropdown-item>
-                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><el-icon><Download /></el-icon>解压到当前目录</el-dropdown-item>
+                        <el-dropdown-item command="rename"><el-icon><Edit /></el-icon>重命名</el-dropdown-item>
+                        <el-dropdown-item command="move"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg>移动</el-dropdown-item>
+                        <el-dropdown-item command="copy"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg>复制</el-dropdown-item>
+                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--extract"><path d="M5 6.5h14" /><path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" /><path d="M10 4h4" /><path d="M12 8.75v5.25" /><path d="m9.75 12.25 2.25 2.25 2.25-2.25" /></svg>解压到当前目录</el-dropdown-item>
                         <el-dropdown-item command="delete" divided><el-icon><Delete /></el-icon>删除</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
@@ -253,10 +272,10 @@
       <button v-if="contextMenu.entry.is_dir" type="button" class="context-menu__item" @click="openEntryFromContext"><el-icon class="context-menu__item-icon"><FolderOpened /></el-icon><span class="context-menu__item-label">打开</span></button>
       <button type="button" class="context-menu__item" @click="packEntryFromContext"><el-icon class="context-menu__item-icon"><Files /></el-icon><span class="context-menu__item-label">打包</span></button>
       <div class="context-menu__divider" />
-      <button type="button" class="context-menu__item" @click="renameEntryFromContext"><el-icon class="context-menu__item-icon"><EditPen /></el-icon><span class="context-menu__item-label">重命名</span></button>
-      <button type="button" class="context-menu__item" @click="moveEntryFromContext"><el-icon class="context-menu__item-icon"><Right /></el-icon><span class="context-menu__item-label">移动</span></button>
-      <button type="button" class="context-menu__item" @click="copyEntryFromContext"><el-icon class="context-menu__item-icon"><CopyDocument /></el-icon><span class="context-menu__item-label">复制</span></button>
-      <button v-if="isArchiveEntry(contextMenu.entry)" type="button" class="context-menu__item" @click="extractEntryFromContext"><el-icon class="context-menu__item-icon"><Download /></el-icon><span class="context-menu__item-label">解压</span></button>
+      <button type="button" class="context-menu__item" @click="renameEntryFromContext"><el-icon class="context-menu__item-icon"><Edit /></el-icon><span class="context-menu__item-label">重命名</span></button>
+      <button type="button" class="context-menu__item" @click="moveEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg><span class="context-menu__item-label">移动</span></button>
+      <button type="button" class="context-menu__item" @click="copyEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg><span class="context-menu__item-label">复制</span></button>
+      <button v-if="isArchiveEntry(contextMenu.entry)" type="button" class="context-menu__item" @click="extractEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--extract"><path d="M5 6.5h14" /><path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" /><path d="M10 4h4" /><path d="M12 8.75v5.25" /><path d="m9.75 12.25 2.25 2.25 2.25-2.25" /></svg><span class="context-menu__item-label">解压</span></button>
       <button type="button" class="context-menu__item context-menu__item--danger" @click="deleteEntryFromContext"><el-icon class="context-menu__item-icon"><Delete /></el-icon><span class="context-menu__item-label">删除</span></button>
     </div>
 
@@ -371,7 +390,7 @@
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Back, Clock, CopyDocument, Delete, Document, Download, EditPen, Files, Folder, FolderAdd, FolderOpened, MoreFilled, Refresh, Right, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
+import { Back, Clock, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
@@ -1400,6 +1419,23 @@ onBeforeUnmount(() => {
   display: block;
 }
 
+.toolbar-action__icon--copy,
+.toolbar-action__icon--browse,
+.toolbar-action__icon--move,
+.toolbar-action__icon--extract,
+.toolbar-action__icon--recycle,
+.dropdown-menu-icon,
+.context-menu__item-icon--copy,
+.context-menu__item-icon--move,
+.context-menu__item-icon--extract,
+.context-menu__item-icon--rename {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .toolbar-action__icon--recycle {
   fill: none;
   stroke: currentColor;
@@ -1413,6 +1449,13 @@ onBeforeUnmount(() => {
   color: #e67e22;
   border-color: #ffd2a6;
   background: #fff7ed;
+}
+
+.dropdown-menu-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: -3px;
 }
 
 .path-row {
@@ -1673,6 +1716,8 @@ onBeforeUnmount(() => {
 .context-menu__item-icon {
   flex-shrink: 0;
   font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .context-menu__item-label {

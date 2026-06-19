@@ -62,6 +62,7 @@ func (s *Store) migrate() error {
 			rule_name TEXT NOT NULL DEFAULT '',
 			trigger_mode TEXT NOT NULL,
 			archive_mode TEXT NOT NULL DEFAULT '',
+			link_mode TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL,
 			processed_files INTEGER NOT NULL DEFAULT 0,
 			success_count INTEGER NOT NULL DEFAULT 0,
@@ -146,6 +147,12 @@ func (s *Store) migrate() error {
 	log.Printf("sqlite:migrate: ensure run_history size_bytes column")
 	if err := s.ensureRunHistorySizeBytesColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure run_history size_bytes column failed: %v", err)
+		return err
+	}
+
+	log.Printf("sqlite:migrate: ensure run_history link_mode column")
+	if err := s.ensureRunHistoryLinkModeColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure run_history link_mode column failed: %v", err)
 		return err
 	}
 	log.Printf("sqlite:migrate: migration pipeline complete")
@@ -240,6 +247,35 @@ func (s *Store) ensureRunHistorySizeBytesColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		return fmt.Errorf("add run_history size_bytes column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRunHistoryLinkModeColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
+	if err != nil {
+		return fmt.Errorf("query run_history schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan run_history schema: %w", err)
+		}
+		if strings.EqualFold(name, "link_mode") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
+		return fmt.Errorf("add run_history link_mode column: %w", err)
 	}
 
 	return nil

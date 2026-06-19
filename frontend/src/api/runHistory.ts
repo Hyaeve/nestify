@@ -4,6 +4,7 @@ export interface RunHistoryItem {
   rule_name?: string
   trigger_mode: string
   archive_mode?: string
+  link_mode?: 'soft' | 'hard'
   status: string
   processed_files: number
   success_count: number

@@ -88,7 +88,7 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 	if ruleID > 0 && !s.markRuleActive(ruleID) {
 		return nil, fmt.Errorf("rule is already running")
 	}
-	run := s.newRun(triggerMode, archiveMode, &ruleID, req.RuleName)
+	run := s.newRun(triggerMode, archiveMode, strings.TrimSpace(req.LinkMode), &ruleID, req.RuleName)
 	s.appendLog(run.ID, "info", fmt.Sprintf("规则“%s”已进入执行队列（模式：%s）", req.RuleName, archiveMode))
 	s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", req.SourceDir, req.TargetDir))
 	s.runExecution(run.ID, req)
@@ -105,7 +105,7 @@ func (s *Service) RecordManualExtractRun(sourcePaths []string, outputDir string,
 		}
 	}
 
-	run := s.newRun(model.TriggerModeManual, "extract", nil, "manual-extract")
+	run := s.newRun(model.TriggerModeManual, "extract", "", nil, "manual-extract")
 	now := time.Now().UTC()
 
 	s.mu.Lock()
@@ -176,7 +176,7 @@ func (s *Service) ListRunLogs(runID string) []model.RunLogEntry {
 	return cloned
 }
 
-func (s *Service) newRun(triggerMode, archiveMode string, ruleID *int64, ruleName string) *model.RunInstance {
+func (s *Service) newRun(triggerMode, archiveMode, linkMode string, ruleID *int64, ruleName string) *model.RunInstance {
 	now := time.Now().UTC()
 	run := &model.RunInstance{
 		ID:          mustRandomID(),
@@ -184,6 +184,7 @@ func (s *Service) newRun(triggerMode, archiveMode string, ruleID *int64, ruleNam
 		RuleName:    ruleName,
 		TriggerMode: triggerMode,
 		ArchiveMode: archiveMode,
+		LinkMode:    linkMode,
 		Status:      model.RunStatusPending,
 		Stage:       model.RunStageQueued,
 		StartedAt:   now,
@@ -380,6 +381,7 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 		RuleName:       run.RuleName,
 		TriggerMode:    run.TriggerMode,
 		ArchiveMode:    run.ArchiveMode,
+		LinkMode:       run.LinkMode,
 		Status:         status,
 		ProcessedFiles: processedFiles,
 		SuccessCount:   successCount,

@@ -31,6 +31,7 @@ type RunInstance struct {
 	RuleName           string     `json:"rule_name,omitempty"`
 	TriggerMode        string     `json:"trigger_mode"`
 	ArchiveMode        string     `json:"archive_mode,omitempty"`
+	LinkMode           string     `json:"link_mode,omitempty"`
 	Status             string     `json:"status"`
 	Stage              string     `json:"stage"`
 	CurrentSeries      string     `json:"current_series,omitempty"`
@@ -58,6 +59,7 @@ type RunHistoryItem struct {
 	RuleName       string     `json:"rule_name,omitempty"`
 	TriggerMode    string     `json:"trigger_mode"`
 	ArchiveMode    string     `json:"archive_mode,omitempty"`
+	LinkMode       string     `json:"link_mode,omitempty"`
 	Status         string     `json:"status"`
 	ProcessedFiles int        `json:"processed_files"`
 	SuccessCount   int        `json:"success_count"`

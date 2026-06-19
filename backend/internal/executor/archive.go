@@ -129,9 +129,6 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		}
 		if matchArchiveEnabled && !entry.IsDir() && matchesArchiveDirectly(sourceDir, entryPath, directMatchers) {
 			matchedTargetDir := targetDir
-			if req.ArchiveMode == "package" && !flatArchive {
-				matchedTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
-			}
 			if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
 				topLevelMatchedFiles = append(topLevelMatchedFiles, entry)
 				return nil
@@ -212,7 +209,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			if err := s.moveCoverFiles(runID, sourceDir, topLevelCoverFiles, archiveTargetDir, &stats); err != nil {
 				return stats, err
 			}
-			if err := s.moveMatchedArchiveEntries(runID, sourceDir, sourceDir, topLevelMatchedFiles, archiveTargetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+			if err := s.moveMatchedArchiveEntries(runID, sourceDir, sourceDir, topLevelMatchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, &stats); err != nil {
 				return stats, err
 			}
 			stats.ProcessedFiles += len(topLevelImageFiles)
@@ -604,9 +601,9 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 	if cleanupSourceAfterArchive {
 		verb = "moved"
 	}
-	message := fmt.Sprintf("%s file %s -> %s", verb, sourcePath, targetPath)
+	message := fmt.Sprintf("%s文件 %s -> %s", mapArchiveActionVerb(verb), sourcePath, targetPath)
 	if actionSummary == "renamed-re" {
-		message += " (renamed with -re/-reN suffix due to different file with same name)"
+		message += "（因存在同名异内容文件，已自动追加 -re/-reN 后缀）"
 	}
 	s.persistRunHistory(runID, message, stats)
 	s.appendLog(runID, "info", message)
@@ -616,7 +613,7 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	if !parentRenameEnabled {
 		if archiveMode == "package" {
-			return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "matched file", stats)
+			return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
 		}
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
@@ -653,7 +650,7 @@ func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targe
 	if cleanupSourceAfterArchive {
 		verb = "moved"
 	}
-	message := fmt.Sprintf("%s matched file %s -> %s", verb, sourcePath, targetPath)
+	message := fmt.Sprintf("%s匹配归档文件 %s -> %s", mapArchiveActionVerb(verb), sourcePath, targetPath)
 	s.persistRunHistory(runID, message, stats)
 	s.appendLog(runID, "info", message)
 	return nil
@@ -695,14 +692,25 @@ func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupS
 	if cleanupSourceAfterArchive {
 		verb = "moved"
 	}
-	message := fmt.Sprintf("%s %s %s -> %s", verb, itemLabel, sourcePath, targetPath)
+	message := fmt.Sprintf("%s%s %s -> %s", mapArchiveActionVerb(verb), itemLabel, sourcePath, targetPath)
 	s.persistRunHistory(runID, message, stats)
 	s.appendLog(runID, "info", message)
 	return nil
 }
 
+func mapArchiveActionVerb(verb string) string {
+	switch strings.TrimSpace(strings.ToLower(verb)) {
+	case "moved":
+		return "已移动"
+	case "copied":
+		return "已复制"
+	default:
+		return strings.TrimSpace(verb)
+	}
+}
+
 func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, stats *executionStats) error {
-	return s.moveFileToOwnDir(runID, sourcePath, targetDir, true, "nested file", stats)
+	return s.moveFileToOwnDir(runID, sourcePath, targetDir, true, "归巢文件", stats)
 }
 
 func (s *Service) trashFilteredArchiveItem(runID, rootSourceDir, sourcePath string, isDir bool, stats *executionStats) error {
