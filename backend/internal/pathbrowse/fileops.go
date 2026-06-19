@@ -46,7 +46,7 @@ func (s *Service) CreateDirectory(parentPath, name string) (string, error) {
 	return targetPath, nil
 }
 
-func (s *Service) UploadFiles(destinationPath string, files []*multipart.FileHeader) ([]string, error) {
+func (s *Service) UploadFiles(destinationPath string, files []*multipart.FileHeader, relativePaths []string) ([]string, error) {
 	destinationPath, err := s.resolveAllowedPath(destinationPath)
 	if err != nil {
 		return nil, err
@@ -61,13 +61,33 @@ func (s *Service) UploadFiles(destinationPath string, files []*multipart.FileHea
 	}
 
 	saved := make([]string, 0, len(files))
-	for _, fileHeader := range files {
+	for index, fileHeader := range files {
 		src, err := fileHeader.Open()
 		if err != nil {
 			return nil, fmt.Errorf("open upload file: %w", err)
 		}
 
-		targetPath := uniqueDestinationPath(destinationPath, fileHeader.Filename)
+		relativePath := ""
+		if index < len(relativePaths) {
+			relativePath = relativePaths[index]
+		}
+
+		normalizedRelativePath, err := normalizeUploadRelativePath(relativePath, fileHeader.Filename)
+		if err != nil {
+			_ = src.Close()
+			return nil, err
+		}
+
+		targetPath := filepath.Join(destinationPath, normalizedRelativePath)
+		if !s.isAllowed(targetPath) {
+			_ = src.Close()
+			return nil, fmt.Errorf("upload target path is outside allowed browse roots")
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			_ = src.Close()
+			return nil, fmt.Errorf("create upload parent directory: %w", err)
+		}
+		targetPath = uniqueDestinationPath(filepath.Dir(targetPath), filepath.Base(targetPath))
 		dst, err := os.Create(targetPath)
 		if err != nil {
 			_ = src.Close()
@@ -86,6 +106,34 @@ func (s *Service) UploadFiles(destinationPath string, files []*multipart.FileHea
 	}
 
 	return saved, nil
+}
+
+func normalizeUploadRelativePath(relativePath, fallbackName string) (string, error) {
+	fallbackName = strings.TrimSpace(filepath.Base(fallbackName))
+	if fallbackName == "" || fallbackName == "." {
+		return "", fmt.Errorf("invalid upload file name")
+	}
+
+	trimmed := strings.TrimSpace(relativePath)
+	if trimmed == "" {
+		return fallbackName, nil
+	}
+
+	trimmed = strings.ReplaceAll(trimmed, `\\`, "/")
+	cleanRelativePath := filepath.Clean(filepath.FromSlash(trimmed))
+	if cleanRelativePath == "." || cleanRelativePath == "" {
+		return fallbackName, nil
+	}
+	if filepath.IsAbs(cleanRelativePath) || cleanRelativePath == ".." || strings.HasPrefix(cleanRelativePath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid upload relative path")
+	}
+
+	baseName := strings.TrimSpace(filepath.Base(cleanRelativePath))
+	if baseName == "" || baseName == "." || baseName == ".." {
+		return "", fmt.Errorf("invalid upload relative path")
+	}
+
+	return cleanRelativePath, nil
 }
 
 func (s *Service) CopyItems(paths []string, destinationPath string) ([]string, error) {

@@ -11,36 +11,92 @@
         />
 
         <div class="toolbar-row">
-          <el-button @click="createFolderDialogVisible = true">新建文件夹</el-button>
-          <el-button type="primary" @click="triggerUpload">上传</el-button>
-          <el-button class="toolbar-action toolbar-action--refresh" :loading="loading" @click="reloadEntries">刷新</el-button>
-          <el-dropdown trigger="click" :disabled="recentVisitedPaths.length === 0" @command="handleRecentVisitedCommand">
-            <el-button>最近访问</el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-for="path in recentVisitedPaths" :key="path" :command="path">{{ path }}</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <el-tooltip content="新建文件夹" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--folder" circle aria-label="新建文件夹" @click="createFolderDialogVisible = true">
+              <el-icon><FolderAdd /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="上传文件夹" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--upload" type="primary" circle aria-label="上传文件夹" @click="triggerUpload">
+              <el-icon><UploadFilled /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="刷新" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--refresh" :loading="loading" circle aria-label="刷新" @click="reloadEntries">
+              <template v-if="!loading">
+                <el-icon><Refresh /></el-icon>
+              </template>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="最近访问" placement="top" :show-after="500">
+            <el-dropdown trigger="click" :disabled="recentVisitedPaths.length === 0" @command="handleRecentVisitedCommand">
+              <el-button class="toolbar-action toolbar-action--recent" circle aria-label="最近访问">
+                <el-icon><Clock /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-for="path in recentVisitedPaths" :key="path" :command="path">{{ path }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </el-tooltip>
           <span class="toolbar-row__split" />
-          <el-button class="toolbar-action toolbar-action--move" :disabled="!selectedCount" @click="openMoveDialog()">移动</el-button>
-          <el-button class="toolbar-action toolbar-action--copy" :disabled="!selectedCount" @click="openCopyDialog()">复制</el-button>
-          <el-button class="toolbar-action toolbar-action--extract" :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" @click="extractSelectedArchives()">解压</el-button>
-          <el-button class="toolbar-action toolbar-action--collect" :disabled="!canCollectSelectedFolders || collecting" :loading="collecting" @click="collectSelectedFolders()">收集</el-button>
-          <el-button class="toolbar-action toolbar-action--delete" type="danger" plain :disabled="!selectedCount" @click="removeItems()">删除</el-button>
+          <el-tooltip content="移动" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--move" :disabled="!selectedCount" circle aria-label="移动" @click="openMoveDialog()">
+              <el-icon><Right /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="复制" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--copy" :disabled="!selectedCount" circle aria-label="复制" @click="openCopyDialog()">
+              <el-icon><CopyDocument /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="解压" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--extract" :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" circle aria-label="解压" @click="extractSelectedArchives()">
+              <template v-if="!extracting">
+                <el-icon><Download /></el-icon>
+              </template>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="收集" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--collect" :disabled="!canCollectSelectedFolders || collecting" :loading="collecting" circle aria-label="收集" @click="collectSelectedFolders()">
+              <template v-if="!collecting">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--collect">
+                  <path d="M3.75 7.75a2 2 0 0 1 2-2h4.2l1.7 1.8h6.6a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H5.75a2 2 0 0 1-2-2Z" />
+                  <path d="M12 10.5v5" />
+                  <path d="M9.75 13.25 12 15.5l2.25-2.25" />
+                </svg>
+              </template>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="删除" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--delete" type="danger" plain :disabled="!selectedCount" circle aria-label="删除" @click="removeItems()">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-tooltip>
           <span class="toolbar-row__split" />
-          <el-button @click="openPicker('browse')">选择目录</el-button>
-          <el-button :disabled="!parentPath" @click="openParent">上级目录</el-button>
-          <el-button class="toolbar-action toolbar-action--recycle" circle aria-label="回收站" title="回收站" @click="openRecycleBin">
-            <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--recycle">
-              <path d="M9 4.5h6" />
-              <path d="M10 3h4a1 1 0 0 1 1 1v.5H9V4a1 1 0 0 1 1-1Z" />
-              <path d="M5.5 6.5h13" />
-              <path d="M7 6.5l.8 11.2A2 2 0 0 0 9.79 19.5h4.42a2 2 0 0 0 1.99-1.8L17 6.5" />
-              <path d="M10 10v6" />
-              <path d="M14 10v6" />
-            </svg>
-          </el-button>
+          <el-tooltip content="选择目录" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--browse" circle aria-label="选择目录" @click="openPicker('browse')">
+              <el-icon><Folder /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="上级目录" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--parent" :disabled="!parentPath" circle aria-label="上级目录" @click="openParent">
+              <el-icon><Back /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="回收站" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--recycle" circle aria-label="回收站" @click="openRecycleBin">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--recycle">
+                <path d="M9 4.5h6" />
+                <path d="M10 3h4a1 1 0 0 1 1 1v.5H9V4a1 1 0 0 1 1-1Z" />
+                <path d="M5.5 6.5h13" />
+                <path d="M7 6.5l.8 11.2A2 2 0 0 0 9.79 19.5h4.42a2 2 0 0 0 1.99-1.8L17 6.5" />
+                <path d="M10 10v6" />
+                <path d="M14 10v6" />
+              </svg>
+            </el-button>
+          </el-tooltip>
           <div class="toolbar-row__search">
             <el-input
               v-model="searchKeyword"
@@ -103,15 +159,20 @@
                 :class="{ 'is-dir': scope.row.is_dir }"
                 @click.stop="handleEntryPrimaryAction(scope.row)"
               >
-                <el-button
-                  v-if="scope.row.is_dir"
-                  link
-                  class="entry-star"
-                  :class="{ 'is-active': isStarred(scope.row.path) }"
-                  @click.stop="toggleFolderStar(scope.row.path)"
-                >
-                  <span class="entry-star__icon">{{ isStarred(scope.row.path) ? '★' : '☆' }}</span>
-                </el-button>
+                <el-tooltip v-if="scope.row.is_dir" :content="isStarred(scope.row.path) ? '取消星标' : '添加星标'" placement="top" :show-after="500">
+                  <el-button
+                    link
+                    class="entry-star"
+                    :class="{ 'is-active': isStarred(scope.row.path) }"
+                    :aria-label="isStarred(scope.row.path) ? '取消星标' : '添加星标'"
+                    @click.stop="toggleFolderStar(scope.row.path)"
+                  >
+                    <el-icon class="entry-star__icon">
+                      <StarFilled v-if="isStarred(scope.row.path)" />
+                      <Star v-else />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
                 <el-icon class="entry-name__icon">
                   <FolderOpened v-if="scope.row.is_dir" />
                   <Document v-else />
@@ -151,15 +212,15 @@
                     <el-icon><MoreFilled /></el-icon>
                   </el-button>
                   <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                      <el-dropdown-item command="move">移动</el-dropdown-item>
-                      <el-dropdown-item command="copy">复制</el-dropdown-item>
-                      <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract">解压到当前目录</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="rename"><el-icon><EditPen /></el-icon>重命名</el-dropdown-item>
+                        <el-dropdown-item command="move"><el-icon><Right /></el-icon>移动</el-dropdown-item>
+                        <el-dropdown-item command="copy"><el-icon><CopyDocument /></el-icon>复制</el-dropdown-item>
+                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><el-icon><Download /></el-icon>解压到当前目录</el-dropdown-item>
+                        <el-dropdown-item command="delete" divided><el-icon><Delete /></el-icon>删除</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -179,7 +240,7 @@
           />
         </div>
 
-        <input ref="uploadInputRef" type="file" multiple class="file-upload-input" @change="handleUploadSelected" />
+        <input ref="uploadInputRef" type="file" multiple webkitdirectory directory class="file-upload-input" @change="handleUploadSelected" />
       </div>
     </el-card>
 
@@ -189,13 +250,14 @@
       :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
       @click.stop
     >
-      <button v-if="contextMenu.entry.is_dir" type="button" class="context-menu__item" @click="openEntryFromContext">打开</button>
-      <button type="button" class="context-menu__item" @click="packEntryFromContext">打包</button>
+      <button v-if="contextMenu.entry.is_dir" type="button" class="context-menu__item" @click="openEntryFromContext"><el-icon class="context-menu__item-icon"><FolderOpened /></el-icon><span class="context-menu__item-label">打开</span></button>
+      <button type="button" class="context-menu__item" @click="packEntryFromContext"><el-icon class="context-menu__item-icon"><Files /></el-icon><span class="context-menu__item-label">打包</span></button>
       <div class="context-menu__divider" />
-      <button type="button" class="context-menu__item" @click="renameEntryFromContext">重命名</button>
-      <button type="button" class="context-menu__item" @click="moveEntryFromContext">移动</button>
-      <button type="button" class="context-menu__item" @click="copyEntryFromContext">复制</button>
-      <button type="button" class="context-menu__item context-menu__item--danger" @click="deleteEntryFromContext">删除</button>
+      <button type="button" class="context-menu__item" @click="renameEntryFromContext"><el-icon class="context-menu__item-icon"><EditPen /></el-icon><span class="context-menu__item-label">重命名</span></button>
+      <button type="button" class="context-menu__item" @click="moveEntryFromContext"><el-icon class="context-menu__item-icon"><Right /></el-icon><span class="context-menu__item-label">移动</span></button>
+      <button type="button" class="context-menu__item" @click="copyEntryFromContext"><el-icon class="context-menu__item-icon"><CopyDocument /></el-icon><span class="context-menu__item-label">复制</span></button>
+      <button v-if="isArchiveEntry(contextMenu.entry)" type="button" class="context-menu__item" @click="extractEntryFromContext"><el-icon class="context-menu__item-icon"><Download /></el-icon><span class="context-menu__item-label">解压</span></button>
+      <button type="button" class="context-menu__item context-menu__item--danger" @click="deleteEntryFromContext"><el-icon class="context-menu__item-icon"><Delete /></el-icon><span class="context-menu__item-label">删除</span></button>
     </div>
 
     <DirectoryPickerDialog
@@ -309,7 +371,7 @@
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Document, Files, Folder, FolderOpened, MoreFilled } from '@element-plus/icons-vue'
+import { Back, Clock, CopyDocument, Delete, Document, Download, EditPen, Files, Folder, FolderAdd, FolderOpened, MoreFilled, Refresh, Right, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
@@ -917,6 +979,13 @@ function copyEntryFromContext() {
   hideContextMenu()
 }
 
+function extractEntryFromContext() {
+  if (contextMenu.value.entry) {
+    void extractSelectedArchives(contextMenu.value.entry)
+  }
+  hideContextMenu()
+}
+
 function deleteEntryFromContext() {
   if (contextMenu.value.entry) {
     void removeItems(contextMenu.value.entry)
@@ -952,9 +1021,11 @@ async function handleUploadSelected(event: Event) {
     return
   }
 
+  const relativePaths = files.map((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name)
+
   try {
-    await uploadFiles(directoryPath.value, files)
-    ElMessage.success(`已上传 ${files.length} 个文件`)
+    await uploadFiles(directoryPath.value, files, relativePaths)
+    ElMessage.success(`已上传 ${files.length} 个项目`)
     await openCurrentPath()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '上传失败'
@@ -1230,6 +1301,24 @@ onBeforeUnmount(() => {
   transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.toolbar-action :deep(.el-icon),
+.toolbar-action :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar-action--folder:not(.is-disabled):hover,
+.toolbar-action--folder:not(.is-disabled):focus-visible {
+  color: #409eff;
+  border-color: #b7d8ff;
+  background: #edf7ff;
+}
+
+.toolbar-action--upload:not(.is-disabled):hover,
+.toolbar-action--upload:not(.is-disabled):focus-visible {
+  box-shadow: 0 10px 24px rgba(64, 158, 255, 0.28);
+}
+
 .toolbar-action:not(.is-disabled):hover,
 .toolbar-action:not(.is-disabled):focus-visible {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
@@ -1247,6 +1336,13 @@ onBeforeUnmount(() => {
   color: #e67e22;
   border-color: #ffbf80;
   background: #fff3e8;
+}
+
+.toolbar-action--recent:not(.is-disabled):hover,
+.toolbar-action--recent:not(.is-disabled):focus-visible {
+  color: #6b7280;
+  border-color: #d1d5db;
+  background: #f8fafc;
 }
 
 .toolbar-action--copy:not(.is-disabled):hover,
@@ -1270,6 +1366,14 @@ onBeforeUnmount(() => {
   background: #f5efff;
 }
 
+.toolbar-action__icon--collect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .toolbar-action--delete:not(.is-disabled):hover,
 .toolbar-action--delete:not(.is-disabled):focus-visible {
   color: #e35d6a;
@@ -1279,6 +1383,15 @@ onBeforeUnmount(() => {
 
 .toolbar-action--recycle {
   padding: 8px;
+}
+
+.toolbar-action--browse:not(.is-disabled):hover,
+.toolbar-action--browse:not(.is-disabled):focus-visible,
+.toolbar-action--parent:not(.is-disabled):hover,
+.toolbar-action--parent:not(.is-disabled):focus-visible {
+  color: #409eff;
+  border-color: #b7d8ff;
+  background: #edf7ff;
 }
 
 .toolbar-action__icon {
@@ -1541,6 +1654,9 @@ onBeforeUnmount(() => {
 
 .context-menu__item {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   text-align: left;
   color: var(--text-primary);
@@ -1552,6 +1668,15 @@ onBeforeUnmount(() => {
 
 .context-menu__item:hover {
   background: #f3f4f6;
+}
+
+.context-menu__item-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.context-menu__item-label {
+  flex: 1;
 }
 
 .context-menu__item--danger {

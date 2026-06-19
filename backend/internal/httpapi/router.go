@@ -431,7 +431,8 @@ func (a *apiHandler) handleUploadFiles(w http.ResponseWriter, r *http.Request) {
 
 	destinationPath := r.FormValue("destination_path")
 	files := r.MultipartForm.File["files"]
-	saved, err := a.pathBrowse.UploadFiles(destinationPath, files)
+	relativePaths := r.MultipartForm.Value["relative_paths"]
+	saved, err := a.pathBrowse.UploadFiles(destinationPath, files, relativePaths)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "UPLOAD_FAILED", Message: err.Error()})
 		return

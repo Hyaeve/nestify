@@ -615,6 +615,9 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 
 func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	if !parentRenameEnabled {
+		if archiveMode == "package" {
+			return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "matched file", stats)
+		}
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
 
@@ -656,7 +659,7 @@ func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targe
 	return nil
 }
 
-func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, stats *executionStats) error {
+func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
 	baseName := strings.TrimSpace(filepath.Base(sourcePath))
 	if baseName == "" {
 		return fmt.Errorf("source file name is empty")
@@ -674,7 +677,13 @@ func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, sta
 	}
 
 	targetPath := uniqueArchiveDestinationPath(nestedTargetDir, filepath.Base(sourcePath))
-	if err := moveFile(sourcePath, targetPath); err != nil {
+	var err error
+	if cleanupSourceAfterArchive {
+		err = moveFile(sourcePath, targetPath)
+	} else {
+		err = copyFile(sourcePath, targetPath)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -682,9 +691,18 @@ func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, sta
 	stats.SuccessCount++
 	stats.MovedFiles++
 	stats.SizeBytes += fileSizeOrZero(targetPath)
-	s.persistRunHistory(runID, fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath), stats)
-	s.appendLog(runID, "info", fmt.Sprintf("nested file %s -> %s", sourcePath, targetPath))
+	verb := "copied"
+	if cleanupSourceAfterArchive {
+		verb = "moved"
+	}
+	message := fmt.Sprintf("%s %s %s -> %s", verb, itemLabel, sourcePath, targetPath)
+	s.persistRunHistory(runID, message, stats)
+	s.appendLog(runID, "info", message)
 	return nil
+}
+
+func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, stats *executionStats) error {
+	return s.moveFileToOwnDir(runID, sourcePath, targetDir, true, "nested file", stats)
 }
 
 func (s *Service) trashFilteredArchiveItem(runID, rootSourceDir, sourcePath string, isDir bool, stats *executionStats) error {

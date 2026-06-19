@@ -132,10 +132,13 @@ export function collectItems(paths: string[], removeSubfolders = false) {
 	})
 }
 
-export async function uploadFiles(destinationPath: string, files: File[]): Promise<ApiResponse<FileMutationResult>> {
+export async function uploadFiles(destinationPath: string, files: File[], relativePaths: string[] = []): Promise<ApiResponse<FileMutationResult>> {
   const formData = new FormData()
   formData.append('destination_path', destinationPath)
-  files.forEach((file) => formData.append('files', file))
+  files.forEach((file, index) => {
+    formData.append('files', file)
+    formData.append('relative_paths', relativePaths[index] || '')
+  })
 
   const response = await fetch('/api/v1/files/upload', {
     method: 'POST',
