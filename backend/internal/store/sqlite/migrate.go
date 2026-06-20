@@ -109,6 +109,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure option_values_json column")
+	if err := s.ensureRuleOptionValuesColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure option_values_json column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure transform_rules column")
 	if err := s.ensureRuleTransformRulesColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure transform_rules column failed: %v", err)
@@ -451,6 +457,35 @@ func (s *Store) ensureRuleLinkModeColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
 		return fmt.Errorf("add link_mode column: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ensureRuleOptionValuesColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		if strings.EqualFold(name, "option_values_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN option_values_json TEXT NOT NULL DEFAULT '{}';`); err != nil {
+		return fmt.Errorf("add option_values_json column: %w", err)
 	}
 
 	return nil
