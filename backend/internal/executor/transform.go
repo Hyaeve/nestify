@@ -23,6 +23,7 @@ type renameTransformRule struct {
 	pattern     string
 	replacement string
 	regex       *regexp.Regexp
+	targetDir   bool
 }
 
 type transformFilterMatcher struct {
@@ -192,7 +193,17 @@ func parseRenameTransformRules(items []string) ([]renameTransformRule, error) {
 		if pattern == "" {
 			return nil, fmt.Errorf("invalid transform rule: %s", line)
 		}
-		rule := renameTransformRule{raw: line, pattern: pattern, replacement: replacement}
+		targetDir := false
+		if unwrappedPattern, ok := unwrapDirectoryTransformToken(pattern); ok {
+			unwrappedReplacement, replacementWrapped := unwrapDirectoryTransformToken(replacement)
+			if !replacementWrapped {
+				return nil, fmt.Errorf("directory transform rule must wrap both pattern and replacement with /: %s", line)
+			}
+			pattern = unwrappedPattern
+			replacement = unwrappedReplacement
+			targetDir = true
+		}
+		rule := renameTransformRule{raw: line, pattern: pattern, replacement: replacement, targetDir: targetDir}
 		if looksLikeRegexPattern(pattern) {
 			compiled, err := regexp.Compile(pattern)
 			if err != nil {
@@ -304,6 +315,9 @@ func applyRenameTransforms(name string, isDir bool, convertTraditional, convertC
 	}
 	if convertCustom {
 		for _, rule := range rules {
+			if rule.targetDir != isDir {
+				continue
+			}
 			if rule.regex != nil {
 				result = rule.regex.ReplaceAllString(result, rule.replacement)
 				continue
@@ -328,6 +342,14 @@ func applyRenameTransforms(name string, isDir bool, convertTraditional, convertC
 		result = strings.TrimSpace(result)
 	}
 	return result
+}
+
+func unwrapDirectoryTransformToken(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) < 2 || !strings.HasPrefix(trimmed, "/") || !strings.HasSuffix(trimmed, "/") {
+		return "", false
+	}
+	return strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "/"), "/")), true
 }
 
 func convertTraditionalToSimplified(value string) (string, error) {

@@ -107,12 +107,26 @@
           <el-tooltip content="回收站" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--recycle" circle aria-label="回收站" @click="openRecycleBin">
               <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--recycle">
-                <path d="M8 5.25h8" />
-                <path d="M9 3.5h6l.75 1.75H8.25L9 3.5Z" />
-                <path d="M5.25 7h13.5" />
-                <path d="M7.25 7.5h9.5l-.7 10.05A2 2 0 0 1 14.05 19.5H9.95a2 2 0 0 1-1.99-1.95L7.25 7.5Z" />
-                <path d="M10 10.25v5.5" />
-                <path d="M14 10.25v5.5" />
+                <defs>
+                  <linearGradient id="recycleBinBody" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#fcfcfd" />
+                    <stop offset="55%" stop-color="#edf1f6" />
+                    <stop offset="100%" stop-color="#d5dde8" />
+                  </linearGradient>
+                  <linearGradient id="recycleBinRim" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#fefefe" />
+                    <stop offset="100%" stop-color="#e6ebf2" />
+                  </linearGradient>
+                </defs>
+                <path d="M5.6 6.1 7 19.1c.08.78.74 1.37 1.53 1.37h6.94c.79 0 1.45-.59 1.53-1.37l1.4-13Z" fill="url(#recycleBinBody)" stroke="#cfd7e2" stroke-width="0.9" stroke-linejoin="round" />
+                <path d="M4.7 5.1h14.6l-1.1 2H5.8Z" fill="url(#recycleBinRim)" stroke="#d8dee8" stroke-width="0.85" stroke-linejoin="round" />
+                <path d="M8.05 4.1h7.9" stroke="#d6dde7" stroke-width="0.95" stroke-linecap="round" />
+                <path d="m10.15 9.35 1.18-1.96.95 1.54h1.78l-.86 1.43h1.68l-2.18 3.63-.9-1.46H10l.83-1.38H9.15Z" fill="#1da1ff" stroke="#1187df" stroke-width="0.22" stroke-linejoin="round" />
+                <path d="m14.96 10.02 1.2.02-.58 1" fill="none" stroke="#1da1ff" stroke-width="0.72" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="m9.44 8.72-.58-1 1.18-.03" fill="none" stroke="#1da1ff" stroke-width="0.72" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="m12.05 14.87-1.18-.02.58-1" fill="none" stroke="#1da1ff" stroke-width="0.72" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M7.5 8.2 8.55 19.3" fill="none" stroke="#eef2f7" stroke-width="0.8" stroke-linecap="round" />
+                <path d="M16.5 8.2 15.45 19.3" fill="none" stroke="#c7cfda" stroke-width="0.8" stroke-linecap="round" />
               </svg>
             </el-button>
           </el-tooltip>

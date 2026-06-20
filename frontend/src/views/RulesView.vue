@@ -612,7 +612,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
+            <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
           </el-form-item>
         </template>
         <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text">
@@ -677,7 +677,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条，格式：待转换 => 转换词；支持关键词部分匹配与正则转换。" />
+            <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
           </el-form-item>
         </template>
         <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text">
@@ -797,7 +797,7 @@ const cleanupModeOptions = [
 
 const transformModeOptions = [
   { key: 'convert_traditional_to_simplified', label: '繁简转换', description: '将监控目录下文件和文件夹名称中的中文繁体字转换为简体字，其他字符保持不变。' },
-  { key: 'convert_matching_text', label: '匹配转换', description: '按自定义规则重命名文件和文件夹名称，支持关键词部分匹配与正则转换。' },
+  { key: 'convert_matching_text', label: '匹配转换', description: '默认按文件名执行“待转换 => 转换词”；若两侧都写成 /待转换/ => /转换词/ 则按文件夹名执行。支持关键词部分匹配，也可用正则实现整段替换。' },
   { key: 'filter_matching_text', label: '匹配过滤', description: '按自定义规则过滤文件夹名称中的指定片段，支持普通文本与正则匹配，命中后会在重命名结果中移除匹配内容。' },
   { key: 'merge_same_name_dirs', label: '同名合并', description: '默认不勾选；关闭时文件夹转换后若出现同名冲突，则自动追加 -re、-re1、-re2……；开启后会将转换后同名的文件夹自动合并为一个目录。' },
 ] as const
