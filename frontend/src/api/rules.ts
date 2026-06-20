@@ -23,6 +23,7 @@ export interface RuleItem {
   cron_expression: string
   run_on_start: boolean
   options_json?: string
+  option_values_json?: string
   package_options_json?: string
   collect_options_json?: string
   filters_json?: string
@@ -68,6 +69,7 @@ export interface CreateRulePayload {
   cron_expression?: string
   run_on_start?: boolean
   options?: Record<string, boolean>
+  option_values?: Record<string, number>
   package_options?: Record<string, boolean>
   collect_options?: Record<string, boolean>
   filters?: string[]

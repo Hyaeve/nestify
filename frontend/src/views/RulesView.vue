@@ -761,7 +761,8 @@ type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
 type CollectOptionKey = 'recursive_collect' | 'cleanup_source_after_archive'
-type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files'
+type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files' | 'cleanup_expired_files'
+type CleanupOptionValueKey = 'cleanup_retention_days'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text' | 'merge_same_name_dirs'
 type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
@@ -769,6 +770,7 @@ type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.s
 type TabKey = 'rules' | 'purify' | 'link' | 'history'
 type RuleListType = 'archive' | 'cleanup' | 'link'
 type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
+type PurifyOptionValues = Record<CleanupOptionValueKey, number>
 
 const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
@@ -793,6 +795,7 @@ const collectModeOptions = [
 const cleanupModeOptions = [
   { key: 'cleanup_empty_dirs', label: '清理空夹', description: '递归删除监控目录中的空文件夹。' },
   { key: 'cleanup_matching_files', label: '匹配清理', description: '按四元规则删除命中的文件或文件夹，支持字符串和正则。' },
+  { key: 'cleanup_expired_files', label: '过期清除', description: '按保留天数删除监控目录下超过期限的文件。' },
 ] as const
 
 const transformModeOptions = [
@@ -815,7 +818,11 @@ function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
 }
 
 function createDefaultCleanupOptions(): Record<CleanupOptionKey, boolean> {
-  return { cleanup_empty_dirs: true, cleanup_matching_files: false }
+  return { cleanup_empty_dirs: true, cleanup_matching_files: false, cleanup_expired_files: false }
+}
+
+function createDefaultCleanupOptionValues(): PurifyOptionValues {
+	return { cleanup_retention_days: 5 }
 }
 
 function createDefaultTransformOptions(): Record<TransformOptionKey, boolean> {
@@ -848,6 +855,20 @@ function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefi
   } catch {
     return { ...defaults }
   }
+}
+
+function parseNumberOptionJSON<T extends Record<string, number>>(raw: string | undefined, defaults: T): T {
+	if (!raw) return { ...defaults }
+	try {
+		const parsed = JSON.parse(raw) as Record<string, unknown>
+		const normalized = { ...defaults }
+		for (const key of Object.keys(defaults)) {
+			if (typeof parsed[key] === 'number' && Number.isFinite(parsed[key])) normalized[key as keyof T] = parsed[key] as T[keyof T]
+		}
+		return normalized
+	} catch {
+		return { ...defaults }
+	}
 }
 
 function parseFiltersText(value: string) {
@@ -1111,6 +1132,7 @@ const createPurifyForm = reactive({
   watch_debounce_ms: 2000,
   run_on_start: true,
   options: createDefaultPurifyOptions() as PurifyOptions,
+  option_values: createDefaultCleanupOptionValues() as PurifyOptionValues,
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
@@ -1129,6 +1151,7 @@ const editPurifyForm = reactive({
   watch_debounce_ms: 2000,
   run_on_start: true,
   options: createDefaultPurifyOptions() as PurifyOptions,
+  option_values: createDefaultCleanupOptionValues() as PurifyOptionValues,
   filters_text: '',
   whitelist_text: '',
   transform_rules_text: '',
@@ -2372,6 +2395,8 @@ onMounted(() => {
 .mode-config-panel__description { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
 .transform-section-input { margin-top: -8px; margin-bottom: 12px; }
 .transform-section-input--filters { margin-top: -6px; }
+.cleanup-retention-input { margin-top: -6px; }
+.cleanup-retention-input :deep(.el-input-number) { width: 100%; max-width: 320px; }
 .mode-config-toggle { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 14px 16px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-fill-color-extra-light); cursor: pointer; text-align: left; }
 .mode-config-toggle__meta { display: flex; align-items: center; gap: 10px; }
 .mode-config-toggle__icon { font-size: 18px; line-height: 1; color: var(--el-text-color-secondary); transition: transform 0.2s ease; }

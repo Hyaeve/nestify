@@ -20,6 +20,7 @@ type Rule struct {
 	CronExpression       string    `json:"cron_expression"`
 	RunOnStart           bool      `json:"run_on_start"`
 	OptionsJSON          string    `json:"options_json"`
+	OptionValuesJSON     string    `json:"option_values_json"`
 	PackageOptionsJSON   string    `json:"package_options_json"`
 	CollectOptionsJSON   string    `json:"collect_options_json"`
 	FiltersJSON          string    `json:"filters_json"`
@@ -57,6 +58,7 @@ type CreateRuleInput struct {
 	CronExpression    string          `json:"cron_expression"`
 	RunOnStart        *bool           `json:"run_on_start"`
 	Options           map[string]bool `json:"options"`
+	OptionValues      map[string]int  `json:"option_values"`
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`
@@ -83,6 +85,7 @@ type UpdateRuleInput struct {
 	CronExpression    string          `json:"cron_expression"`
 	RunOnStart        *bool           `json:"run_on_start"`
 	Options           map[string]bool `json:"options"`
+	OptionValues      map[string]int  `json:"option_values"`
 	PackageOptions    map[string]bool `json:"package_options"`
 	CollectOptions    map[string]bool `json:"collect_options"`
 	Filters           []string        `json:"filters"`

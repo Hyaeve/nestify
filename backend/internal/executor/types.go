@@ -11,6 +11,7 @@ type ExecuteRuleRequest struct {
 	SourceDir         string
 	TargetDir         string
 	Options           map[string]bool
+	OptionValues      map[string]int
 	PackageOptions    map[string]bool
 	CollectOptions    map[string]bool
 	Filters           []string

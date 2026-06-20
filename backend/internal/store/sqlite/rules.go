@@ -14,7 +14,7 @@ func (s *Store) ListRules() ([]model.Rule, error) {
 	rows, err := s.db.Query(`
 		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			       options_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
+			       options_json, option_values_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
@@ -61,7 +61,7 @@ func (s *Store) ListRulesPage(page, pageSize int, ruleType string) ([]model.Rule
 	rows, err := s.db.Query(`
 		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			       options_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
+			       options_json, option_values_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules`+whereClause+`
@@ -106,7 +106,7 @@ func (s *Store) GetRuleByID(id int64) (*model.Rule, error) {
 	row := s.db.QueryRow(`
 		SELECT id, sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 		       source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			       options_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
+			       options_json, option_values_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
 		       last_run_status, last_success_count, last_skip_count, last_failure_count,
 		       created_at, updated_at
 		FROM rules
@@ -144,9 +144,9 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		INSERT INTO rules (
 			sort_order, name, description, enabled, monitor_enabled, compatibility_mode, archive_mode, rule_type, link_mode, run_mode,
 			source_dir, target_dir, watch_debounce_ms, cron_expression, run_on_start,
-			options_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
+			options_json, option_values_json, package_options_json, collect_options_json, filters_json, whitelist_json, match_filters_json, nest_filters_json, transform_rules_json, transform_filters_json,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		maxSortOrder+1,
 		strings.TrimSpace(input.Name),
@@ -164,6 +164,7 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
 		marshalBoolMap(input.Options),
+		marshalIntMap(input.OptionValues),
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
@@ -206,6 +207,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		    cron_expression = ?,
 		    run_on_start = ?,
 		    options_json = ?,
+		    option_values_json = ?,
 		    package_options_json = ?,
 		    collect_options_json = ?,
 		    filters_json = ?,
@@ -232,6 +234,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		strings.TrimSpace(input.CronExpression),
 		boolToInt(defaultBool(input.RunOnStart, true)),
 		marshalBoolMap(input.Options),
+		marshalIntMap(input.OptionValues),
 		marshalBoolMap(input.PackageOptions),
 		marshalBoolMap(input.CollectOptions),
 		marshalStringList(input.Filters),
@@ -356,6 +359,7 @@ func (s *Store) ReplaceRules(items []model.Rule) error {
 			item.CronExpression,
 			boolToInt(item.RunOnStart),
 			defaultRuleJSONText(item.OptionsJSON, `{}`),
+			defaultRuleJSONText(item.OptionValuesJSON, `{}`),
 			defaultRuleJSONText(item.PackageOptionsJSON, `{}`),
 			defaultRuleJSONText(item.CollectOptionsJSON, `{}`),
 			defaultRuleJSONText(item.FiltersJSON, `[]`),
@@ -461,6 +465,17 @@ func marshalBoolMap(value map[string]bool) string {
 	return string(encoded)
 }
 
+func marshalIntMap(value map[string]int) string {
+	if len(value) == 0 {
+		return "{}"
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return "{}"
+	}
+	return string(encoded)
+}
+
 func marshalStringList(value []string) string {
 	if len(value) == 0 {
 		return `[]`
@@ -513,6 +528,7 @@ func scanRule(s scanner) (model.Rule, error) {
 		&rule.CronExpression,
 		&runOnStart,
 		&rule.OptionsJSON,
+		&rule.OptionValuesJSON,
 		&rule.PackageOptionsJSON,
 		&rule.CollectOptionsJSON,
 		&rule.FiltersJSON,

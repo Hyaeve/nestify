@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type fileNameMatcher struct {
@@ -41,9 +42,16 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 
 	cleanupEmptyDirs := req.Options["cleanup_empty_dirs"]
 	cleanupMatchingFiles := req.Options["cleanup_matching_files"]
-	if !cleanupEmptyDirs && !cleanupMatchingFiles {
+	cleanupExpiredFiles := req.Options["cleanup_expired_files"]
+	cleanupRetentionDays := req.OptionValues["cleanup_retention_days"]
+	if !cleanupEmptyDirs && !cleanupMatchingFiles && !cleanupExpiredFiles {
 		stats.SkipCount = 1
 		stats.Summary = "no cleanup actions enabled"
+		return stats, nil
+	}
+	if cleanupExpiredFiles && cleanupRetentionDays < 1 {
+		stats.SkipCount = 1
+		stats.Summary = "cleanup_expired_files enabled but no valid retention days provided"
 		return stats, nil
 	}
 
@@ -55,7 +63,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 		return stats, nil
 	}
 
-	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, &stats)
+	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles, cleanupRetentionDays, matchers, whitelist, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -71,7 +79,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	return stats, nil
 }
 
-func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles bool, matchers []fileNameMatcher, whitelist map[string]struct{}, stats *executionStats) {
+func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles bool, cleanupRetentionDays int, matchers []fileNameMatcher, whitelist map[string]struct{}, stats *executionStats) {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
@@ -100,7 +108,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 				}
 				return nil
 			}
-			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, matchers, whitelist, stats)
+			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles, cleanupRetentionDays, matchers, whitelist, stats)
 			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), whitelist) {
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
 				if removeErr != nil {
@@ -119,14 +127,31 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			return nil
 		}
 
-		if !cleanupMatchingFiles || !matchesFileName(entry.Name(), false, matchers) {
+		if cleanupMatchingFiles && matchesFileName(entry.Name(), false, matchers) {
+			if err := os.Remove(entryPath); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("remove file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("remove file %s failed: %v", entryPath, err))
+				return nil
+			}
+
+			stats.ProcessedFiles++
+			stats.SuccessCount++
+			stats.CleanupRemovedFiles++
+			stats.SizeBytes += fileSizeOrZero(entryPath)
+			s.persistRunHistory(runID, fmt.Sprintf("removed matched file %s", entryPath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("removed matched file %s", entryPath))
+			return nil
+		}
+
+		if !cleanupExpiredFiles || !isExpiredFile(entryPath, cleanupRetentionDays) {
 			return nil
 		}
 
 		if err := os.Remove(entryPath); err != nil {
 			stats.FailureCount++
-			s.persistRunHistory(runID, fmt.Sprintf("remove file %s failed: %v", entryPath, err), stats)
-			s.appendLog(runID, "error", fmt.Sprintf("remove file %s failed: %v", entryPath, err))
+			s.persistRunHistory(runID, fmt.Sprintf("remove expired file %s failed: %v", entryPath, err), stats)
+			s.appendLog(runID, "error", fmt.Sprintf("remove expired file %s failed: %v", entryPath, err))
 			return nil
 		}
 
@@ -134,10 +159,22 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		stats.SuccessCount++
 		stats.CleanupRemovedFiles++
 		stats.SizeBytes += fileSizeOrZero(entryPath)
-		s.persistRunHistory(runID, fmt.Sprintf("removed matched file %s", entryPath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("removed matched file %s", entryPath))
+		s.persistRunHistory(runID, fmt.Sprintf("removed expired file %s", entryPath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("removed expired file %s", entryPath))
 		return nil
 	})
+}
+
+func isExpiredFile(path string, retentionDays int) bool {
+	if retentionDays < 1 {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
+	return info.ModTime().Before(cutoff)
 }
 
 func dirSizeOrZero(path string) int64 {

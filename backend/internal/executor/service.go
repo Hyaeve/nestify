@@ -308,6 +308,20 @@ func ParseBoolOptionsJSON(raw string) map[string]bool {
 	return parsed
 }
 
+func ParseIntOptionsJSON(raw string) map[string]int {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "{}" {
+		return map[string]int{}
+	}
+
+	parsed := make(map[string]int)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return map[string]int{}
+	}
+
+	return parsed
+}
+
 func ParseStringListJSON(raw string) []string {
 	value := strings.TrimSpace(raw)
 	if value == "" || value == "[]" || value == "{}" {

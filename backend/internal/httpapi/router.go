@@ -708,6 +708,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		SourceDir:         rule.SourceDir,
 		TargetDir:         rule.TargetDir,
 		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
@@ -737,6 +738,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		SourceDir:         rule.SourceDir,
 		TargetDir:         rule.TargetDir,
 		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
@@ -1701,14 +1703,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
+func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode string, options map[string]bool, optionValues map[string]int, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1734,11 +1736,15 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	if archiveMode == "cleanup" {
 		cleanupEmptyDirs := options["cleanup_empty_dirs"]
 		cleanupMatchingFiles := options["cleanup_matching_files"]
-		if !cleanupEmptyDirs && !cleanupMatchingFiles {
+		cleanupExpiredFiles := options["cleanup_expired_files"]
+		if !cleanupEmptyDirs && !cleanupMatchingFiles && !cleanupExpiredFiles {
 			return errors.New("cleanup rule requires at least one cleanup option")
 		}
 		if cleanupMatchingFiles && len(normalizeRuleFilters(filters)) == 0 {
 			return errors.New("filters are required when cleanup_matching_files is enabled")
+		}
+		if cleanupExpiredFiles && optionValues["cleanup_retention_days"] < 1 {
+			return errors.New("cleanup_retention_days must be a positive integer when cleanup_expired_files is enabled")
 		}
 		if len(normalizeRuleFilters(whitelist)) > 0 {
 			for _, item := range normalizeRuleFilters(whitelist) {

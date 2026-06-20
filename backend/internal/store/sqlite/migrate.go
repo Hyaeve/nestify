@@ -33,6 +33,7 @@ func (s *Store) migrate() error {
 			cron_expression TEXT NOT NULL DEFAULT '',
 			run_on_start INTEGER NOT NULL DEFAULT 1,
 			options_json TEXT NOT NULL DEFAULT '{}',
+			option_values_json TEXT NOT NULL DEFAULT '{}',
 			package_options_json TEXT NOT NULL DEFAULT '{}',
 			collect_options_json TEXT NOT NULL DEFAULT '{}',
 			filters_json TEXT NOT NULL DEFAULT '[]',
