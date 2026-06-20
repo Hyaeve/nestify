@@ -606,6 +606,15 @@
             <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
           </el-form-item>
         </template>
+        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_expired_files">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过期清除</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
+          </button>
+          <el-form-item label="保留天数" class="cleanup-retention-input">
+            <el-input-number v-model="createPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
+          </el-form-item>
+        </template>
         <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.convert_matching_text">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配转换</div></div>
@@ -669,6 +678,15 @@
           </button>
           <el-form-item class="transform-section-input">
             <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+          </el-form-item>
+        </template>
+        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_expired_files">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过期清除</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
+          </button>
+          <el-form-item label="保留天数" class="cleanup-retention-input">
+            <el-input-number v-model="editPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
           </el-form-item>
         </template>
         <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.convert_matching_text">
