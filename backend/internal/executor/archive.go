@@ -613,7 +613,10 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
 	if !parentRenameEnabled {
 		if archiveMode == "package" {
-			return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
+			if sameCleanPath(filepath.Clean(strings.TrimSpace(rootSourceDir)), filepath.Dir(filepath.Clean(strings.TrimSpace(sourcePath)))) {
+				return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
+			}
+			return s.moveFileToTargetDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
 		}
 		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
 	}
@@ -656,24 +659,12 @@ func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targe
 	return nil
 }
 
-func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
-	baseName := strings.TrimSpace(filepath.Base(sourcePath))
-	if baseName == "" {
-		return fmt.Errorf("source file name is empty")
+func (s *Service) moveFileToTargetDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("create target dir: %w", err)
 	}
 
-	fileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
-	fileName = strings.TrimSpace(fileName)
-	if fileName == "" {
-		fileName = baseName
-	}
-
-	nestedTargetDir := filepath.Join(targetDir, fileName)
-	if err := os.MkdirAll(nestedTargetDir, 0o755); err != nil {
-		return fmt.Errorf("create nested target dir: %w", err)
-	}
-
-	targetPath := uniqueArchiveDestinationPath(nestedTargetDir, filepath.Base(sourcePath))
+	targetPath := uniqueArchiveDestinationPath(targetDir, filepath.Base(sourcePath))
 	var err error
 	if cleanupSourceAfterArchive {
 		err = moveFile(sourcePath, targetPath)
@@ -696,6 +687,21 @@ func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupS
 	s.persistRunHistory(runID, message, stats)
 	s.appendLog(runID, "info", message)
 	return nil
+}
+
+func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
+	baseName := strings.TrimSpace(filepath.Base(sourcePath))
+	if baseName == "" {
+		return fmt.Errorf("source file name is empty")
+	}
+
+	fileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = baseName
+	}
+
+	return s.moveFileToTargetDir(runID, sourcePath, filepath.Join(targetDir, fileName), cleanupSourceAfterArchive, itemLabel, stats)
 }
 
 func mapArchiveActionVerb(verb string) string {
@@ -779,7 +785,8 @@ func (s *Service) scanAndStagePackageEntries(runID, rootSourceDir, dirPath, comp
 
 func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, targetDir string, stage packageStageResult, parentRenameEnabled bool, cleanupSourceAfterArchive bool, preferPlainParentName bool, stats *executionStats) error {
 	if len(stage.matchedFiles) > 0 {
-		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, dirPath, stage.matchedFiles, targetDir, parentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+		matchedTargetDir := matchedArchiveTargetDir(rootSourceDir, dirPath, targetDir)
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, dirPath, stage.matchedFiles, matchedTargetDir, parentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
 			return err
 		}
 	}
@@ -897,6 +904,33 @@ func (s *Service) moveMatchedArchiveEntries(runID, rootSourceDir, basePath strin
 	}
 
 	return nil
+}
+
+func matchedArchiveTargetDir(rootSourceDir, dirPath, targetDir string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	if cleanRoot == "" || cleanRoot == "." || cleanDir == "" || cleanDir == "." || sameCleanPath(cleanRoot, cleanDir) {
+		return targetDir
+	}
+
+	relDir, err := filepath.Rel(cleanRoot, cleanDir)
+	if err != nil {
+		return targetDir
+	}
+	segments := splitArchivePathSegments(relDir)
+	if len(segments) == 0 {
+		return targetDir
+	}
+
+	firstLevelDir := strings.TrimSpace(segments[0])
+	if firstLevelDir == "" || firstLevelDir == "." || firstLevelDir == ".." {
+		return targetDir
+	}
+	if filepath.Base(targetDir) == firstLevelDir {
+		return targetDir
+	}
+
+	return filepath.Join(targetDir, firstLevelDir)
 }
 
 func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
