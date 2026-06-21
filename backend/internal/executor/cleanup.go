@@ -103,8 +103,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
 					stats.SizeBytes += dirSizeOrZero(entryPath)
-					s.persistRunHistory(runID, fmt.Sprintf("removed matched directory %s", entryPath), stats)
-					s.appendLog(runID, "info", fmt.Sprintf("removed matched directory %s", entryPath))
+					s.persistRunHistory(runID, fmt.Sprintf("已删除匹配目录 %s", entryPath), stats)
+					s.appendLog(runID, "info", fmt.Sprintf("已删除匹配目录 %s", entryPath))
 				}
 				return nil
 			}
@@ -120,8 +120,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
 					stats.SizeBytes += dirSizeOrZero(entryPath)
-					s.persistRunHistory(runID, fmt.Sprintf("removed empty directory %s", entryPath), stats)
-					s.appendLog(runID, "info", fmt.Sprintf("removed empty directory %s", entryPath))
+					s.persistRunHistory(runID, fmt.Sprintf("已删除空目录 %s", entryPath), stats)
+					s.appendLog(runID, "info", fmt.Sprintf("已删除空目录 %s", entryPath))
 				}
 			}
 			return nil
@@ -139,8 +139,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			stats.SuccessCount++
 			stats.CleanupRemovedFiles++
 			stats.SizeBytes += fileSizeOrZero(entryPath)
-			s.persistRunHistory(runID, fmt.Sprintf("removed matched file %s", entryPath), stats)
-			s.appendLog(runID, "info", fmt.Sprintf("removed matched file %s", entryPath))
+			s.persistRunHistory(runID, fmt.Sprintf("已删除匹配文件 %s", entryPath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("已删除匹配文件 %s", entryPath))
 			return nil
 		}
 
@@ -159,8 +159,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		stats.SuccessCount++
 		stats.CleanupRemovedFiles++
 		stats.SizeBytes += fileSizeOrZero(entryPath)
-		s.persistRunHistory(runID, fmt.Sprintf("removed expired file %s", entryPath), stats)
-		s.appendLog(runID, "info", fmt.Sprintf("removed expired file %s", entryPath))
+		s.persistRunHistory(runID, fmt.Sprintf("已删除过期文件 %s", entryPath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("已删除过期文件 %s", entryPath))
 		return nil
 	})
 }

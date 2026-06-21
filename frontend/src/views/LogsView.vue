@@ -66,7 +66,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="状态" width="110" align="center">
+          <el-table-column label="状态" width="90" align="center">
             <template #default="scope">
               <el-tag :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
             </template>
@@ -78,13 +78,13 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="类型" width="120" align="center">
+          <el-table-column label="类型" width="100" align="center">
             <template #default="scope">
               {{ archiveModeLabel(scope.row.archive_mode) }}
             </template>
           </el-table-column>
 
-          <el-table-column label="触发方式" width="120" align="center">
+          <el-table-column label="触发方式" width="90" align="center">
             <template #default="scope">
               {{ triggerModeLabel(scope.row.trigger_mode) }}
             </template>
@@ -98,7 +98,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="处理数" width="100" align="center">
+          <el-table-column label="处理数" width="80" align="center">
             <template #default="scope">
               {{ scope.row.processed_files }}
             </template>

@@ -463,7 +463,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	entries = limitEntriesForMode(compatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount++
-		s.persistRunHistory(runID, fmt.Sprintf("skipped empty volume %s", volumePath), stats)
+		s.persistRunHistory(runID, fmt.Sprintf("已跳过空分卷目录 %s", volumePath), stats)
 		_ = os.Remove(volumePath)
 		return nil
 	}
