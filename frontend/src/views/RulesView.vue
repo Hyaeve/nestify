@@ -177,7 +177,7 @@
             <template #default="scope">
               <div class="history-rule">
                 <div class="history-rule__title">{{ scope.row.rule_name || '未知规则' }}</div>
-                <div class="history-rule__desc">{{ scope.row.summary || '—' }}</div>
+                <div class="history-rule__desc">{{ formatRunHistorySummary(scope.row.summary) || '—' }}</div>
               </div>
             </template>
           </el-table-column>
@@ -774,6 +774,7 @@ import {
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
+import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'

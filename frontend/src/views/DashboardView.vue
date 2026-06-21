@@ -39,7 +39,7 @@
               </div>
               <div class="summary-item__meta">
                 <span>{{ formatDate(item.started_at) }}</span>
-                <span>{{ item.summary || '无摘要' }}</span>
+                <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
               </div>
             </div>
           </div>
@@ -153,6 +153,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
 import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResourcePayload } from '../api/system'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
+import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { fetchRules, type RuleItem } from '../api/rules'
 
 const health = ref<HealthPayload | null>(null)

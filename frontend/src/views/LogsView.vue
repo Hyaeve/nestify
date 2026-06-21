@@ -106,7 +106,7 @@
 
           <el-table-column label="消息摘要" min-width="320" show-overflow-tooltip>
             <template #default="scope">
-              {{ scope.row.summary || '—' }}
+              {{ formatRunHistorySummary(scope.row.summary) || '—' }}
             </template>
           </el-table-column>
         </el-table>
@@ -133,6 +133,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 function createDefaultHistorySummary(): RunHistorySummary {
   return {
