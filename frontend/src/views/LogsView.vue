@@ -84,7 +84,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="触发方式" width="90" align="center">
+          <el-table-column label="触发方式" width="110" align="center">
             <template #default="scope">
               {{ triggerModeLabel(scope.row.trigger_mode) }}
             </template>
@@ -98,7 +98,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="处理数" width="80" align="center">
+          <el-table-column label="处理数" width="90" align="center">
             <template #default="scope">
               {{ scope.row.processed_files }}
             </template>
