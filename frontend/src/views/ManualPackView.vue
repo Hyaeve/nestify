@@ -1703,10 +1703,10 @@ onBeforeUnmount(() => {
   z-index: 3000;
   min-width: 160px;
   padding: 8px;
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: var(--bg-panel-strong);
+  border: 1px solid var(--border-color);
   border-radius: 14px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-soft);
 }
 
 .context-menu__item {
@@ -1724,7 +1724,7 @@ onBeforeUnmount(() => {
 }
 
 .context-menu__item:hover {
-  background: #f3f4f6;
+  background: var(--accent-soft);
 }
 
 .context-menu__item-icon {
@@ -1749,14 +1749,14 @@ onBeforeUnmount(() => {
 }
 
 :deep(.file-manager-row--selected > td.el-table__cell) {
-  background: #f3f4f6 !important;
+  background: var(--accent-soft) !important;
 }
 
 :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: #f7f7f8;
+  background: var(--accent-soft);
 }
 
 :deep(.el-table__body tr.current-row > td.el-table__cell) {
-  background: #f3f4f6;
+  background: var(--accent-soft);
 }
 </style>

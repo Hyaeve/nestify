@@ -678,6 +678,75 @@ onMounted(() => {
   padding: 0 4px;
 }
 
+:global(:root[data-theme='dark']) .logs-hero {
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  color: #e5eefc;
+  background:
+    linear-gradient(rgba(96, 165, 250, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.07) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.24), transparent 30%),
+    radial-gradient(circle at 86% 20%, rgba(99, 102, 241, 0.28), transparent 26%),
+    linear-gradient(100deg, rgba(15, 23, 42, 0.94) 0%, rgba(17, 24, 39, 0.9) 48%, rgba(30, 41, 59, 0.92) 100%);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+:global(:root[data-theme='dark']) .logs-hero::after {
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.18), transparent 66%);
+}
+
+:global(:root[data-theme='dark']) .logs-hero__desc {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .logs-hero__badge {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(22, 163, 74, 0.13);
+  color: #86efac;
+}
+
+:global(:root[data-theme='dark']) .metric-card,
+:global(:root[data-theme='dark']) .logs-toolbar-panel,
+:global(:root[data-theme='dark']) .logs-table-shell {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(16, 22, 36, 0.88);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+:global(:root[data-theme='dark']) .metric-card__label,
+:global(:root[data-theme='dark']) .logs-summary,
+:global(:root[data-theme='dark']) .logs-message__meta,
+:global(:root[data-theme='dark']) .logs-time {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .metric-card__value,
+:global(:root[data-theme='dark']) .logs-message__title {
+  color: #e5eefc;
+}
+
+:global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper),
+:global(:root[data-theme='dark']) .logs-toolbar :deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset;
+}
+
+:global(:root[data-theme='dark']) .logs-table {
+  --el-table-header-bg-color: rgba(24, 33, 51, 0.92);
+  --el-table-tr-bg-color: rgba(16, 22, 36, 0.72);
+  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.16);
+}
+
+:global(:root[data-theme='dark']) .logs-table :deep(.el-table__header-wrapper th) {
+  color: #94a3b8;
+  background: rgba(24, 33, 51, 0.92);
+}
+
+:global(:root[data-theme='dark']) .logs-mode-tag,
+:global(:root[data-theme='dark']) .logs-message__meta span {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.58);
+}
+
 @media (max-width: 1440px) {
   .logs-overview {
     grid-template-columns: repeat(3, minmax(0, 1fr));

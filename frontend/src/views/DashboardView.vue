@@ -987,6 +987,111 @@ onBeforeUnmount(() => {
   min-height: 120px;
 }
 
+:global(:root[data-theme='dark']) .dashboard-hero {
+  border-color: rgba(96, 165, 250, 0.22);
+  color: #e5eefc;
+  background:
+    linear-gradient(rgba(96, 165, 250, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.07) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.24), transparent 30%),
+    radial-gradient(circle at 86% 20%, rgba(99, 102, 241, 0.28), transparent 26%),
+    linear-gradient(100deg, rgba(15, 23, 42, 0.94) 0%, rgba(17, 24, 39, 0.9) 48%, rgba(30, 41, 59, 0.92) 100%);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+:global(:root[data-theme='dark']) .dashboard-hero::after {
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.18), transparent 66%);
+}
+
+:global(:root[data-theme='dark']) .dashboard-hero p {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .dashboard-hero__meta span {
+  border-color: rgba(96, 165, 250, 0.26);
+  background: rgba(37, 99, 235, 0.14);
+  color: #93c5fd;
+}
+
+:global(:root[data-theme='dark']) .dashboard-hero__status {
+  border-color: rgba(74, 222, 128, 0.28);
+  background: rgba(22, 163, 74, 0.13);
+  color: #86efac;
+}
+
+:global(:root[data-theme='dark']) .metric-card,
+:global(:root[data-theme='dark']) .dashboard-panel {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(16, 22, 36, 0.88);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+:global(:root[data-theme='dark']) .metric-card__label,
+:global(:root[data-theme='dark']) .metric-card__hint,
+:global(:root[data-theme='dark']) .summary-item__meta,
+:global(:root[data-theme='dark']) .task-preview-item__meta,
+:global(:root[data-theme='dark']) .task-preview-item__stats,
+:global(:root[data-theme='dark']) .task-preview-item__path,
+:global(:root[data-theme='dark']) .resource-metric__desc {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .metric-card__value,
+:global(:root[data-theme='dark']) .page-section-title,
+:global(:root[data-theme='dark']) .summary-item__name,
+:global(:root[data-theme='dark']) .task-preview-item__name,
+:global(:root[data-theme='dark']) .resource-metric__main {
+  color: #e5eefc;
+}
+
+:global(:root[data-theme='dark']) .summary-item,
+:global(:root[data-theme='dark']) .task-preview-item {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(24, 33, 51, 0.78);
+}
+
+:global(:root[data-theme='dark']) .resource-metric {
+  border-color: rgba(96, 165, 250, 0.2);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.68) 100%);
+}
+
+:global(:root[data-theme='dark']) .resource-metric__icon,
+:global(:root[data-theme='dark']) .dashboard-panel__count {
+  background: rgba(37, 99, 235, 0.16);
+  color: #93c5fd;
+}
+
+:global(:root[data-theme='dark']) .resource-progress :deep(.el-progress-bar__outer) {
+  background-color: rgba(96, 165, 250, 0.18);
+}
+
+:global(:root[data-theme='dark']) .resource-highlight {
+  border-color: rgba(96, 165, 250, 0.24);
+  background: rgba(37, 99, 235, 0.14);
+}
+
+:global(:root[data-theme='dark']) .resource-highlight__label {
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .resource-highlight__value,
+:global(:root[data-theme='dark']) .resource-metric__value,
+:global(:root[data-theme='dark']) .task-preview-card__refresh {
+  color: #60a5fa;
+}
+
+:global(:root[data-theme='dark']) .task-preview-item__stats span,
+:global(:root[data-theme='dark']) .task-preview-item__logs,
+:global(:root[data-theme='dark']) .dashboard-mode-tag {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+:global(:root[data-theme='dark']) .task-preview-item__logs {
+  color: #cbd5e1;
+}
+
 @media (max-width: 1280px) {
   .dashboard-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
