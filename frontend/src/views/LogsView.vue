@@ -785,50 +785,6 @@ onMounted(() => {
   background: rgba(148, 163, 184, 0.12);
 }
 
-:global(:root[data-theme='appletv']) .logs-hero {
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  color: #f3f7ff;
-  background:
-    linear-gradient(rgba(96, 165, 250, 0.065) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.065) 1px, transparent 1px),
-    radial-gradient(circle at 9% 18%, rgba(59, 130, 246, 0.36), transparent 28%),
-    radial-gradient(circle at 88% 24%, rgba(124, 58, 237, 0.34), transparent 30%),
-    linear-gradient(100deg, rgba(24, 35, 55, 0.96) 0%, rgba(12, 17, 29, 0.96) 46%, rgba(35, 29, 58, 0.94) 100%);
-  background-size: 54px 54px, 54px 54px, auto, auto, auto;
-  box-shadow:
-    0 20px 54px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-:global(:root[data-theme='appletv']) .metric-card,
-:global(:root[data-theme='appletv']) .logs-toolbar-panel,
-:global(:root[data-theme='appletv']) .logs-table-shell {
-  border-color: rgba(148, 163, 184, 0.22);
-  background:
-    linear-gradient(180deg, rgba(23, 30, 45, 0.96) 0%, rgba(15, 20, 32, 0.94) 100%) !important;
-  box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
-}
-
-:global(:root[data-theme='appletv']) .metric-card__label,
-:global(:root[data-theme='appletv']) .logs-summary,
-:global(:root[data-theme='appletv']) .logs-message__meta,
-:global(:root[data-theme='appletv']) .logs-time {
-  color: #c0cadc;
-}
-
-:global(:root[data-theme='appletv']) .metric-card__value,
-:global(:root[data-theme='appletv']) .logs-message__title {
-  color: #e5eefc;
-}
-
-:global(:root[data-theme='appletv']) .logs-table :deep(.el-table__header-wrapper th),
-:global(:root[data-theme='appletv']) .logs-table :deep(.el-table__body tr:nth-child(odd) > td.el-table__cell),
-:global(:root[data-theme='appletv']) .logs-table :deep(.el-table__body tr:nth-child(even) > td.el-table__cell) {
-  background: rgba(18, 24, 38, 0.92);
-}
-
 @media (max-width: 1440px) {
   .logs-overview {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -26,8 +26,7 @@
   --font-size-title: 18px;
 }
 
-:root[data-theme='dark'],
-:root[data-theme='appletv'] {
+:root[data-theme='dark'] {
   color-scheme: dark;
   --bg-app: #0b101b;
   --bg-app-overlay:
@@ -48,6 +47,25 @@
   --accent-color: #60a5fa;
   --accent-soft: rgba(96, 165, 250, 0.18);
   --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='appletv'] {
+  color-scheme: light;
+  --bg-app: linear-gradient(180deg, #d6eefc 0%, #edf6fb 28%, #f6f7f9 100%);
+  --bg-app-overlay: none;
+  --bg-app-base: #eaf3f8;
+  --bg-panel: rgba(255, 255, 255, 0.76);
+  --bg-panel-strong: rgba(255, 255, 255, 0.88);
+  --bg-elevated: rgba(255, 255, 255, 0.94);
+  --bg-sidebar: rgba(255, 255, 255, 0.72);
+  --bg-header: rgba(255, 255, 255, 0.7);
+  --text-primary: #253241;
+  --text-secondary: #7a8ca3;
+  --text-tertiary: #96a6b8;
+  --border-color: rgba(148, 163, 184, 0.22);
+  --accent-color: #66b5ff;
+  --accent-soft: rgba(102, 181, 255, 0.14);
+  --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
 }
 
 * {
@@ -71,9 +89,7 @@ body {
 }
 
 :root[data-theme='dark'] body,
-:root[data-theme='dark'] #app,
-:root[data-theme='appletv'] body,
-:root[data-theme='appletv'] #app {
+:root[data-theme='dark'] #app {
   background:
     var(--bg-app-overlay),
     var(--bg-app-base);
@@ -287,8 +303,7 @@ body {
   border-radius: 16px;
 }
 
-:root[data-theme='dark'] .el-table,
-:root[data-theme='appletv'] .el-table {
+:root[data-theme='dark'] .el-table {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: rgba(20, 26, 40, 0.92);
   --el-table-row-hover-bg-color: rgba(55, 65, 81, 0.96);
@@ -302,28 +317,18 @@ body {
 :root[data-theme='dark'] .el-table tr,
 :root[data-theme='dark'] .el-table td.el-table__cell,
 :root[data-theme='dark'] .el-table__body-wrapper,
-:root[data-theme='dark'] .el-table__inner-wrapper::before,
-:root[data-theme='appletv'] .el-table th.el-table__cell,
-:root[data-theme='appletv'] .el-table tr,
-:root[data-theme='appletv'] .el-table td.el-table__cell,
-:root[data-theme='appletv'] .el-table__body-wrapper,
-:root[data-theme='appletv'] .el-table__inner-wrapper::before {
+:root[data-theme='dark'] .el-table__inner-wrapper::before {
   background: transparent;
 }
 
 :root[data-theme='dark'] .el-table__fixed-right,
-:root[data-theme='dark'] .el-table__fixed-left,
-:root[data-theme='appletv'] .el-table__fixed-right,
-:root[data-theme='appletv'] .el-table__fixed-left {
+:root[data-theme='dark'] .el-table__fixed-left {
   background: var(--bg-panel);
 }
 
 :root[data-theme='dark'] .el-input__wrapper,
 :root[data-theme='dark'] .el-textarea__inner,
-:root[data-theme='dark'] .el-select__wrapper,
-:root[data-theme='appletv'] .el-input__wrapper,
-:root[data-theme='appletv'] .el-textarea__inner,
-:root[data-theme='appletv'] .el-select__wrapper {
+:root[data-theme='dark'] .el-select__wrapper {
   color: var(--text-primary);
   background: rgba(20, 26, 40, 0.94);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset;
@@ -332,63 +337,44 @@ body {
 :root[data-theme='dark'] .el-input__inner,
 :root[data-theme='dark'] .el-textarea__inner,
 :root[data-theme='dark'] .el-select__placeholder,
-:root[data-theme='dark'] .el-select__selected-item,
-:root[data-theme='appletv'] .el-input__inner,
-:root[data-theme='appletv'] .el-textarea__inner,
-:root[data-theme='appletv'] .el-select__placeholder,
-:root[data-theme='appletv'] .el-select__selected-item {
+:root[data-theme='dark'] .el-select__selected-item {
   color: var(--text-primary);
 }
 
 :root[data-theme='dark'] .el-input__inner::placeholder,
-:root[data-theme='dark'] .el-textarea__inner::placeholder,
-:root[data-theme='appletv'] .el-input__inner::placeholder,
-:root[data-theme='appletv'] .el-textarea__inner::placeholder {
+:root[data-theme='dark'] .el-textarea__inner::placeholder {
   color: var(--text-tertiary);
 }
 
 :root[data-theme='dark'] .el-popper,
 :root[data-theme='dark'] .el-select-dropdown,
 :root[data-theme='dark'] .el-dropdown-menu,
-:root[data-theme='dark'] .el-picker-panel,
-:root[data-theme='appletv'] .el-popper,
-:root[data-theme='appletv'] .el-select-dropdown,
-:root[data-theme='appletv'] .el-dropdown-menu,
-:root[data-theme='appletv'] .el-picker-panel {
+:root[data-theme='dark'] .el-picker-panel {
   background: var(--bg-panel-strong);
   border-color: var(--border-color);
   color: var(--text-primary);
 }
 
 :root[data-theme='dark'] .el-select-dropdown__item,
-:root[data-theme='dark'] .el-dropdown-menu__item,
-:root[data-theme='appletv'] .el-select-dropdown__item,
-:root[data-theme='appletv'] .el-dropdown-menu__item {
+:root[data-theme='dark'] .el-dropdown-menu__item {
   color: var(--text-primary);
 }
 
 :root[data-theme='dark'] .el-select-dropdown__item.hover,
 :root[data-theme='dark'] .el-select-dropdown__item:hover,
-:root[data-theme='dark'] .el-dropdown-menu__item:hover,
-:root[data-theme='appletv'] .el-select-dropdown__item.hover,
-:root[data-theme='appletv'] .el-select-dropdown__item:hover,
-:root[data-theme='appletv'] .el-dropdown-menu__item:hover {
+:root[data-theme='dark'] .el-dropdown-menu__item:hover {
   background: var(--accent-soft);
   color: var(--accent-color);
 }
 
 :root[data-theme='dark'] .el-pagination .btn-next,
 :root[data-theme='dark'] .el-pagination .btn-prev,
-:root[data-theme='dark'] .el-pagination .el-pager li,
-:root[data-theme='appletv'] .el-pagination .btn-next,
-:root[data-theme='appletv'] .el-pagination .btn-prev,
-:root[data-theme='appletv'] .el-pagination .el-pager li {
+:root[data-theme='dark'] .el-pagination .el-pager li {
   background: var(--bg-elevated);
   color: var(--text-secondary);
 }
 
-:root[data-theme='dark'] .el-pagination .el-pager li.is-active,
-:root[data-theme='appletv'] .el-pagination .el-pager li.is-active {
+:root[data-theme='dark'] .el-pagination .el-pager li.is-active {
   color: var(--accent-color);
 }
 
