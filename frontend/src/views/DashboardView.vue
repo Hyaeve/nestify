@@ -52,35 +52,33 @@
             <h3 class="page-section-title">系统资源</h3>
 
             <div class="resource-stack">
-              <div class="resource-line">
-                <div class="resource-line__head">
-                  <span class="resource-line__title">CPU {{ formatPercentage(systemResource?.cpu_usage) }}</span>
-                  <span class="resource-line__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
+              <div class="resource-metric">
+                <div class="resource-metric__head">
+                  <div class="resource-metric__main">
+                    <span class="resource-metric__icon">⚙</span>
+                    <span class="resource-metric__label">CPU</span>
+                    <span class="resource-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
+                    <span class="resource-metric__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
+                  </div>
                 </div>
-                <el-progress :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" />
+                <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="12" color="#2d9bf0" />
               </div>
 
-              <div class="resource-line">
-                <div class="resource-line__head">
-                  <span class="resource-line__title">内存 {{ formatPercentage(systemResource?.memory_usage) }}</span>
-                  <span class="resource-line__desc">{{ formatMemorySummary }}</span>
+              <div class="resource-metric">
+                <div class="resource-metric__head">
+                  <div class="resource-metric__main">
+                    <span class="resource-metric__icon">▣</span>
+                    <span class="resource-metric__label">内存</span>
+                    <span class="resource-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
+                  </div>
+                  <span class="resource-metric__desc resource-metric__desc--right">{{ formatMemorySummary }}</span>
                 </div>
-                <el-progress :percentage="systemResource?.memory_usage ?? 0" :show-text="false" color="#409eff" />
+                <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="12" color="#2d9bf0" />
               </div>
 
-              <div class="resource-kv">
-                <span class="resource-kv__label">Nestify 内存占用</span>
-                <span class="resource-kv__value resource-kv__value--primary">{{ systemResource?.nestify_memory || '0 B' }}</span>
-              </div>
-
-              <div class="resource-kv">
-                <span class="resource-kv__label">运行时间</span>
-                <span class="resource-kv__value">{{ systemResource?.uptime || '0分' }}</span>
-              </div>
-
-              <div class="resource-kv">
-                <span class="resource-kv__label">服务标识</span>
-                <span class="resource-kv__value">{{ healthService }}</span>
+              <div class="resource-highlight">
+                <span class="resource-highlight__label">Nestify 内存占用</span>
+                <span class="resource-highlight__value">{{ systemResource?.nestify_memory || '0 B' }}</span>
               </div>
             </div>
 
@@ -568,61 +566,109 @@ onBeforeUnmount(() => {
 
 .resource-card--compact {
   min-height: auto;
+  border: 0;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
 }
 
 .resource-stack {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
-.resource-line {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.resource-metric {
+  padding: 16px;
+  border: 1px solid #d5e2f3;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
 }
 
-.resource-line__head {
+.resource-metric__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin-bottom: 10px;
 }
 
-.resource-line__title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.resource-line__desc {
-  font-size: 14px;
-  color: var(--text-secondary);
-  text-align: right;
-}
-
-.resource-kv {
-  display: flex;
+.resource-metric__main {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.resource-kv__label {
+  gap: 8px;
+  min-width: 0;
   font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 800;
+  color: #2f3a46;
 }
 
-.resource-kv__value {
-  font-size: 14px;
-  color: var(--text-tertiary);
-}
-
-.resource-kv__value--primary {
+.resource-metric__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #2f3a46;
   font-size: 18px;
+  line-height: 1;
+}
+
+.resource-metric__label {
+  white-space: nowrap;
+}
+
+.resource-metric__value {
+  color: #9a9da3;
+  white-space: nowrap;
+}
+
+.resource-metric__desc {
+  min-width: 0;
+  color: #96999f;
   font-weight: 700;
-  color: var(--el-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-metric__desc--right {
+  flex: 0 0 auto;
+  font-size: 15px;
+}
+
+.resource-progress :deep(.el-progress-bar__outer) {
+  background-color: #d8dde4;
+  border-radius: 999px;
+}
+
+.resource-progress :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
+}
+
+.resource-highlight {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #8fc8ff;
+  border-radius: 16px;
+  background: #dff0ff;
+}
+
+.resource-highlight__label {
+  color: #3c4854;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.resource-highlight__value {
+  color: #1f93f5;
+  font-size: 20px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .resource-card__alert {

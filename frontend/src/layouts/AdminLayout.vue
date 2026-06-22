@@ -1,11 +1,11 @@
 <template>
   <el-container class="admin-layout">
-    <el-aside :width="isCollapsed ? '68px' : '196px'" :class="['admin-layout__aside', { 'is-collapsed': isCollapsed }]">
+    <el-aside :width="isCollapsed ? '68px' : '176px'" :class="['admin-layout__aside', { 'is-collapsed': isCollapsed }]">
       <div class="brand">
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v6.5</div>
+          <div class="brand__version">v6.6</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -228,9 +228,9 @@ async function handleLogout() {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: 72px;
-  padding: 14px 12px 12px;
+  padding: 14px 10px 12px;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-sidebar);
@@ -249,8 +249,8 @@ async function handleLogout() {
 }
 
 .brand__name {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1.1;
 }
 
@@ -265,7 +265,7 @@ async function handleLogout() {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 8px 16px;
+  padding: 12px 10px 16px;
   scrollbar-gutter: stable;
 }
 
@@ -494,10 +494,14 @@ async function handleLogout() {
 :deep(.el-menu-item) {
   height: 44px;
   margin-bottom: 6px;
+  padding: 0 14px !important;
   border-radius: 14px;
+  color: #334155;
+  font-weight: 700;
 }
 
 :deep(.el-menu-item:hover) {
+  color: #1e293b;
   background: rgba(64, 158, 255, 0.08);
 }
 
@@ -521,6 +525,10 @@ async function handleLogout() {
   background: linear-gradient(135deg, rgba(64, 158, 255, 0.14), rgba(64, 158, 255, 0.22));
   color: var(--accent-color);
   box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.08);
+}
+
+:deep(.el-menu-item span) {
+  color: inherit;
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {
