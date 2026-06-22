@@ -1,147 +1,190 @@
 <template>
   <div class="dashboard-view">
-    <el-row :gutter="16" class="dashboard-row">
-      <el-col :span="8">
-        <el-card class="page-card metric-card">
+    <section class="dashboard-hero">
+      <div class="dashboard-hero__content">
+        <div class="dashboard-hero__eyebrow">DASHBOARD</div>
+        <h1>运行总览</h1>
+        <p>集中查看规则状态、今日处理量、实时任务与系统资源，快速掌握 Nestify 当前运行情况。</p>
+        <div class="dashboard-hero__meta">
+          <span>服务：{{ healthService }}</span>
+          <span>检查时间：{{ healthTime }}</span>
+        </div>
+      </div>
+      <div class="dashboard-hero__status">
+        <span class="dashboard-live-dot"></span>
+        <span>{{ healthStatus }}</span>
+        <el-tag :type="healthTagType" effect="light" round>{{ healthStatus }}</el-tag>
+      </div>
+    </section>
+
+    <section class="dashboard-overview">
+      <div class="metric-card metric-card--rules">
+        <div class="metric-card__icon">规</div>
+        <div>
           <div class="metric-card__label">总规则数</div>
           <div class="metric-card__value">{{ totalRuleCount }}</div>
           <div class="metric-card__hint">已启用 {{ enabledRuleCount }} 条规则</div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card class="page-card metric-card">
+        </div>
+      </div>
+      <div class="metric-card metric-card--processed">
+        <div class="metric-card__icon">处</div>
+        <div>
           <div class="metric-card__label">今日处理</div>
           <div class="metric-card__value">{{ todayProcessedCount }}</div>
           <div class="metric-card__hint">今日执行 {{ todayRunCount }} 次任务</div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card class="page-card metric-card">
+        </div>
+      </div>
+      <div class="metric-card metric-card--running">
+        <div class="metric-card__icon">行</div>
+        <div>
           <div class="metric-card__label">运行中任务</div>
           <div class="metric-card__value">{{ runningTaskCount }}</div>
           <div class="metric-card__hint">{{ runningTaskHint }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
+      </div>
+      <div class="metric-card metric-card--resource">
+        <div class="metric-card__icon">资</div>
+        <div>
+          <div class="metric-card__label">系统资源</div>
+          <div class="metric-card__value">{{ formatPercentage(systemResource?.cpu_usage) }}</div>
+          <div class="metric-card__hint">内存 {{ formatPercentage(systemResource?.memory_usage) }}</div>
+        </div>
+      </div>
+    </section>
 
-    <el-row :gutter="16" class="dashboard-row dashboard-row--detail">
-      <el-col :span="14">
-        <el-card class="page-card dashboard-card dashboard-card--summary">
-          <h3 class="page-section-title">最近执行摘要</h3>
-          <div v-if="summaryItems.length" class="summary-list">
-            <div v-for="item in summaryItems" :key="item.id" class="summary-item">
-              <div class="summary-item__header">
+    <section class="dashboard-content">
+      <div class="dashboard-panel dashboard-panel--summary">
+        <div class="dashboard-panel__header">
+          <div>
+            <div class="dashboard-panel__eyebrow">EXECUTION</div>
+            <h3 class="page-section-title">最近执行摘要</h3>
+          </div>
+          <span class="dashboard-panel__count">{{ summaryItems.length }} 条记录</span>
+        </div>
+        <div v-if="summaryItems.length" class="summary-list">
+          <div v-for="item in summaryItems" :key="item.id" class="summary-item">
+            <div class="summary-item__header">
+              <div class="summary-item__title">
+                <span class="summary-item__dot"></span>
                 <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
-                <div class="summary-item__badges">
+              </div>
+              <div class="summary-item__badges">
+                <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                <el-tag :type="getStatusType(item.status)" effect="light" size="small">{{ getStatusText(item.status) }}</el-tag>
+              </div>
+            </div>
+            <div class="summary-item__meta">
+              <span>{{ formatDate(item.started_at) }}</span>
+              <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
+      </div>
+
+      <div class="dashboard-side-stack">
+        <div class="dashboard-panel resource-card">
+          <div class="dashboard-panel__header">
+            <div>
+              <div class="dashboard-panel__eyebrow">RESOURCE</div>
+              <h3 class="page-section-title">系统资源</h3>
+            </div>
+            <el-tag :type="healthTagType" effect="light" size="small">{{ healthStatus }}</el-tag>
+          </div>
+
+          <div class="resource-stack">
+            <div class="resource-metric">
+              <div class="resource-metric__head">
+                <div class="resource-metric__main">
+                  <span class="resource-metric__icon">⚙</span>
+                  <span class="resource-metric__label">CPU</span>
+                </div>
+                <span class="resource-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
+              </div>
+              <div class="resource-metric__desc">{{ systemResource?.cpu_model || '未知型号' }}</div>
+              <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="12" color="#2563eb" />
+            </div>
+
+            <div class="resource-metric">
+              <div class="resource-metric__head">
+                <div class="resource-metric__main">
+                  <span class="resource-metric__icon">▣</span>
+                  <span class="resource-metric__label">内存</span>
+                </div>
+                <span class="resource-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
+              </div>
+              <div class="resource-metric__desc">{{ formatMemorySummary }}</div>
+              <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="12" color="#7c3aed" />
+            </div>
+
+            <div class="resource-highlight">
+              <span class="resource-highlight__label">Nestify 内存占用</span>
+              <span class="resource-highlight__value">{{ systemResource?.nestify_memory || '0 B' }}</span>
+            </div>
+          </div>
+
+          <el-alert
+            v-if="healthError"
+            class="resource-card__alert"
+            type="error"
+            :closable="false"
+            :title="healthError"
+          />
+        </div>
+
+        <div class="dashboard-panel task-preview-card">
+          <div class="task-preview-card__header">
+            <div>
+              <div class="dashboard-panel__eyebrow">LIVE TASKS</div>
+              <h3 class="page-section-title">任务预览</h3>
+            </div>
+            <div class="task-preview-card__actions">
+              <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="light" size="small">
+                {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
+              </el-tag>
+              <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
+            </div>
+          </div>
+
+          <div v-if="runningPreviewItems.length" class="task-preview-list">
+            <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
+              <div class="task-preview-item__header">
+                <div>
+                  <div class="task-preview-item__name">{{ item.ruleName }}</div>
+                  <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ item.runModeText }}</div>
+                  <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
+                </div>
+                <div class="task-preview-item__badges">
                   <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
-                  <el-tag :type="getStatusType(item.status)" effect="plain" size="small">{{ getStatusText(item.status) }}</el-tag>
+                  <el-tag type="warning" effect="light" size="small">进行中</el-tag>
                 </div>
               </div>
-              <div class="summary-item__meta">
-                <span>{{ formatDate(item.started_at) }}</span>
-                <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
+
+              <el-progress :percentage="estimateRunProgress(item)" :stroke-width="8" :show-text="false" status="success" />
+
+              <div class="task-preview-item__stats">
+                <span>成功 {{ item.success_count }}</span>
+                <span>跳过 {{ item.skip_count }}</span>
+                <span>失败 {{ item.failure_count }}</span>
+              </div>
+
+              <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
+              <div class="task-preview-item__logs">
+                <div v-if="previewLogsLoadingMap[item.id]" class="task-preview-item__logs-loading">执行情况加载中...</div>
+                <template v-else>
+                  <div v-for="log in getPreviewLogs(item.id)" :key="log.id" class="task-preview-item__log-line">
+                    {{ formatRunLogLine(log) }}
+                  </div>
+                  <div v-if="!getPreviewLogs(item.id).length" class="task-preview-item__logs-empty">暂无执行日志</div>
+                </template>
               </div>
             </div>
           </div>
-          <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
-        </el-card>
-      </el-col>
-      <el-col :span="10">
-        <div class="dashboard-side-stack">
-          <el-card class="page-card resource-card resource-card--compact">
-            <h3 class="page-section-title">系统资源</h3>
 
-            <div class="resource-stack">
-              <div class="resource-metric">
-                <div class="resource-metric__head">
-                  <div class="resource-metric__main">
-                    <span class="resource-metric__icon">⚙</span>
-                    <span class="resource-metric__label">CPU</span>
-                    <span class="resource-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
-                    <span class="resource-metric__desc">{{ systemResource?.cpu_model || '未知型号' }}</span>
-                  </div>
-                </div>
-                <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="12" color="#2d9bf0" />
-              </div>
-
-              <div class="resource-metric">
-                <div class="resource-metric__head">
-                  <div class="resource-metric__main">
-                    <span class="resource-metric__icon">▣</span>
-                    <span class="resource-metric__label">内存</span>
-                    <span class="resource-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
-                  </div>
-                  <span class="resource-metric__desc resource-metric__desc--right">{{ formatMemorySummary }}</span>
-                </div>
-                <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="12" color="#2d9bf0" />
-              </div>
-
-              <div class="resource-highlight">
-                <span class="resource-highlight__label">Nestify 内存占用</span>
-                <span class="resource-highlight__value">{{ systemResource?.nestify_memory || '0 B' }}</span>
-              </div>
-            </div>
-
-            <el-alert
-              v-if="healthError"
-              class="resource-card__alert"
-              type="error"
-              :closable="false"
-              :title="healthError"
-            />
-          </el-card>
-
-          <el-card class="page-card dashboard-card task-preview-card">
-            <div class="task-preview-card__header">
-              <h3 class="page-section-title">任务预览</h3>
-              <div class="task-preview-card__actions">
-                <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="plain" size="small">
-                  {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
-                </el-tag>
-                <el-button text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
-              </div>
-            </div>
-
-            <div v-if="runningPreviewItems.length" class="task-preview-list">
-              <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
-                <div class="task-preview-item__header">
-                    <div>
-                      <div class="task-preview-item__name">{{ item.ruleName }}</div>
-                      <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ item.runModeText }}</div>
-                      <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
-                    </div>
-                    <div class="task-preview-item__badges">
-                      <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
-                      <el-tag type="warning" effect="plain" size="small">进行中</el-tag>
-                    </div>
-                  </div>
-
-                <el-progress :percentage="estimateRunProgress(item)" :stroke-width="8" :show-text="false" status="success" />
-
-                <div class="task-preview-item__stats">
-                  <span>成功 {{ item.success_count }}</span>
-                  <span>跳过 {{ item.skip_count }}</span>
-                  <span>失败 {{ item.failure_count }}</span>
-                </div>
-
-                <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
-                <div class="task-preview-item__logs">
-                  <div v-if="previewLogsLoadingMap[item.id]" class="task-preview-item__logs-loading">执行情况加载中...</div>
-                  <template v-else>
-                    <div v-for="log in getPreviewLogs(item.id)" :key="log.id" class="task-preview-item__log-line">
-                      {{ formatRunLogLine(log) }}
-                    </div>
-                    <div v-if="!getPreviewLogs(item.id).length" class="task-preview-item__logs-empty">暂无执行日志</div>
-                  </template>
-                </div>
-              </div>
-            </div>
-
-            <el-empty v-else class="task-preview-empty" description="当前没有正在执行的规则任务" />
-          </el-card>
+          <el-empty v-else class="task-preview-empty" description="当前没有正在执行的规则任务" />
         </div>
-      </el-col>
-    </el-row>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -430,65 +473,236 @@ onBeforeUnmount(() => {
 .dashboard-view {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
+  padding-bottom: 12px;
 }
 
-.dashboard-row {
-  margin-top: 0 !important;
-}
-
-.dashboard-row--detail {
-  align-items: stretch;
-}
-
-.dashboard-row--detail :deep(.el-col) {
+.dashboard-hero {
+  position: relative;
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  padding: 34px 36px;
+  border-radius: 30px;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.25), transparent 28%),
+    linear-gradient(135deg, #2563eb 0%, #4f46e5 52%, #7c3aed 100%);
+  box-shadow: 0 24px 54px rgba(37, 99, 235, 0.25);
+}
+
+.dashboard-hero::after {
+  position: absolute;
+  right: -64px;
+  bottom: -92px;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  content: '';
+}
+
+.dashboard-hero__content,
+.dashboard-hero__status {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-hero__eyebrow,
+.dashboard-panel__eyebrow {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dashboard-hero__eyebrow {
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.dashboard-hero h1 {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.18;
+  font-weight: 900;
+}
+
+.dashboard-hero p {
+  max-width: 680px;
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.dashboard-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.dashboard-hero__meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dashboard-hero__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 900;
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.18);
+}
+
+.dashboard-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .metric-card {
-  min-height: 124px;
-  border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 108px;
+  padding: 22px;
+  border: 1px solid #eef2f7;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
 }
 
+.metric-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+.metric-card--rules .metric-card__icon { background: linear-gradient(135deg, #2563eb, #60a5fa); }
+.metric-card--processed .metric-card__icon { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+.metric-card--running .metric-card__icon { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.metric-card--resource .metric-card__icon { background: linear-gradient(135deg, #10b981, #34d399); }
+
 .metric-card__label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .metric-card__value {
-  margin-top: 14px;
+  margin-top: 8px;
+  color: #0f172a;
   font-size: 30px;
   line-height: 1;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: 900;
 }
 
 .metric-card__hint {
-  margin-top: 10px;
+  margin-top: 8px;
+  color: #94a3b8;
   font-size: 12px;
-  color: var(--text-tertiary);
+  font-weight: 700;
 }
 
-.dashboard-card {
-  min-height: 360px;
-  border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
+.dashboard-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.7fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
-.dashboard-card--summary {
+.dashboard-panel {
+  border: 1px solid #eef2f7;
+  border-radius: 26px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-panel--summary,
+.resource-card,
+.task-preview-card {
+  padding: 24px;
+}
+
+.dashboard-panel--summary {
+  min-height: 100%;
+}
+
+.dashboard-panel__header,
+.task-preview-card__header {
   display: flex;
-  flex-direction: column;
-  flex: 1;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.dashboard-panel__eyebrow {
+  margin-bottom: 7px;
+  color: #2563eb;
+}
+
+.page-section-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.dashboard-panel__count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .dashboard-side-stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  height: 100%;
+  gap: 18px;
+  min-width: 0;
 }
 
 .summary-list {
@@ -497,29 +711,51 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.summary-item {
-  padding: 12px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-elevated);
+.summary-item,
+.task-preview-item {
+  padding: 16px;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  background: #f8fafc;
 }
 
-.summary-item__header {
+.summary-item__header,
+.task-preview-item__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.summary-item__badges {
+.summary-item__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.summary-item__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12);
+}
+
+.summary-item__badges,
+.task-preview-item__badges,
+.task-preview-card__actions {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
 }
 
-.summary-item__name {
-  font-weight: 600;
-  color: var(--text-primary);
+.summary-item__name,
+.task-preview-item__name {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .dashboard-mode-tag {
@@ -528,11 +764,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-width: 54px;
   padding: 4px 10px;
-  border-radius: 8px;
   border: 1px solid currentColor;
+  border-radius: 8px;
+  background: #fff;
   font-size: 12px;
   line-height: 1.2;
-  background: #fff;
+  font-weight: 800;
 }
 
 .dashboard-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
@@ -544,45 +781,27 @@ onBeforeUnmount(() => {
 .summary-item__meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 10px;
+  color: #64748b;
   font-size: 12px;
-  color: var(--text-tertiary);
+  line-height: 1.6;
 }
 
 .dashboard-empty {
   min-height: 280px;
 }
 
-.resource-card {
-  min-height: 220px;
-  border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent), var(--bg-panel);
-}
-
-.resource-card--vertical {
-  min-height: 360px;
-}
-
-.resource-card--compact {
-  min-height: auto;
-  border: 0;
-  border-radius: 20px;
-  background: #ffffff;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.08);
-}
-
 .resource-stack {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 18px;
 }
 
 .resource-metric {
   padding: 16px;
-  border: 1px solid #d5e2f3;
-  border-radius: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
 }
 
@@ -597,49 +816,50 @@ onBeforeUnmount(() => {
 .resource-metric__main {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
-  font-size: 16px;
-  font-weight: 800;
-  color: #2f3a46;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .resource-metric__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: #2f3a46;
-  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 16px;
   line-height: 1;
 }
 
-.resource-metric__label {
+.resource-metric__label,
+.resource-metric__value {
   white-space: nowrap;
 }
 
 .resource-metric__value {
-  color: #9a9da3;
-  white-space: nowrap;
+  color: #2563eb;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .resource-metric__desc {
   min-width: 0;
-  color: #96999f;
-  font-weight: 700;
+  margin-bottom: 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.resource-metric__desc--right {
-  flex: 0 0 auto;
-  font-size: 15px;
-}
-
 .resource-progress :deep(.el-progress-bar__outer) {
-  background-color: #d8dde4;
+  background-color: #dbeafe;
   border-radius: 999px;
 }
 
@@ -653,19 +873,19 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #8fc8ff;
-  border-radius: 16px;
-  background: #dff0ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  background: #eff6ff;
 }
 
 .resource-highlight__label {
-  color: #3c4854;
-  font-size: 16px;
-  font-weight: 800;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .resource-highlight__value {
-  color: #1f93f5;
+  color: #2563eb;
   font-size: 20px;
   font-weight: 900;
   white-space: nowrap;
@@ -680,18 +900,9 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.task-preview-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.task-preview-card__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.task-preview-card__refresh {
+  color: #2563eb;
+  font-weight: 900;
 }
 
 .task-preview-list {
@@ -700,75 +911,61 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.task-preview-item {
-  padding: 12px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-elevated);
-}
-
 .task-preview-item__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
   margin-bottom: 10px;
 }
 
-.task-preview-item__badges {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.task-preview-item__name {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
 .task-preview-item__meta {
-  margin-top: 4px;
+  margin-top: 5px;
+  color: #64748b;
   font-size: 12px;
-  color: var(--text-secondary);
+  font-weight: 800;
 }
 
 .task-preview-item__detail {
   margin-top: 6px;
+  color: #94a3b8;
   font-size: 12px;
-  color: var(--text-tertiary);
   line-height: 1.5;
 }
 
 .task-preview-item__stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   margin-top: 10px;
+  color: #64748b;
   font-size: 12px;
-  color: var(--text-secondary);
+  font-weight: 800;
+}
+
+.task-preview-item__stats span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #ffffff;
 }
 
 .task-preview-item__path {
-  margin-top: 8px;
+  margin-top: 10px;
+  color: #64748b;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .task-preview-item__logs {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.04);
-  font-size: 12px;
-  color: var(--text-secondary);
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
 }
 
 .task-preview-item__log-line {
@@ -778,7 +975,7 @@ onBeforeUnmount(() => {
 
 .task-preview-item__logs-loading,
 .task-preview-item__logs-empty {
-  color: var(--text-tertiary);
+  color: #94a3b8;
 }
 
 .task-preview-empty {
@@ -786,14 +983,31 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .dashboard-row--detail :deep(.el-col) {
-    max-width: 100%;
-    flex: 0 0 100%;
+  .dashboard-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-content {
+    grid-template-columns: 1fr;
   }
 }
 
-:deep(.el-card__body) {
-  position: relative;
+@media (max-width: 720px) {
+  .dashboard-hero,
+  .dashboard-panel__header,
+  .task-preview-card__header,
+  .summary-item__header,
+  .task-preview-item__header {
+    flex-direction: column;
+  }
+
+  .dashboard-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-hero {
+    padding: 28px 24px;
+  }
 }
 
 :deep(.el-tag) {
