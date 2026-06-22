@@ -28,25 +28,25 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #0b101b;
+  --bg-app: #090c13;
   --bg-app-overlay:
-    linear-gradient(rgba(96, 165, 250, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.055) 1px, transparent 1px),
-    radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.2), transparent 30%),
-    radial-gradient(circle at 88% 16%, rgba(124, 58, 237, 0.2), transparent 28%);
-  --bg-app-base: #0b101b;
-  --bg-panel: rgba(17, 20, 31, 0.88);
-  --bg-panel-strong: rgba(15, 18, 29, 0.94);
-  --bg-elevated: rgba(25, 29, 42, 0.92);
+    linear-gradient(rgba(80, 120, 180, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 120, 180, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 6% 16%, rgba(45, 96, 150, 0.28), transparent 28%),
+    radial-gradient(circle at 84% 10%, rgba(100, 78, 150, 0.24), transparent 30%);
+  --bg-app-base: #090c13;
+  --bg-panel: rgba(18, 21, 31, 0.9);
+  --bg-panel-strong: rgba(15, 18, 28, 0.96);
+  --bg-elevated: rgba(23, 27, 39, 0.92);
   --bg-sidebar: #101827;
-  --bg-header: rgba(13, 18, 30, 0.92);
-  --text-primary: #f2f6ff;
-  --text-secondary: #c0cadc;
-  --text-tertiary: #8f9bb0;
-  --border-color: rgba(130, 145, 170, 0.18);
-  --accent-color: #60a5fa;
-  --accent-soft: rgba(96, 165, 250, 0.18);
-  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --bg-header: rgba(10, 13, 21, 0.92);
+  --text-primary: #edf3ff;
+  --text-secondary: #b7c0d2;
+  --text-tertiary: #8b95a8;
+  --border-color: rgba(130, 145, 170, 0.16);
+  --accent-color: #5da2ff;
+  --accent-soft: rgba(93, 162, 255, 0.16);
+  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.42);
 }
 
 :root[data-theme='appletv'] {
@@ -91,12 +91,12 @@ body {
 :root[data-theme='dark'] body,
 :root[data-theme='dark'] #app {
   background:
-    linear-gradient(rgba(96, 165, 250, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px),
-    radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.16), transparent 26%),
-    radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.16), transparent 28%),
-    #0b0f19;
-  background-size: 72px 72px, 72px 72px, auto, auto, auto;
+    linear-gradient(rgba(80, 120, 180, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 120, 180, 0.055) 1px, transparent 1px),
+    radial-gradient(circle at 5% 20%, rgba(45, 96, 150, 0.26), transparent 28%),
+    radial-gradient(circle at 86% 10%, rgba(96, 80, 150, 0.22), transparent 30%),
+    linear-gradient(90deg, #0d1420 0%, #090c13 42%, #11101c 100%);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
   background-attachment: fixed;
 }
 
@@ -333,8 +333,8 @@ body {
 :root[data-theme='dark'] .el-textarea__inner,
 :root[data-theme='dark'] .el-select__wrapper {
   color: var(--text-primary);
-  background: rgba(20, 26, 40, 0.94);
-  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset;
+  background: rgba(17, 20, 31, 0.86);
+  box-shadow: 0 0 0 1px rgba(130, 145, 170, 0.16) inset;
 }
 
 :root[data-theme='dark'] .el-input__inner,

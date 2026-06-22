@@ -988,18 +988,18 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero {
-  border-color: rgba(96, 165, 250, 0.18);
-  color: #f3f7ff;
+  border-color: rgba(130, 145, 170, 0.18);
+  color: #edf3ff;
   background:
-    linear-gradient(rgba(96, 165, 250, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
-    radial-gradient(circle at 0% 20%, rgba(37, 99, 235, 0.18), transparent 32%),
-    radial-gradient(circle at 100% 8%, rgba(124, 58, 237, 0.2), transparent 30%),
-    linear-gradient(100deg, rgba(24, 39, 61, 0.82) 0%, rgba(16, 20, 32, 0.78) 48%, rgba(42, 34, 67, 0.78) 100%);
+    linear-gradient(rgba(80, 120, 180, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 120, 180, 0.065) 1px, transparent 1px),
+    radial-gradient(circle at 0% 18%, rgba(55, 110, 170, 0.26), transparent 32%),
+    radial-gradient(circle at 96% 14%, rgba(100, 82, 150, 0.24), transparent 30%),
+    linear-gradient(100deg, rgba(28, 42, 65, 0.82) 0%, rgba(13, 16, 25, 0.8) 48%, rgba(38, 34, 58, 0.82) 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 24px 70px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero::after {
@@ -1024,12 +1024,11 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .dashboard-panel {
-  border-color: rgba(130, 145, 170, 0.18);
-  background:
-    linear-gradient(180deg, rgba(22, 25, 37, 0.84) 0%, rgba(17, 20, 31, 0.82) 100%) !important;
+  border-color: rgba(130, 145, 170, 0.16);
+  background: rgba(17, 20, 31, 0.88) !important;
   box-shadow:
-    0 22px 62px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 22px 62px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(18px);
 }
 
@@ -1053,14 +1052,14 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .summary-item,
 :global(:root[data-theme='dark']) .task-preview-item {
-  border-color: rgba(130, 145, 170, 0.16);
-  background: rgba(20, 23, 34, 0.78) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  border-color: rgba(130, 145, 170, 0.14);
+  background: rgba(21, 24, 35, 0.82) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 :global(:root[data-theme='dark']) .resource-metric {
-  border-color: rgba(96, 165, 250, 0.18);
-  background: linear-gradient(180deg, rgba(25, 30, 45, 0.82) 0%, rgba(18, 22, 34, 0.78) 100%) !important;
+  border-color: rgba(130, 145, 170, 0.15);
+  background: rgba(21, 24, 35, 0.82) !important;
 }
 
 :global(:root[data-theme='dark']) .resource-metric__icon,

@@ -539,19 +539,19 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .admin-layout__aside {
-  border-right-color: rgba(96, 165, 250, 0.18);
+  border-right-color: rgba(93, 162, 255, 0.16);
   background:
-    linear-gradient(rgba(96, 165, 250, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(21, 31, 50, 0.98) 0%, rgba(13, 19, 32, 0.98) 56%, rgba(10, 15, 26, 0.98) 100%);
-  background-size: 56px 56px, 56px 56px, auto;
-  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.28);
+    linear-gradient(rgba(80, 120, 180, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 120, 180, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 19, 32, 0.98) 48%, rgba(8, 12, 20, 0.98) 100%);
+  background-size: 54px 54px, 54px 54px, auto;
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.32);
 }
 
 :global(:root[data-theme='dark']) .admin-layout__header {
-  border-bottom-color: rgba(96, 165, 250, 0.14);
-  background: rgba(13, 19, 32, 0.82);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16);
+  border-bottom-color: rgba(130, 145, 170, 0.12);
+  background: linear-gradient(90deg, rgba(13, 18, 28, 0.94) 0%, rgba(10, 12, 19, 0.94) 52%, rgba(15, 13, 24, 0.94) 100%);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2);
 }
 
 :global(:root[data-theme='dark']) .brand {
@@ -600,7 +600,7 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item) {
-  color: #e2e8f0;
+  color: #aeb7c9;
   background: transparent;
 }
 
