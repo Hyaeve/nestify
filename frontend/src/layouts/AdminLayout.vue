@@ -492,18 +492,29 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item) {
+  position: relative;
   height: 44px;
   margin-bottom: 6px;
   padding: 0 14px !important;
   border-radius: 14px;
-  color: #334155;
-  font-weight: 700;
+  color: #222222;
+  font-weight: 800;
 }
 
 :deep(.el-menu-item:hover) {
-  color: #0f172a;
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.26), rgba(64, 158, 255, 0.34));
-  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.16);
+  color: #1688e8;
+  background: #d7ebfb;
+}
+
+:deep(.el-menu-item:hover::before) {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 4px;
+  border-radius: 999px;
+  background: #1688e8;
+  content: '';
 }
 
 :deep(.el-menu--collapse .el-menu-item) {
@@ -523,15 +534,28 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.18), rgba(64, 158, 255, 0.26));
-  color: #2563eb;
-  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.12);
+  color: #1e9bff;
+  background: #e8f4ff;
+}
+
+:deep(.el-menu-item.is-active::before) {
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 4px;
+  border-radius: 999px;
+  background: #1e9bff;
+  content: '';
 }
 
 :deep(.el-menu-item.is-active:hover) {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.28), rgba(64, 158, 255, 0.38));
-  color: #1d4ed8;
-  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.2);
+  color: #1688e8;
+  background: #d7ebfb;
+}
+
+:deep(.el-menu-item.is-active:hover::before) {
+  background: #1688e8;
 }
 
 :deep(.el-menu-item span) {
