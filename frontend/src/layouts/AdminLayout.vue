@@ -641,18 +641,19 @@ async function handleLogout() {
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {
-  min-width: 160px;
-  padding: 8px;
-  border-radius: 16px;
+  min-width: 128px;
+  padding: 6px;
+  border-radius: 14px;
 }
 
 :global(.header-user-dropdown .el-dropdown-menu__item) {
-  min-height: 44px;
-  border-radius: 12px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
 }
 
 :global(.header-user-dropdown .el-dropdown-menu__item .el-icon) {
-  margin-right: 10px;
+  margin-right: 8px;
 }
 </style>
 
