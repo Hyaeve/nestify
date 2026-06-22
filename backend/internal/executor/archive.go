@@ -271,7 +271,7 @@ func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executi
 		if strings.EqualFold(strings.TrimSpace(req.LinkMode), "hard") {
 			modeLabel = "硬链"
 		}
-		stats.Summary = fmt.Sprintf("链路完成：创建 %d 个%s，跳过 %d 项，失败 %d 项", stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
+		stats.Summary = fmt.Sprintf("链路完成：%s -> %s；创建 %d 个%s，跳过 %d 项，失败 %d 项", sourceDir, targetDir, stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
 	}
 
 	if stats.FailureCount > 0 {
