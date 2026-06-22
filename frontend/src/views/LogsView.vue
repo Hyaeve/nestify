@@ -679,17 +679,17 @@ onMounted(() => {
 }
 
 :global(:root[data-theme='dark']) .logs-hero {
-  border: 1px solid rgba(130, 145, 170, 0.18);
+  border: 1px solid rgba(132, 148, 176, 0.18);
   color: #edf3ff;
   background:
-    linear-gradient(rgba(80, 120, 180, 0.065) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(80, 120, 180, 0.065) 1px, transparent 1px),
-    radial-gradient(circle at 0% 18%, rgba(55, 110, 170, 0.26), transparent 32%),
-    radial-gradient(circle at 96% 14%, rgba(100, 82, 150, 0.24), transparent 30%),
-    linear-gradient(100deg, rgba(28, 42, 65, 0.82) 0%, rgba(13, 16, 25, 0.8) 48%, rgba(38, 34, 58, 0.82) 100%);
+    linear-gradient(rgba(92, 124, 176, 0.064) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 124, 176, 0.064) 1px, transparent 1px),
+    radial-gradient(circle at 0% 18%, rgba(55, 110, 170, 0.28), transparent 32%),
+    radial-gradient(circle at 96% 14%, rgba(86, 70, 130, 0.26), transparent 30%),
+    linear-gradient(100deg, rgba(28, 42, 65, 0.82) 0%, rgba(12, 15, 23, 0.82) 48%, rgba(38, 34, 58, 0.82) 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.38),
+    0 24px 70px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
@@ -710,10 +710,10 @@ onMounted(() => {
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .logs-toolbar-panel,
 :global(:root[data-theme='dark']) .logs-table-shell {
-  border-color: rgba(130, 145, 170, 0.16);
-  background: rgba(17, 20, 31, 0.88) !important;
+  border-color: rgba(132, 148, 176, 0.16);
+  background: rgba(18, 21, 31, 0.86) !important;
   box-shadow:
-    0 22px 62px rgba(0, 0, 0, 0.36),
+    0 22px 62px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(18px);
 }
@@ -732,8 +732,8 @@ onMounted(() => {
 
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper),
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-select__wrapper) {
-  background: rgba(18, 21, 32, 0.82);
-  box-shadow: 0 0 0 1px rgba(130, 145, 170, 0.18) inset;
+  background: rgba(16, 19, 29, 0.88);
+  box-shadow: 0 0 0 1px rgba(132, 148, 176, 0.16) inset;
 }
 
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper:hover),

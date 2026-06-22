@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div v-if="!isCollapsed" class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v6.6</div>
+          <div class="brand__version">v6.7</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -541,11 +541,11 @@ async function handleLogout() {
 :global(:root[data-theme='dark']) .admin-layout__aside {
   border-right-color: rgba(93, 162, 255, 0.16);
   background:
-    linear-gradient(rgba(80, 120, 180, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(80, 120, 180, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 19, 32, 0.98) 48%, rgba(8, 12, 20, 0.98) 100%);
+    linear-gradient(rgba(92, 124, 176, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 124, 176, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 19, 31, 0.98) 48%, rgba(8, 12, 20, 0.98) 100%);
   background-size: 54px 54px, 54px 54px, auto;
-  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.32);
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.34);
 }
 
 :global(:root[data-theme='dark']) .admin-layout__header {
@@ -555,10 +555,10 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .brand {
-  border-bottom-color: rgba(96, 165, 250, 0.14);
+  border-bottom-color: rgba(93, 162, 255, 0.16);
   background:
-    radial-gradient(circle at 20% 12%, rgba(96, 165, 250, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(30, 41, 59, 0.68), rgba(15, 23, 42, 0.18));
+    radial-gradient(circle at 18% 10%, rgba(93, 162, 255, 0.18), transparent 36%),
+    linear-gradient(180deg, rgba(22, 31, 48, 0.82), rgba(13, 19, 31, 0.46));
 }
 
 :global(:root[data-theme='dark']) .brand__logo {
@@ -579,10 +579,10 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .icon-button {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(24, 33, 51, 0.82);
+  border-color: rgba(132, 148, 176, 0.16);
+  background: rgba(18, 21, 31, 0.82);
   color: #cbd5e1;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
 :global(:root[data-theme='dark']) .icon-button:hover {

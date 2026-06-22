@@ -28,25 +28,25 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #090c13;
+  --bg-app: #080b12;
   --bg-app-overlay:
-    linear-gradient(rgba(80, 120, 180, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(80, 120, 180, 0.06) 1px, transparent 1px),
-    radial-gradient(circle at 6% 16%, rgba(45, 96, 150, 0.28), transparent 28%),
-    radial-gradient(circle at 84% 10%, rgba(100, 78, 150, 0.24), transparent 30%);
-  --bg-app-base: #090c13;
-  --bg-panel: rgba(18, 21, 31, 0.9);
-  --bg-panel-strong: rgba(15, 18, 28, 0.96);
-  --bg-elevated: rgba(23, 27, 39, 0.92);
-  --bg-sidebar: #101827;
-  --bg-header: rgba(10, 13, 21, 0.92);
+    linear-gradient(rgba(92, 124, 176, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 124, 176, 0.055) 1px, transparent 1px),
+    radial-gradient(circle at 4% 18%, rgba(50, 92, 138, 0.3), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(84, 68, 128, 0.28), transparent 32%);
+  --bg-app-base: #080b12;
+  --bg-panel: rgba(18, 21, 31, 0.86);
+  --bg-panel-strong: rgba(14, 17, 26, 0.96);
+  --bg-elevated: rgba(20, 24, 36, 0.9);
+  --bg-sidebar: #111a2b;
+  --bg-header: rgba(10, 13, 21, 0.94);
   --text-primary: #edf3ff;
-  --text-secondary: #b7c0d2;
-  --text-tertiary: #8b95a8;
-  --border-color: rgba(130, 145, 170, 0.16);
+  --text-secondary: #aeb7c9;
+  --text-tertiary: #858fa4;
+  --border-color: rgba(132, 148, 176, 0.16);
   --accent-color: #5da2ff;
   --accent-soft: rgba(93, 162, 255, 0.16);
-  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.42);
+  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.46);
 }
 
 :root[data-theme='appletv'] {
@@ -91,11 +91,11 @@ body {
 :root[data-theme='dark'] body,
 :root[data-theme='dark'] #app {
   background:
-    linear-gradient(rgba(80, 120, 180, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(80, 120, 180, 0.055) 1px, transparent 1px),
-    radial-gradient(circle at 5% 20%, rgba(45, 96, 150, 0.26), transparent 28%),
-    radial-gradient(circle at 86% 10%, rgba(96, 80, 150, 0.22), transparent 30%),
-    linear-gradient(90deg, #0d1420 0%, #090c13 42%, #11101c 100%);
+    linear-gradient(rgba(92, 124, 176, 0.052) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 124, 176, 0.052) 1px, transparent 1px),
+    radial-gradient(circle at 5% 20%, rgba(45, 86, 128, 0.3), transparent 29%),
+    radial-gradient(circle at 88% 12%, rgba(86, 70, 130, 0.28), transparent 31%),
+    linear-gradient(90deg, #0f1927 0%, #080b12 44%, #11101c 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
   background-attachment: fixed;
 }
@@ -308,12 +308,12 @@ body {
 
 :root[data-theme='dark'] .el-table {
   --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: rgba(20, 26, 40, 0.92);
-  --el-table-row-hover-bg-color: rgba(55, 65, 81, 0.96);
-  --el-table-header-bg-color: rgba(16, 22, 36, 0.98);
-  --el-table-border-color: rgba(148, 163, 184, 0.2);
+  --el-table-tr-bg-color: rgba(18, 21, 31, 0.9);
+  --el-table-row-hover-bg-color: rgba(45, 49, 61, 0.98);
+  --el-table-header-bg-color: rgba(14, 17, 26, 0.98);
+  --el-table-border-color: rgba(132, 148, 176, 0.14);
   --el-table-text-color: var(--text-primary);
-  --el-table-header-text-color: #d8e0ef;
+  --el-table-header-text-color: #cfd7e6;
 }
 
 :root[data-theme='dark'] .el-table th.el-table__cell,
@@ -333,8 +333,8 @@ body {
 :root[data-theme='dark'] .el-textarea__inner,
 :root[data-theme='dark'] .el-select__wrapper {
   color: var(--text-primary);
-  background: rgba(17, 20, 31, 0.86);
-  box-shadow: 0 0 0 1px rgba(130, 145, 170, 0.16) inset;
+  background: rgba(18, 21, 31, 0.9);
+  box-shadow: 0 0 0 1px rgba(132, 148, 176, 0.16) inset;
 }
 
 :root[data-theme='dark'] .el-input__inner,
