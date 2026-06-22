@@ -501,8 +501,9 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item:hover) {
-  color: #1e293b;
-  background: rgba(64, 158, 255, 0.08);
+  color: #0f172a;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.26), rgba(64, 158, 255, 0.34));
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.16);
 }
 
 :deep(.el-menu--collapse .el-menu-item) {
@@ -522,9 +523,15 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item.is-active) {
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.14), rgba(64, 158, 255, 0.22));
-  color: var(--accent-color);
-  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.08);
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.18), rgba(64, 158, 255, 0.26));
+  color: #2563eb;
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.12);
+}
+
+:deep(.el-menu-item.is-active:hover) {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.28), rgba(64, 158, 255, 0.38));
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.2);
 }
 
 :deep(.el-menu-item span) {

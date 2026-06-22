@@ -60,11 +60,11 @@
             <el-option label="警告" value="skip" />
           </el-select>
 
-          <el-select v-model="modeFilter" class="logs-toolbar__select" placeholder="类型" @change="handleFiltersChange">
+          <el-select v-model="ruleTypeFilter" class="logs-toolbar__select" placeholder="类型" @change="handleFiltersChange">
             <el-option label="全部类型" value="all" />
-            <el-option label="打包归档" value="package" />
-            <el-option label="收集归档" value="collect" />
-            <el-option label="清理归档" value="cleanup" />
+            <el-option label="归档规则" value="archive" />
+            <el-option label="净化规则" value="cleanup" />
+            <el-option label="链路规则" value="link" />
           </el-select>
 
           <el-input
@@ -102,9 +102,9 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="类型" width="130" align="center">
+          <el-table-column label="模式" width="130" align="center">
             <template #default="scope">
-              <span class="logs-type">{{ archiveModeLabel(scope.row.archive_mode) }}</span>
+              <span class="logs-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
             </template>
           </el-table-column>
 
@@ -168,7 +168,7 @@ const filteredTotal = ref(0)
 const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const modeFilter = ref<'all' | 'package' | 'collect' | 'cleanup'>('all')
+const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
 const logsPageSizeOptions = [25, 50]
 const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
@@ -187,7 +187,7 @@ async function loadHistory() {
       page_size: logsPageSize.value,
       keyword: searchKeyword.value || undefined,
       status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
-      archive_mode: modeFilter.value !== 'all' ? modeFilter.value : undefined,
+      rule_type: ruleTypeFilter.value !== 'all' ? ruleTypeFilter.value : undefined,
     })
     historyItems.value = response.data?.items ?? []
     filteredTotal.value = response.data?.total ?? 0
@@ -214,7 +214,7 @@ function resetFilters() {
   keywordInput.value = ''
   searchKeyword.value = ''
   statusFilter.value = 'all'
-  modeFilter.value = 'all'
+  ruleTypeFilter.value = 'all'
   logsCurrentPage.value = 1
   void loadHistory()
 }
@@ -287,17 +287,38 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' {
   return 'warning'
 }
 
-function archiveModeLabel(mode?: string) {
-  if (mode === 'package') {
-    return '打包归档'
+function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
+  switch (item?.archive_mode) {
+    case 'package':
+      return '打包'
+    case 'collect':
+      return '收集'
+    case 'cleanup':
+      return '清理'
+    case 'transform':
+      return '转换'
+    case 'link':
+      return item?.link_mode === 'soft' ? '软链' : '硬链'
+    default:
+      return '未知'
   }
-  if (mode === 'collect') {
-    return '收集归档'
+}
+
+function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string }) {
+  switch (item?.archive_mode) {
+    case 'package':
+      return 'logs-mode-tag--package'
+    case 'collect':
+      return 'logs-mode-tag--collect'
+    case 'cleanup':
+      return 'logs-mode-tag--cleanup'
+    case 'transform':
+      return 'logs-mode-tag--transform'
+    case 'link':
+      return item?.link_mode === 'soft' ? 'logs-mode-tag--softlink' : 'logs-mode-tag--hardlink'
+    default:
+      return ''
   }
-  if (mode === 'cleanup') {
-    return '清理归档'
-  }
-  return '未分类'
 }
 
 function triggerModeLabel(mode: string) {
@@ -599,17 +620,26 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.logs-type {
+.logs-mode-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  color: #334155;
-  background: #f1f5f9;
-  font-size: 12px;
+  min-width: 62px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
 }
+
+.logs-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }
+.logs-mode-tag--collect { color: #8a74d6; background: rgba(138, 116, 214, 0.1); }
+.logs-mode-tag--cleanup { color: #5f9f45; background: rgba(95, 159, 69, 0.12); }
+.logs-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
+.logs-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
+.logs-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 
 .logs-message {
   display: flex;
