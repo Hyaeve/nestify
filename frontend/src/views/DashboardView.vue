@@ -988,18 +988,18 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero {
-  border-color: rgba(96, 165, 250, 0.26);
-  color: #e5eefc;
+  border-color: rgba(96, 165, 250, 0.24);
+  color: #f3f7ff;
   background:
-    linear-gradient(rgba(96, 165, 250, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
-    radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.22), transparent 30%),
-    radial-gradient(circle at 86% 20%, rgba(99, 102, 241, 0.24), transparent 26%),
-    linear-gradient(100deg, rgba(12, 18, 32, 0.98) 0%, rgba(15, 23, 42, 0.94) 48%, rgba(20, 30, 49, 0.96) 100%);
+    linear-gradient(rgba(96, 165, 250, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.065) 1px, transparent 1px),
+    radial-gradient(circle at 9% 18%, rgba(59, 130, 246, 0.36), transparent 28%),
+    radial-gradient(circle at 88% 24%, rgba(124, 58, 237, 0.34), transparent 30%),
+    linear-gradient(100deg, rgba(24, 35, 55, 0.96) 0%, rgba(12, 17, 29, 0.96) 46%, rgba(35, 29, 58, 0.94) 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
   box-shadow:
-    0 20px 54px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 20px 54px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero::after {
@@ -1007,7 +1007,7 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero p {
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero__meta span {
@@ -1024,12 +1024,12 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .dashboard-panel {
-  border-color: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.22);
   background:
-    linear-gradient(180deg, rgba(24, 33, 51, 0.9) 0%, rgba(15, 23, 42, 0.88) 100%);
+    linear-gradient(180deg, rgba(23, 30, 45, 0.96) 0%, rgba(15, 20, 32, 0.94) 100%);
   box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    0 18px 46px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 :global(:root[data-theme='dark']) .metric-card__label,
@@ -1039,7 +1039,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='dark']) .task-preview-item__stats,
 :global(:root[data-theme='dark']) .task-preview-item__path,
 :global(:root[data-theme='dark']) .resource-metric__desc {
-  color: #94a3b8;
+  color: #c0cadc;
 }
 
 :global(:root[data-theme='dark']) .metric-card__value,
@@ -1052,9 +1052,9 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .summary-item,
 :global(:root[data-theme='dark']) .task-preview-item {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(24, 33, 51, 0.84);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(22, 29, 44, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 :global(:root[data-theme='dark']) .resource-metric {

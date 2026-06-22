@@ -28,21 +28,25 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg-app: #0f172a;
-  --bg-app-overlay: none;
-  --bg-app-base: none;
-  --bg-panel: rgba(16, 22, 36, 0.82);
-  --bg-panel-strong: #131a2a;
-  --bg-elevated: #182133;
-  --bg-sidebar: #111522;
-  --bg-header: rgba(16, 18, 28, 0.88);
-  --text-primary: #e5eefc;
-  --text-secondary: #9aa7bd;
-  --text-tertiary: #6d7b94;
-  --border-color: rgba(71, 85, 105, 0.42);
+  --bg-app: #0b101b;
+  --bg-app-overlay:
+    linear-gradient(rgba(96, 165, 250, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.055) 1px, transparent 1px),
+    radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.2), transparent 30%),
+    radial-gradient(circle at 88% 16%, rgba(124, 58, 237, 0.2), transparent 28%);
+  --bg-app-base: #0b101b;
+  --bg-panel: rgba(18, 24, 38, 0.9);
+  --bg-panel-strong: #151b2b;
+  --bg-elevated: #1b2233;
+  --bg-sidebar: #101827;
+  --bg-header: rgba(13, 18, 30, 0.92);
+  --text-primary: #f2f6ff;
+  --text-secondary: #c0cadc;
+  --text-tertiary: #8f9bb0;
+  --border-color: rgba(148, 163, 184, 0.24);
   --accent-color: #60a5fa;
   --accent-soft: rgba(96, 165, 250, 0.18);
-  --shadow-soft: 0 20px 60px rgba(2, 6, 23, 0.45);
+  --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.42);
 }
 
 :root[data-theme='appletv'] {
@@ -82,6 +86,15 @@ body {
   min-height: 100vh;
   background: var(--bg-app);
   color: var(--text-primary);
+}
+
+:root[data-theme='dark'] body,
+:root[data-theme='dark'] #app {
+  background:
+    var(--bg-app-overlay),
+    var(--bg-app-base);
+  background-size: 72px 72px, 72px 72px, auto, auto;
+  background-attachment: fixed;
 }
 
 .page-card {
@@ -292,12 +305,12 @@ body {
 
 :root[data-theme='dark'] .el-table {
   --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: rgba(16, 22, 36, 0.72);
-  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.16);
-  --el-table-header-bg-color: rgba(24, 33, 51, 0.92);
-  --el-table-border-color: rgba(148, 163, 184, 0.16);
+  --el-table-tr-bg-color: rgba(20, 26, 40, 0.92);
+  --el-table-row-hover-bg-color: rgba(55, 65, 81, 0.96);
+  --el-table-header-bg-color: rgba(16, 22, 36, 0.98);
+  --el-table-border-color: rgba(148, 163, 184, 0.2);
   --el-table-text-color: var(--text-primary);
-  --el-table-header-text-color: var(--text-secondary);
+  --el-table-header-text-color: #d8e0ef;
 }
 
 :root[data-theme='dark'] .el-table th.el-table__cell,
@@ -317,8 +330,8 @@ body {
 :root[data-theme='dark'] .el-textarea__inner,
 :root[data-theme='dark'] .el-select__wrapper {
   color: var(--text-primary);
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--border-color) inset;
+  background: rgba(20, 26, 40, 0.94);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset;
 }
 
 :root[data-theme='dark'] .el-input__inner,

@@ -539,11 +539,13 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .admin-layout__aside {
-  border-right-color: rgba(96, 165, 250, 0.16);
+  border-right-color: rgba(96, 165, 250, 0.18);
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.76) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(10, 15, 26, 0.98) 100%),
-    var(--bg-sidebar);
-  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.34);
+    linear-gradient(rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(21, 31, 50, 0.98) 0%, rgba(13, 19, 32, 0.98) 56%, rgba(10, 15, 26, 0.98) 100%);
+  background-size: 56px 56px, 56px 56px, auto;
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.28);
 }
 
 :global(:root[data-theme='dark']) .admin-layout__header {
@@ -567,13 +569,13 @@ async function handleLogout() {
 
 :global(:root[data-theme='dark']) .brand__name,
 :global(:root[data-theme='dark']) .page-title__text {
-  color: #e5eefc;
+  color: #f2f6ff;
 }
 
 :global(:root[data-theme='dark']) .brand__version,
 :global(:root[data-theme='dark']) .page-title__crumb,
 :global(:root[data-theme='dark']) .page-title__divider {
-  color: #94a3b8;
+  color: #c0cadc;
 }
 
 :global(:root[data-theme='dark']) .icon-button {
@@ -598,22 +600,22 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item) {
-  color: #cbd5e1;
+  color: #c0cadc;
   background: transparent;
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item:hover) {
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.2);
-  box-shadow: inset 4px 0 0 rgba(96, 165, 250, 0.62);
+  color: #f3f7ff;
+  background: rgba(37, 99, 235, 0.24);
+  box-shadow: inset 4px 0 0 rgba(96, 165, 250, 0.7);
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item.is-active) {
-  color: #93c5fd;
-  background: rgba(37, 99, 235, 0.14);
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.18);
   box-shadow:
     inset 4px 0 0 #60a5fa,
-    0 10px 24px rgba(37, 99, 235, 0.1);
+    0 10px 24px rgba(37, 99, 235, 0.12);
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item.is-active:hover) {
