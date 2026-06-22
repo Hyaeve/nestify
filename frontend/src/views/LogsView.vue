@@ -679,16 +679,18 @@ onMounted(() => {
 }
 
 :global(:root[data-theme='dark']) .logs-hero {
-  border: 1px solid rgba(96, 165, 250, 0.22);
+  border: 1px solid rgba(96, 165, 250, 0.26);
   color: #e5eefc;
   background:
-    linear-gradient(rgba(96, 165, 250, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.07) 1px, transparent 1px),
-    radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.24), transparent 30%),
-    radial-gradient(circle at 86% 20%, rgba(99, 102, 241, 0.28), transparent 26%),
-    linear-gradient(100deg, rgba(15, 23, 42, 0.94) 0%, rgba(17, 24, 39, 0.9) 48%, rgba(30, 41, 59, 0.92) 100%);
+    linear-gradient(rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, rgba(14, 165, 233, 0.22), transparent 30%),
+    radial-gradient(circle at 86% 20%, rgba(99, 102, 241, 0.24), transparent 26%),
+    linear-gradient(100deg, rgba(12, 18, 32, 0.98) 0%, rgba(15, 23, 42, 0.94) 48%, rgba(20, 30, 49, 0.96) 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 20px 54px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 :global(:root[data-theme='dark']) .logs-hero::after {
@@ -708,9 +710,12 @@ onMounted(() => {
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .logs-toolbar-panel,
 :global(:root[data-theme='dark']) .logs-table-shell {
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(16, 22, 36, 0.88);
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(180deg, rgba(24, 33, 51, 0.9) 0%, rgba(15, 23, 42, 0.88) 100%);
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 :global(:root[data-theme='dark']) .metric-card__label,
@@ -727,13 +732,20 @@ onMounted(() => {
 
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper),
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-select__wrapper) {
+  background: rgba(10, 15, 26, 0.58);
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset;
 }
 
+:global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper:hover),
+:global(:root[data-theme='dark']) .logs-toolbar :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.38) inset;
+}
+
 :global(:root[data-theme='dark']) .logs-table {
-  --el-table-header-bg-color: rgba(24, 33, 51, 0.92);
-  --el-table-tr-bg-color: rgba(16, 22, 36, 0.72);
-  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.16);
+  --el-table-header-bg-color: rgba(24, 33, 51, 0.94);
+  --el-table-tr-bg-color: rgba(12, 18, 32, 0.64);
+  --el-table-row-hover-bg-color: rgba(37, 99, 235, 0.18);
+  --el-table-border-color: rgba(148, 163, 184, 0.12);
 }
 
 :global(:root[data-theme='dark']) .logs-table :deep(.el-table__header-wrapper th) {
@@ -743,8 +755,22 @@ onMounted(() => {
 
 :global(:root[data-theme='dark']) .logs-mode-tag,
 :global(:root[data-theme='dark']) .logs-message__meta span {
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.58);
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(10, 15, 26, 0.62);
+}
+
+:global(:root[data-theme='dark']) .logs-table :deep(.el-table__row) {
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .logs-level-tag,
+:global(:root[data-theme='dark']) .logs-mode-tag {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+}
+
+:global(:root[data-theme='dark']) .logs-mode-tag--hardlink {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.12);
 }
 
 @media (max-width: 1440px) {

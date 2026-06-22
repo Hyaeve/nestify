@@ -538,6 +538,98 @@ async function handleLogout() {
   color: inherit;
 }
 
+:global(:root[data-theme='dark']) .admin-layout__aside {
+  border-right-color: rgba(96, 165, 250, 0.16);
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.76) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(10, 15, 26, 0.98) 100%),
+    var(--bg-sidebar);
+  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.34);
+}
+
+:global(:root[data-theme='dark']) .admin-layout__header {
+  border-bottom-color: rgba(96, 165, 250, 0.14);
+  background: rgba(13, 19, 32, 0.82);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16);
+}
+
+:global(:root[data-theme='dark']) .brand {
+  border-bottom-color: rgba(96, 165, 250, 0.14);
+  background:
+    radial-gradient(circle at 20% 12%, rgba(96, 165, 250, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(30, 41, 59, 0.68), rgba(15, 23, 42, 0.18));
+}
+
+:global(:root[data-theme='dark']) .brand__logo {
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.24),
+    0 16px 30px rgba(37, 99, 235, 0.18);
+}
+
+:global(:root[data-theme='dark']) .brand__name,
+:global(:root[data-theme='dark']) .page-title__text {
+  color: #e5eefc;
+}
+
+:global(:root[data-theme='dark']) .brand__version,
+:global(:root[data-theme='dark']) .page-title__crumb,
+:global(:root[data-theme='dark']) .page-title__divider {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .icon-button {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(24, 33, 51, 0.82);
+  color: #cbd5e1;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+:global(:root[data-theme='dark']) .icon-button:hover {
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(37, 99, 235, 0.16);
+  color: #93c5fd;
+}
+
+:global(:root[data-theme='dark']) .aside-toggle__line {
+  background: rgba(96, 165, 250, 0.22);
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu) {
+  background: transparent;
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item) {
+  color: #cbd5e1;
+  background: transparent;
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item:hover) {
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.2);
+  box-shadow: inset 4px 0 0 rgba(96, 165, 250, 0.62);
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active) {
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.14);
+  box-shadow:
+    inset 4px 0 0 #60a5fa,
+    0 10px 24px rgba(37, 99, 235, 0.1);
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active:hover) {
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.22);
+  box-shadow:
+    inset 4px 0 0 #93c5fd,
+    0 12px 28px rgba(37, 99, 235, 0.14);
+}
+
+:global(:root[data-theme='dark']) :global(.header-user-dropdown .el-dropdown-menu) {
+  background: rgba(19, 26, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+}
+
 :global(.header-user-dropdown .el-dropdown-menu) {
   min-width: 160px;
   padding: 8px;
