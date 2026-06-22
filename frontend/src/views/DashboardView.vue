@@ -988,17 +988,17 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .dashboard-hero {
-  border-color: rgba(96, 165, 250, 0.24);
+  border-color: rgba(96, 165, 250, 0.18);
   color: #f3f7ff;
   background:
-    linear-gradient(rgba(96, 165, 250, 0.065) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, 0.065) 1px, transparent 1px),
-    radial-gradient(circle at 9% 18%, rgba(59, 130, 246, 0.36), transparent 28%),
-    radial-gradient(circle at 88% 24%, rgba(124, 58, 237, 0.34), transparent 30%),
-    linear-gradient(100deg, rgba(24, 35, 55, 0.96) 0%, rgba(12, 17, 29, 0.96) 46%, rgba(35, 29, 58, 0.94) 100%);
+    linear-gradient(rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 0% 20%, rgba(37, 99, 235, 0.18), transparent 32%),
+    radial-gradient(circle at 100% 8%, rgba(124, 58, 237, 0.2), transparent 30%),
+    linear-gradient(100deg, rgba(24, 39, 61, 0.82) 0%, rgba(16, 20, 32, 0.78) 48%, rgba(42, 34, 67, 0.78) 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
   box-shadow:
-    0 20px 54px rgba(0, 0, 0, 0.3),
+    0 24px 70px rgba(0, 0, 0, 0.34),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -1024,12 +1024,13 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .dashboard-panel {
-  border-color: rgba(148, 163, 184, 0.22);
+  border-color: rgba(130, 145, 170, 0.18);
   background:
-    linear-gradient(180deg, rgba(23, 30, 45, 0.96) 0%, rgba(15, 20, 32, 0.94) 100%) !important;
+    linear-gradient(180deg, rgba(22, 25, 37, 0.84) 0%, rgba(17, 20, 31, 0.82) 100%) !important;
   box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.26),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    0 22px 62px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
 }
 
 :global(:root[data-theme='dark']) .metric-card__label,
@@ -1052,14 +1053,14 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .summary-item,
 :global(:root[data-theme='dark']) .task-preview-item {
-  border-color: rgba(148, 163, 184, 0.22);
-  background: rgba(22, 29, 44, 0.94) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-color: rgba(130, 145, 170, 0.16);
+  background: rgba(20, 23, 34, 0.78) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 :global(:root[data-theme='dark']) .resource-metric {
-  border-color: rgba(96, 165, 250, 0.24);
-  background: linear-gradient(180deg, rgba(27, 36, 55, 0.96) 0%, rgba(16, 22, 36, 0.94) 100%) !important;
+  border-color: rgba(96, 165, 250, 0.18);
+  background: linear-gradient(180deg, rgba(25, 30, 45, 0.82) 0%, rgba(18, 22, 34, 0.78) 100%) !important;
 }
 
 :global(:root[data-theme='dark']) .resource-metric__icon,
@@ -1073,8 +1074,8 @@ onBeforeUnmount(() => {
 }
 
 :global(:root[data-theme='dark']) .resource-highlight {
-  border-color: rgba(96, 165, 250, 0.24);
-  background: rgba(37, 99, 235, 0.16) !important;
+  border-color: rgba(96, 165, 250, 0.18);
+  background: rgba(37, 99, 235, 0.12) !important;
 }
 
 :global(:root[data-theme='dark']) .resource-highlight__label {

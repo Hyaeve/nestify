@@ -35,18 +35,18 @@
     radial-gradient(circle at 16% 18%, rgba(37, 99, 235, 0.2), transparent 30%),
     radial-gradient(circle at 88% 16%, rgba(124, 58, 237, 0.2), transparent 28%);
   --bg-app-base: #0b101b;
-  --bg-panel: rgba(18, 24, 38, 0.9);
-  --bg-panel-strong: #151b2b;
-  --bg-elevated: #1b2233;
+  --bg-panel: rgba(17, 20, 31, 0.88);
+  --bg-panel-strong: rgba(15, 18, 29, 0.94);
+  --bg-elevated: rgba(25, 29, 42, 0.92);
   --bg-sidebar: #101827;
   --bg-header: rgba(13, 18, 30, 0.92);
   --text-primary: #f2f6ff;
   --text-secondary: #c0cadc;
   --text-tertiary: #8f9bb0;
-  --border-color: rgba(148, 163, 184, 0.24);
+  --border-color: rgba(130, 145, 170, 0.18);
   --accent-color: #60a5fa;
   --accent-soft: rgba(96, 165, 250, 0.18);
-  --shadow-soft: 0 20px 60px rgba(0, 0, 0, 0.42);
+  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.38);
 }
 
 :root[data-theme='appletv'] {
@@ -91,9 +91,12 @@ body {
 :root[data-theme='dark'] body,
 :root[data-theme='dark'] #app {
   background:
-    var(--bg-app-overlay),
-    var(--bg-app-base);
-  background-size: 72px 72px, 72px 72px, auto, auto;
+    linear-gradient(rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(96, 165, 250, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.16), transparent 26%),
+    radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.16), transparent 28%),
+    #0b0f19;
+  background-size: 72px 72px, 72px 72px, auto, auto, auto;
   background-attachment: fixed;
 }
 
