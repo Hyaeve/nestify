@@ -486,21 +486,26 @@ onBeforeUnmount(() => {
   overflow: hidden;
   padding: 34px 36px;
   border-radius: 30px;
-  color: #ffffff;
+  border: 1px solid #dbeafe;
+  color: #0f172a;
   background:
-    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.25), transparent 28%),
-    linear-gradient(135deg, #2563eb 0%, #4f46e5 52%, #7c3aed 100%);
-  box-shadow: 0 24px 54px rgba(37, 99, 235, 0.25);
+    linear-gradient(rgba(37, 99, 235, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, rgba(186, 230, 253, 0.55), transparent 28%),
+    radial-gradient(circle at 86% 20%, rgba(224, 231, 255, 0.9), transparent 24%),
+    linear-gradient(100deg, #eff8ff 0%, #ffffff 45%, #f4f7ff 100%);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+  box-shadow: 0 18px 42px rgba(37, 99, 235, 0.08);
 }
 
 .dashboard-hero::after {
   position: absolute;
-  right: -64px;
-  bottom: -92px;
-  width: 260px;
-  height: 260px;
+  right: -42px;
+  top: -72px;
+  width: 280px;
+  height: 280px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.12), transparent 66%);
   content: '';
 }
 
@@ -520,7 +525,7 @@ onBeforeUnmount(() => {
 
 .dashboard-hero__eyebrow {
   margin-bottom: 10px;
-  color: rgba(255, 255, 255, 0.78);
+  color: #1e9bff;
 }
 
 .dashboard-hero h1 {
@@ -533,7 +538,7 @@ onBeforeUnmount(() => {
 .dashboard-hero p {
   max-width: 680px;
   margin: 12px 0 0;
-  color: rgba(255, 255, 255, 0.82);
+  color: #475569;
   font-size: 15px;
   line-height: 1.8;
 }
@@ -550,10 +555,10 @@ onBeforeUnmount(() => {
   align-items: center;
   min-height: 30px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.13);
-  color: rgba(255, 255, 255, 0.86);
+  background: rgba(219, 234, 254, 0.66);
+  color: #2563eb;
   font-size: 12px;
   font-weight: 800;
 }
@@ -565,10 +570,10 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   min-height: 44px;
   padding: 8px 12px 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid #86efac;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.9);
+  background: rgba(220, 252, 231, 0.72);
+  color: #16a34a;
   font-size: 13px;
   font-weight: 900;
   backdrop-filter: blur(12px);

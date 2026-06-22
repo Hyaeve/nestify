@@ -506,17 +506,6 @@ async function handleLogout() {
   background: #d7ebfb;
 }
 
-:deep(.el-menu-item:hover::before) {
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 4px;
-  border-radius: 999px;
-  background: #1688e8;
-  content: '';
-}
-
 :deep(.el-menu--collapse .el-menu-item) {
   padding: 0;
   justify-content: center;
@@ -536,26 +525,13 @@ async function handleLogout() {
 :deep(.el-menu-item.is-active) {
   color: #1e9bff;
   background: #e8f4ff;
-}
-
-:deep(.el-menu-item.is-active::before) {
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 4px;
-  border-radius: 999px;
-  background: #1e9bff;
-  content: '';
+  box-shadow: inset 4px 0 0 #1e9bff;
 }
 
 :deep(.el-menu-item.is-active:hover) {
   color: #1688e8;
   background: #d7ebfb;
-}
-
-:deep(.el-menu-item.is-active:hover::before) {
-  background: #1688e8;
+  box-shadow: inset 4px 0 0 #1688e8;
 }
 
 :deep(.el-menu-item span) {
