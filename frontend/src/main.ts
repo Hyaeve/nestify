@@ -6,7 +6,10 @@ import 'element-plus/dist/index.css'
 
 import App from './App.vue'
 import router from './router'
+import { applyTheme, getStoredTheme } from './utils/theme'
 import './styles/index.scss'
+
+applyTheme(getStoredTheme())
 
 const app = createApp(App)
 

@@ -1,4 +1,4 @@
-export type ThemeMode = 'light' | 'dark' | 'appletv'
+export type ThemeMode = 'light' | 'dark'
 
 const THEME_STORAGE_KEY = 'nestify-theme'
 
@@ -9,7 +9,7 @@ export function getStoredTheme(): ThemeMode {
 
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
   if (stored === 'dark' || stored === 'appletv') {
-    return stored
+    return 'dark'
   }
   return 'light'
 }

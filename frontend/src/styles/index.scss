@@ -26,7 +26,8 @@
   --font-size-title: 18px;
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+:root[data-theme='appletv'] {
   color-scheme: dark;
   --bg-app: #0b101b;
   --bg-app-overlay:

@@ -1026,7 +1026,7 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='dark']) .dashboard-panel {
   border-color: rgba(148, 163, 184, 0.22);
   background:
-    linear-gradient(180deg, rgba(23, 30, 45, 0.96) 0%, rgba(15, 20, 32, 0.94) 100%);
+    linear-gradient(180deg, rgba(23, 30, 45, 0.96) 0%, rgba(15, 20, 32, 0.94) 100%) !important;
   box-shadow:
     0 18px 46px rgba(0, 0, 0, 0.26),
     inset 0 1px 0 rgba(255, 255, 255, 0.045);
@@ -1053,13 +1053,13 @@ onBeforeUnmount(() => {
 :global(:root[data-theme='dark']) .summary-item,
 :global(:root[data-theme='dark']) .task-preview-item {
   border-color: rgba(148, 163, 184, 0.22);
-  background: rgba(22, 29, 44, 0.94);
+  background: rgba(22, 29, 44, 0.94) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 :global(:root[data-theme='dark']) .resource-metric {
-  border-color: rgba(96, 165, 250, 0.2);
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.82) 0%, rgba(15, 23, 42, 0.68) 100%);
+  border-color: rgba(96, 165, 250, 0.24);
+  background: linear-gradient(180deg, rgba(27, 36, 55, 0.96) 0%, rgba(16, 22, 36, 0.94) 100%) !important;
 }
 
 :global(:root[data-theme='dark']) .resource-metric__icon,
@@ -1074,7 +1074,7 @@ onBeforeUnmount(() => {
 
 :global(:root[data-theme='dark']) .resource-highlight {
   border-color: rgba(96, 165, 250, 0.24);
-  background: rgba(37, 99, 235, 0.14);
+  background: rgba(37, 99, 235, 0.16) !important;
 }
 
 :global(:root[data-theme='dark']) .resource-highlight__label {

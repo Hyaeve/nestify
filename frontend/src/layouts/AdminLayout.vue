@@ -56,8 +56,7 @@
         <div class="header-actions">
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
-              <Apple v-if="isAppleTVTheme" />
-              <Sunny v-else-if="!isDark" />
+              <Sunny v-if="!isDark" />
               <MoonNight v-else />
             </el-icon>
           </el-button>
@@ -91,7 +90,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
-  Apple,
   ArrowLeftBold,
   ArrowRightBold,
   Document,
@@ -119,9 +117,8 @@ const route = useRoute()
 const isCollapsed = ref(typeof window !== 'undefined' && window.localStorage.getItem('nestify-sidebar-collapsed') === '1')
 const themeMode = ref<ThemeMode>(getStoredTheme())
 
-const themeCycle: ThemeMode[] = ['light', 'dark', 'appletv']
+const themeCycle: ThemeMode[] = ['light', 'dark']
 const isDark = computed(() => themeMode.value === 'dark')
-const isAppleTVTheme = computed(() => themeMode.value === 'appletv')
 const currentSectionLabel = computed(() => {
   const pageTitleMap: Record<string, string> = {
     '/dashboard': '仪表盘',
@@ -600,8 +597,12 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item) {
-  color: #c0cadc;
+  color: #e2e8f0;
   background: transparent;
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item .el-icon) {
+  color: #cbd5e1;
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item:hover) {
@@ -611,11 +612,15 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item.is-active) {
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.18);
+  color: #ffffff;
+  background: rgba(96, 165, 250, 0.22);
   box-shadow:
     inset 4px 0 0 #60a5fa,
-    0 10px 24px rgba(37, 99, 235, 0.12);
+    0 10px 24px rgba(37, 99, 235, 0.16);
+}
+
+:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active .el-icon) {
+  color: #ffffff;
 }
 
 :global(:root[data-theme='dark']) :deep(.el-menu-item.is-active:hover) {
