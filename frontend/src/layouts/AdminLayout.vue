@@ -252,6 +252,7 @@ async function handleLogout() {
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(59, 130, 246, 0.14);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .brand__meta {
@@ -509,6 +510,10 @@ async function handleLogout() {
   justify-content: center;
   padding-left: 0;
   padding-right: 0;
+}
+
+.admin-layout__aside.is-collapsed .brand__logo {
+  transform: translateX(4px);
 }
 
 .admin-layout__aside.is-collapsed .brand__meta {
