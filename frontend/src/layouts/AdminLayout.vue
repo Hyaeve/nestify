@@ -11,7 +11,13 @@
       <div class="aside-scroll">
         <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu">
           <el-menu-item index="/dashboard">
-            <el-icon><Odometer /></el-icon>
+            <el-icon class="nav-icon nav-icon--dashboard">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4.5 15.5a7.5 7.5 0 1 1 15 0" />
+                <path d="M12 15.5l4.1-4.1" />
+                <path d="M12 15.5h.01" />
+              </svg>
+            </el-icon>
             <span>仪表盘</span>
           </el-menu-item>
           <el-menu-item index="/rules">
@@ -19,7 +25,12 @@
             <span>规则管理</span>
           </el-menu-item>
           <el-menu-item index="/manual-pack">
-            <el-icon><FolderOpened /></el-icon>
+            <el-icon class="nav-icon nav-icon--folder">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3.5 7.5h6l2 2h9v8.2a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7.5Z" />
+                <path d="M3.5 9.5h17" />
+              </svg>
+            </el-icon>
             <span>文件管理</span>
           </el-menu-item>
           <el-menu-item index="/logs">
@@ -94,9 +105,7 @@ import {
   ArrowLeftBold,
   ArrowRightBold,
   Document,
-  FolderOpened,
   MoreFilled,
-  Odometer,
   Operation,
   RefreshRight,
   Setting,
@@ -503,20 +512,50 @@ async function handleLogout() {
   background: #d7ebfb;
 }
 
+.admin-layout__aside.is-collapsed .aside-scroll {
+  padding: 12px 6px 16px;
+}
+
+:deep(.el-menu--collapse) {
+  width: 100%;
+}
+
 :deep(.el-menu--collapse .el-menu-item) {
-  padding: 0;
   justify-content: center;
-  width: 56px;
+  width: 44px;
+  height: 44px;
+  padding: 0 !important;
   margin-left: auto;
   margin-right: auto;
 }
 
 :deep(.el-menu-item .el-icon) {
-  font-size: 18px;
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  font-size: 20px;
 }
 
 :deep(.el-menu--collapse .el-menu-item .el-icon) {
   margin: 0;
+}
+
+.nav-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-icon--dashboard svg {
+  stroke-width: 2.15;
+}
+
+.nav-icon--folder svg {
+  stroke-width: 1.95;
 }
 
 :deep(.el-menu-item.is-active) {
