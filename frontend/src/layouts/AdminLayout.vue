@@ -13,8 +13,8 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__arc" d="M6.2 16.2a5.8 5.8 0 0 1 11.6 0" />
-                <path class="nav-icon__needle" d="M12 16.2l3.25-3.25" />
+                <path class="nav-icon__arc" d="M5.4 16.7a6.6 6.6 0 0 1 13.2 0" />
+                <path class="nav-icon__needle" d="M12.9 15.05l3.2-3.2" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -544,20 +544,44 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse) {
-  width: 100%;
+  width: 68px;
 }
 
 :deep(.el-menu--collapse .el-menu-item) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 54px;
+  width: 68px;
+  min-width: 68px;
   height: 54px;
   padding: 0 !important;
-  margin-left: auto;
-  margin-right: auto;
-  margin-bottom: 10px;
+  margin: 0 0 10px;
+  border-radius: 0;
+  background: transparent;
+}
+
+:deep(.el-menu--collapse .el-menu-item::before) {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 54px;
+  height: 54px;
   border-radius: 18px;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+:deep(.el-menu--collapse .el-menu-item:hover) {
+  background: transparent;
+}
+
+:deep(.el-menu--collapse .el-menu-item:hover::before) {
+  background: #d7ebfb;
 }
 
 :deep(.el-menu-item .el-icon) {
@@ -590,19 +614,19 @@ async function handleLogout() {
 }
 
 .nav-icon--dashboard svg {
+  width: 25px;
+  height: 25px;
   stroke-width: 2.35;
 }
 
-.nav-icon--dashboard .nav-icon__arc {
-  transform: translateY(1px);
-}
-
+.nav-icon--dashboard .nav-icon__arc,
 .nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(1px);
+  transform: translateY(0.7px);
 }
 
 .nav-icon--folder svg {
-  stroke-width: 2.2;
+  stroke-width: 1.65;
+  opacity: 0.78;
 }
 
 :deep(.el-menu-item.is-active) {
@@ -612,13 +636,27 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active) {
+  background: transparent;
   box-shadow: none;
+}
+
+:deep(.el-menu--collapse .el-menu-item.is-active::before) {
+  background: #e8f4ff;
 }
 
 :deep(.el-menu-item.is-active:hover) {
   color: #1688e8;
   background: #d7ebfb;
   box-shadow: inset 4px 0 0 #1688e8;
+}
+
+:deep(.el-menu--collapse .el-menu-item.is-active:hover) {
+  background: transparent;
+  box-shadow: none;
+}
+
+:deep(.el-menu--collapse .el-menu-item.is-active:hover::before) {
+  background: #d7ebfb;
 }
 
 :deep(.el-menu-item span) {

@@ -13,7 +13,6 @@
       <div class="dashboard-hero__status">
         <span class="dashboard-live-dot"></span>
         <span>{{ healthStatus }}</span>
-        <el-tag :type="healthTagType" effect="light" round>{{ healthStatus }}</el-tag>
       </div>
     </section>
 
