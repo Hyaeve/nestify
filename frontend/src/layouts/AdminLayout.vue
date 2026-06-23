@@ -13,8 +13,8 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 16a7 7 0 0 1 14 0" />
-                <path d="M12 16l4.2-4.2" />
+                <path class="nav-icon__arc" d="M6.2 16.2a5.8 5.8 0 0 1 11.6 0" />
+                <path class="nav-icon__needle" d="M12 16.2l3.25-3.25" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -26,8 +26,8 @@
           <el-menu-item index="/manual-pack">
             <el-icon class="nav-icon nav-icon--folder">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3.5 8.5a2 2 0 0 1 2-2h4.1l2 2h6.9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-8Z" />
-                <path d="M3.5 10.5h17" />
+                <path d="M3.8 8.2a2 2 0 0 1 2-2h4.15l1.85 2h6.4a2 2 0 0 1 2 2v1.05" />
+                <path d="M3.8 10.35h16.4v6.45a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2v-6.45Z" />
               </svg>
             </el-icon>
             <span>文件管理</span>
@@ -540,7 +540,7 @@ async function handleLogout() {
 }
 
 .admin-layout__aside.is-collapsed .aside-scroll {
-  padding: 12px 6px 16px;
+  padding: 12px 0 16px;
 }
 
 :deep(.el-menu--collapse) {
@@ -548,15 +548,23 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item) {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 54px;
+  height: 54px;
   padding: 0 !important;
   margin-left: auto;
   margin-right: auto;
+  margin-bottom: 10px;
+  border-radius: 18px;
 }
 
 :deep(.el-menu-item .el-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
   width: 22px;
   height: 22px;
   margin-right: 10px;
@@ -564,7 +572,11 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item .el-icon) {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   margin: 0;
+  transform: translate(-50%, -50%);
 }
 
 .nav-icon svg {
@@ -578,17 +590,29 @@ async function handleLogout() {
 }
 
 .nav-icon--dashboard svg {
-  stroke-width: 2.15;
+  stroke-width: 2.35;
+}
+
+.nav-icon--dashboard .nav-icon__arc {
+  transform: translateY(1px);
+}
+
+.nav-icon--dashboard .nav-icon__needle {
+  transform: translateY(1px);
 }
 
 .nav-icon--folder svg {
-  stroke-width: 1.95;
+  stroke-width: 2.2;
 }
 
 :deep(.el-menu-item.is-active) {
   color: #1e9bff;
   background: #e8f4ff;
   box-shadow: inset 4px 0 0 #1e9bff;
+}
+
+:deep(.el-menu--collapse .el-menu-item.is-active) {
+  box-shadow: none;
 }
 
 :deep(.el-menu-item.is-active:hover) {
@@ -613,6 +637,7 @@ async function handleLogout() {
   max-width: 0;
   opacity: 0;
   transform: translateX(-8px);
+  pointer-events: none;
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {
