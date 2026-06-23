@@ -2438,15 +2438,6 @@ onMounted(() => {
   .history-search :deep(.el-input) { width: 100%; }
 }
 
-:global(:root[data-theme='dark']) .rules-page :deep(.rules-table .el-table__fixed-right) {
-  box-shadow: -10px 0 18px rgba(0, 0, 0, 0.22);
-}
-
-:global(:root[data-theme='dark']) .custom-mode-tag {
-  border-color: currentColor;
-  background: rgba(15, 23, 42, 0.58);
-}
-
 @media (max-width: 1440px) {
   .rules-page :deep(.rules-table .el-switch__label) {
     display: none;

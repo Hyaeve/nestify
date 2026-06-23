@@ -57,8 +57,7 @@
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
               <Apple v-if="isAppleTVTheme" />
-              <Sunny v-else-if="!isDark" />
-              <MoonNight v-else />
+              <Sunny v-else />
             </el-icon>
           </el-button>
           <el-dropdown trigger="click" placement="bottom-end" popper-class="header-user-dropdown" @command="handleHeaderCommand">
@@ -96,7 +95,6 @@ import {
   ArrowRightBold,
   Document,
   FolderOpened,
-  MoonNight,
   MoreFilled,
   Odometer,
   Operation,
@@ -119,8 +117,7 @@ const route = useRoute()
 const isCollapsed = ref(typeof window !== 'undefined' && window.localStorage.getItem('nestify-sidebar-collapsed') === '1')
 const themeMode = ref<ThemeMode>(getStoredTheme())
 
-const themeCycle: ThemeMode[] = ['light', 'dark', 'appletv']
-const isDark = computed(() => themeMode.value === 'dark')
+const themeCycle: ThemeMode[] = ['light', 'appletv']
 const isAppleTVTheme = computed(() => themeMode.value === 'appletv')
 const currentSectionLabel = computed(() => {
   const pageTitleMap: Record<string, string> = {
@@ -536,109 +533,6 @@ async function handleLogout() {
 
 :deep(.el-menu-item span) {
   color: inherit;
-}
-
-:global(:root[data-theme='dark']) .admin-layout__aside {
-  border-right-color: rgba(92, 132, 196, 0.2);
-  background:
-    linear-gradient(rgba(92, 132, 196, 0.046) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(92, 132, 196, 0.046) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 18, 29, 0.98) 50%, rgba(9, 12, 20, 0.98) 100%);
-  background-size: 53px 53px, 53px 53px, auto;
-  box-shadow: 12px 0 38px rgba(0, 0, 0, 0.4);
-}
-
-:global(:root[data-theme='dark']) .admin-layout__header {
-  border-bottom-color: rgba(125, 143, 172, 0.14);
-  background: linear-gradient(90deg, rgba(13, 18, 28, 0.9) 0%, rgba(8, 10, 17, 0.9) 52%, rgba(17, 14, 26, 0.9) 100%);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
-}
-
-:global(:root[data-theme='dark']) .brand {
-  border-bottom-color: rgba(92, 132, 196, 0.2);
-  background:
-    radial-gradient(circle at 18% 8%, rgba(96, 165, 250, 0.16), transparent 38%),
-    linear-gradient(180deg, rgba(25, 34, 52, 0.82), rgba(14, 19, 30, 0.54));
-}
-
-:global(:root[data-theme='dark']) .brand__logo {
-  box-shadow:
-    0 0 0 1px rgba(96, 165, 250, 0.24),
-    0 16px 30px rgba(37, 99, 235, 0.18);
-}
-
-:global(:root[data-theme='dark']) .brand__name,
-:global(:root[data-theme='dark']) .page-title__text {
-  color: #f2f6ff;
-}
-
-:global(:root[data-theme='dark']) .brand__version,
-:global(:root[data-theme='dark']) .page-title__crumb,
-:global(:root[data-theme='dark']) .page-title__divider {
-  color: #c0cadc;
-}
-
-:global(:root[data-theme='dark']) .icon-button {
-  border-color: rgba(125, 143, 172, 0.18);
-  background: rgba(18, 21, 31, 0.68);
-  color: #d2d8e5;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
-}
-
-:global(:root[data-theme='dark']) .icon-button:hover {
-  border-color: rgba(96, 165, 250, 0.35);
-  background: rgba(37, 99, 235, 0.16);
-  color: #93c5fd;
-}
-
-:global(:root[data-theme='dark']) .aside-toggle__line {
-  background: rgba(96, 165, 250, 0.22);
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu) {
-  background: transparent;
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item) {
-  color: #aeb7c9;
-  background: transparent;
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item .el-icon) {
-  color: #cbd5e1;
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item:hover) {
-  color: #f3f7ff;
-  background: rgba(37, 99, 235, 0.24);
-  box-shadow: inset 4px 0 0 rgba(96, 165, 250, 0.7);
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active) {
-  color: #ffffff;
-  background: rgba(96, 165, 250, 0.22);
-  box-shadow:
-    inset 4px 0 0 #60a5fa,
-    0 10px 24px rgba(37, 99, 235, 0.16);
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active .el-icon) {
-  color: #ffffff;
-}
-
-:global(:root[data-theme='dark']) :deep(.el-menu-item.is-active:hover) {
-  color: #bfdbfe;
-  background: rgba(37, 99, 235, 0.22);
-  box-shadow:
-    inset 4px 0 0 #93c5fd,
-    0 12px 28px rgba(37, 99, 235, 0.14);
-}
-
-:global(:root[data-theme='dark']) :global(.header-user-dropdown .el-dropdown-menu) {
-  background: rgba(18, 21, 31, 0.94);
-  border: 1px solid rgba(125, 143, 172, 0.2);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(18px);
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {
