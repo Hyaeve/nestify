@@ -539,26 +539,26 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .admin-layout__aside {
-  border-right-color: rgba(93, 162, 255, 0.16);
+  border-right-color: rgba(92, 132, 196, 0.2);
   background:
-    linear-gradient(rgba(92, 124, 176, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(92, 124, 176, 0.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 19, 31, 0.98) 48%, rgba(8, 12, 20, 0.98) 100%);
-  background-size: 54px 54px, 54px 54px, auto;
-  box-shadow: 12px 0 36px rgba(0, 0, 0, 0.34);
+    linear-gradient(rgba(92, 132, 196, 0.046) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 132, 196, 0.046) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(18, 27, 44, 0.98) 0%, rgba(13, 18, 29, 0.98) 50%, rgba(9, 12, 20, 0.98) 100%);
+  background-size: 53px 53px, 53px 53px, auto;
+  box-shadow: 12px 0 38px rgba(0, 0, 0, 0.4);
 }
 
 :global(:root[data-theme='dark']) .admin-layout__header {
-  border-bottom-color: rgba(130, 145, 170, 0.12);
-  background: linear-gradient(90deg, rgba(13, 18, 28, 0.94) 0%, rgba(10, 12, 19, 0.94) 52%, rgba(15, 13, 24, 0.94) 100%);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.2);
+  border-bottom-color: rgba(125, 143, 172, 0.14);
+  background: linear-gradient(90deg, rgba(13, 18, 28, 0.9) 0%, rgba(8, 10, 17, 0.9) 52%, rgba(17, 14, 26, 0.9) 100%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
 }
 
 :global(:root[data-theme='dark']) .brand {
-  border-bottom-color: rgba(93, 162, 255, 0.16);
+  border-bottom-color: rgba(92, 132, 196, 0.2);
   background:
-    radial-gradient(circle at 18% 10%, rgba(93, 162, 255, 0.18), transparent 36%),
-    linear-gradient(180deg, rgba(22, 31, 48, 0.82), rgba(13, 19, 31, 0.46));
+    radial-gradient(circle at 18% 8%, rgba(96, 165, 250, 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(25, 34, 52, 0.82), rgba(14, 19, 30, 0.54));
 }
 
 :global(:root[data-theme='dark']) .brand__logo {
@@ -579,10 +579,10 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) .icon-button {
-  border-color: rgba(132, 148, 176, 0.16);
-  background: rgba(18, 21, 31, 0.82);
-  color: #cbd5e1;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  border-color: rgba(125, 143, 172, 0.18);
+  background: rgba(18, 21, 31, 0.68);
+  color: #d2d8e5;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
 }
 
 :global(:root[data-theme='dark']) .icon-button:hover {
@@ -635,9 +635,10 @@ async function handleLogout() {
 }
 
 :global(:root[data-theme='dark']) :global(.header-user-dropdown .el-dropdown-menu) {
-  background: rgba(19, 26, 42, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+  background: rgba(18, 21, 31, 0.94);
+  border: 1px solid rgba(125, 143, 172, 0.2);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {

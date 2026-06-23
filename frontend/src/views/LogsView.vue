@@ -679,18 +679,18 @@ onMounted(() => {
 }
 
 :global(:root[data-theme='dark']) .logs-hero {
-  border: 1px solid rgba(132, 148, 176, 0.18);
-  color: #edf3ff;
+  border: 1px solid rgba(125, 143, 172, 0.2);
+  color: #eef4ff;
   background:
-    linear-gradient(rgba(92, 124, 176, 0.064) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(92, 124, 176, 0.064) 1px, transparent 1px),
-    radial-gradient(circle at 0% 18%, rgba(55, 110, 170, 0.28), transparent 32%),
-    radial-gradient(circle at 96% 14%, rgba(86, 70, 130, 0.26), transparent 30%),
-    linear-gradient(100deg, rgba(28, 42, 65, 0.82) 0%, rgba(12, 15, 23, 0.82) 48%, rgba(38, 34, 58, 0.82) 100%);
-  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+    linear-gradient(rgba(92, 132, 196, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 132, 196, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 0% 16%, rgba(54, 105, 162, 0.3), transparent 32%),
+    radial-gradient(circle at 96% 16%, rgba(82, 68, 128, 0.3), transparent 32%),
+    linear-gradient(100deg, rgba(28, 42, 65, 0.74) 0%, rgba(9, 11, 18, 0.78) 50%, rgba(43, 37, 66, 0.72) 100%);
+  background-size: 53px 53px, 53px 53px, auto, auto, auto;
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    0 24px 72px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 :global(:root[data-theme='dark']) .logs-hero::after {
@@ -710,11 +710,11 @@ onMounted(() => {
 :global(:root[data-theme='dark']) .metric-card,
 :global(:root[data-theme='dark']) .logs-toolbar-panel,
 :global(:root[data-theme='dark']) .logs-table-shell {
-  border-color: rgba(132, 148, 176, 0.16);
-  background: rgba(18, 21, 31, 0.86) !important;
+  border-color: rgba(125, 143, 172, 0.18);
+  background: rgba(18, 21, 31, 0.76) !important;
   box-shadow:
-    0 22px 62px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    0 22px 64px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -732,8 +732,8 @@ onMounted(() => {
 
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper),
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-select__wrapper) {
-  background: rgba(16, 19, 29, 0.88);
-  box-shadow: 0 0 0 1px rgba(132, 148, 176, 0.16) inset;
+  background: rgba(16, 19, 29, 0.78);
+  box-shadow: 0 0 0 1px rgba(125, 143, 172, 0.18) inset;
 }
 
 :global(:root[data-theme='dark']) .logs-toolbar :deep(.el-input__wrapper:hover),
@@ -742,27 +742,27 @@ onMounted(() => {
 }
 
 :global(:root[data-theme='dark']) .logs-table {
-  --el-table-header-bg-color: rgba(15, 18, 28, 0.98);
-  --el-table-tr-bg-color: rgba(18, 21, 31, 0.9);
-  --el-table-row-hover-bg-color: rgba(42, 46, 58, 0.98);
-  --el-table-border-color: rgba(130, 145, 170, 0.11);
+  --el-table-header-bg-color: rgba(14, 16, 25, 0.92);
+  --el-table-tr-bg-color: rgba(18, 21, 31, 0.78);
+  --el-table-row-hover-bg-color: rgba(43, 47, 59, 0.96);
+  --el-table-border-color: rgba(125, 143, 172, 0.12);
 }
 
 :global(:root[data-theme='dark']) .logs-table :deep(.el-table__header-wrapper th) {
   color: #cfd7e6;
-  background: rgba(15, 18, 28, 0.98);
+  background: rgba(14, 16, 25, 0.92);
 }
 
 :global(:root[data-theme='dark']) .logs-table :deep(.el-table__body tr:nth-child(even) > td.el-table__cell) {
-  background: rgba(42, 46, 58, 0.9);
+  background: rgba(43, 47, 59, 0.82);
 }
 
 :global(:root[data-theme='dark']) .logs-table :deep(.el-table__body tr:nth-child(odd) > td.el-table__cell) {
-  background: rgba(18, 21, 31, 0.9);
+  background: rgba(18, 21, 31, 0.78);
 }
 
 :global(:root[data-theme='dark']) .logs-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: rgba(50, 56, 70, 0.98);
+  background: rgba(53, 59, 74, 0.96);
 }
 
 :global(:root[data-theme='dark']) .logs-mode-tag,
