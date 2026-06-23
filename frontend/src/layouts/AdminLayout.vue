@@ -3,7 +3,7 @@
     <el-aside :width="isCollapsed ? '68px' : '176px'" :class="['admin-layout__aside', { 'is-collapsed': isCollapsed }]">
       <div class="brand">
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
-        <div v-if="!isCollapsed" class="brand__meta">
+        <div class="brand__meta">
           <div class="brand__name">Nestify</div>
           <div class="brand__version">v6.7</div>
         </div>
@@ -13,9 +13,8 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4.5 15.5a7.5 7.5 0 1 1 15 0" />
-                <path d="M12 15.5l4.1-4.1" />
-                <path d="M12 15.5h.01" />
+                <path d="M5 16a7 7 0 0 1 14 0" />
+                <path d="M12 16l4.2-4.2" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -27,8 +26,8 @@
           <el-menu-item index="/manual-pack">
             <el-icon class="nav-icon nav-icon--folder">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3.5 7.5h6l2 2h9v8.2a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V7.5Z" />
-                <path d="M3.5 9.5h17" />
+                <path d="M3.5 8.5a2 2 0 0 1 2-2h4.1l2 2h6.9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-8Z" />
+                <path d="M3.5 10.5h17" />
               </svg>
             </el-icon>
             <span>文件管理</span>
@@ -210,7 +209,12 @@ async function handleLogout() {
     border-right: 1px solid var(--border-color);
     box-shadow: 10px 0 30px rgba(2, 6, 23, 0.12);
     backdrop-filter: blur(16px);
-    transition: width 0.2s ease;
+    min-width: 68px;
+    will-change: width;
+    transition:
+      width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.28s ease,
+      background-color 0.28s ease;
   }
 
   &__header {
@@ -252,6 +256,15 @@ async function handleLogout() {
 
 .brand__meta {
   min-width: 0;
+  max-width: 86px;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  transform: translateX(0);
+  transition:
+    opacity 0.18s ease,
+    max-width 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .brand__name {
@@ -273,6 +286,7 @@ async function handleLogout() {
   overflow-y: auto;
   padding: 12px 10px 16px;
   scrollbar-gutter: stable;
+  transition: padding 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .aside-scroll::-webkit-scrollbar {
@@ -497,6 +511,13 @@ async function handleLogout() {
   padding-right: 0;
 }
 
+.admin-layout__aside.is-collapsed .brand__meta {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
 :deep(.el-menu-item) {
   position: relative;
   height: 44px;
@@ -505,6 +526,12 @@ async function handleLogout() {
   border-radius: 14px;
   color: #222222;
   font-weight: 800;
+  transition:
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    padding 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 :deep(.el-menu-item:hover) {
@@ -572,6 +599,20 @@ async function handleLogout() {
 
 :deep(.el-menu-item span) {
   color: inherit;
+  max-width: 96px;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 0.16s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:deep(.el-menu--collapse .el-menu-item span) {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
 }
 
 :global(.header-user-dropdown .el-dropdown-menu) {
