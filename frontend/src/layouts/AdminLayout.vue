@@ -593,11 +593,11 @@ async function handleLogout() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
   margin-right: 10px;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 :deep(.el-menu--collapse .el-menu-item .el-icon) {
@@ -609,32 +609,32 @@ async function handleLogout() {
 }
 
 .nav-icon svg {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 2.15;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .nav-icon--dashboard svg {
-  width: 24px;
-  height: 24px;
-  stroke-width: 2.25;
+  width: 29px;
+  height: 29px;
+  stroke-width: 2.45;
 }
 
 .nav-icon--dashboard .nav-icon__arc,
 .nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(0.55px) scale(1.08);
+  transform: translateY(0.4px) scale(1.2);
   transform-origin: 12px 14px;
 }
 
 .nav-icon--folder svg {
-  width: 22px;
-  height: 22px;
-  stroke-width: 1.85;
-  opacity: 0.82;
+  width: 26px;
+  height: 26px;
+  stroke-width: 2;
+  opacity: 0.86;
 }
 
 :deep(.el-menu-item.is-active) {

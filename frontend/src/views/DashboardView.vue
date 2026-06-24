@@ -6,7 +6,6 @@
         <h1>运行总览</h1>
         <p>集中查看规则状态、今日处理量、实时任务与系统资源，快速掌握 Nestify 当前运行情况。</p>
         <div class="dashboard-hero__meta">
-          <span>服务：{{ healthService }}</span>
           <span>检查时间：{{ healthTime }}</span>
         </div>
       </div>
@@ -217,8 +216,7 @@ const healthStatus = computed(() => {
   return '未连接'
 })
 
-const healthService = computed(() => health.value?.service ?? '未知')
-const healthTime = computed(() => health.value?.time ?? '尚未获取')
+const healthTime = computed(() => formatHealthTime(health.value?.time))
 const healthTagType = computed(() => (health.value ? 'success' : loading.value ? 'warning' : 'danger'))
 const formatMemorySummary = computed(() => {
   if (!systemResource.value) {
@@ -256,6 +254,20 @@ const todayProcessedCount = computed(() => {
 
 const runningTaskCount = computed(() => runningRuns.value.length)
 const runningTaskHint = computed(() => (runningTaskCount.value > 0 ? '存在正在执行的规则任务' : '当前没有活跃任务'))
+
+function formatHealthTime(value?: string) {
+  if (!value) {
+    return '尚未获取'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    const match = value.match(/(?:T|\s)(\d{2}:\d{2})/)
+    return match?.[1] ?? value
+  }
+
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
 
 function getStatusType(status: string) {
   if (status === 'success' || status === 'succeeded') return 'success'
