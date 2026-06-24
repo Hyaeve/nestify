@@ -13,8 +13,10 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__arc" d="M5.4 16.7a6.6 6.6 0 0 1 13.2 0" />
-                <path class="nav-icon__needle" d="M12.9 15.05l3.2-3.2" />
+                <path class="nav-icon__arc" d="M4.3 16.55a7.7 7.7 0 0 1 15.4 0" />
+                <path class="nav-icon__needle" d="M13.05 15.15l3.35-3.35" />
+                <path class="nav-icon__tick" d="M6.4 16.55h-.05" />
+                <path class="nav-icon__tick" d="M17.65 16.55h-.05" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -26,8 +28,8 @@
           <el-menu-item index="/manual-pack">
             <el-icon class="nav-icon nav-icon--folder">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3.8 8.2a2 2 0 0 1 2-2h4.15l1.85 2h6.4a2 2 0 0 1 2 2v1.05" />
-                <path d="M3.8 10.35h16.4v6.45a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2v-6.45Z" />
+                <path d="M3.6 8.15a2 2 0 0 1 2-2h4.55l1.65 2h6.6a2 2 0 0 1 2 2v1.1" />
+                <path d="M3.6 10.25h16.8l-1.45 7.1a2 2 0 0 1-1.96 1.6H5.45a2 2 0 0 1-1.96-2.4l1.02-4.7a2 2 0 0 1 1.96-1.6H20.4" />
               </svg>
             </el-icon>
             <span>文件管理</span>
@@ -625,13 +627,14 @@ async function handleLogout() {
 }
 
 .nav-icon--dashboard .nav-icon__arc,
-.nav-icon--dashboard .nav-icon__needle {
+.nav-icon--dashboard .nav-icon__needle,
+.nav-icon--dashboard .nav-icon__tick {
   transform: translateY(0.7px);
 }
 
 .nav-icon--folder svg {
-  stroke-width: 1.65;
-  opacity: 0.78;
+  stroke-width: 1.8;
+  opacity: 0.8;
 }
 
 :deep(.el-menu-item.is-active) {
