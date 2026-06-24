@@ -13,8 +13,8 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__arc" d="M5.1 17.1C5.1 13.25 8.2 10.15 12 10.15s6.9 3.1 6.9 6.95" />
-                <path class="nav-icon__needle" d="M12.7 15.8l3.35-3.65" />
+                <path class="nav-icon__arc" d="M6.05 17.25a5.95 5.95 0 1 1 11.9 0" />
+                <path class="nav-icon__needle" d="M12.35 15.45l3.05-3.05" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -621,12 +621,12 @@ async function handleLogout() {
 .nav-icon--dashboard svg {
   width: 22px;
   height: 22px;
-  stroke-width: 2.25;
+  stroke-width: 2.2;
 }
 
 .nav-icon--dashboard .nav-icon__arc,
 .nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(-0.2px);
+  transform: translateY(0.25px);
 }
 
 .nav-icon--folder svg {
