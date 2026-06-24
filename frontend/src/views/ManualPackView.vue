@@ -63,11 +63,14 @@
             <el-button class="toolbar-action toolbar-action--extract" :disabled="!canExtractSelectedArchives || extracting" :loading="extracting" circle aria-label="解压" @click="extractSelectedArchives()">
               <template v-if="!extracting">
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--extract">
-                  <path d="M5 6.5h14" />
-                  <path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" />
-                  <path d="M10 4h4" />
-                  <path d="M12 8.75v5.25" />
-                  <path d="m9.75 12.25 2.25 2.25 2.25-2.25" />
+                  <path d="M7.25 3.75h6.05l3.45 3.45v13.05H7.25Z" />
+                  <path d="M13.25 3.95V7.3h3.35" />
+                  <path d="M10.15 6.7h1.05" />
+                  <path d="M11.2 8.75h1.05" />
+                  <path d="M10.15 10.8h1.05" />
+                  <path d="M11.2 12.85h1.05" />
+                  <path d="M10.15 14.9h1.05" />
+                  <path d="M10.1 17.05h2.15v1.95H10.1Z" />
                 </svg>
               </template>
             </el-button>
@@ -249,7 +252,7 @@
                         <el-dropdown-item command="rename"><el-icon><Edit /></el-icon>重命名</el-dropdown-item>
                         <el-dropdown-item command="move"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg>移动</el-dropdown-item>
                         <el-dropdown-item command="copy"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg>复制</el-dropdown-item>
-                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--extract"><path d="M5 6.5h14" /><path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" /><path d="M10 4h4" /><path d="M12 8.75v5.25" /><path d="m9.75 12.25 2.25 2.25 2.25-2.25" /></svg>解压到当前目录</el-dropdown-item>
+                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--extract"><path d="M7.25 3.75h6.05l3.45 3.45v13.05H7.25Z" /><path d="M13.25 3.95V7.3h3.35" /><path d="M10.15 6.7h1.05" /><path d="M11.2 8.75h1.05" /><path d="M10.15 10.8h1.05" /><path d="M11.2 12.85h1.05" /><path d="M10.15 14.9h1.05" /><path d="M10.1 17.05h2.15v1.95H10.1Z" /></svg>解压到当前目录</el-dropdown-item>
                         <el-dropdown-item command="delete" divided><el-icon><Delete /></el-icon>删除</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
@@ -289,7 +292,7 @@
       <button type="button" class="context-menu__item" @click="renameEntryFromContext"><el-icon class="context-menu__item-icon"><Edit /></el-icon><span class="context-menu__item-label">重命名</span></button>
       <button type="button" class="context-menu__item" @click="moveEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg><span class="context-menu__item-label">移动</span></button>
       <button type="button" class="context-menu__item" @click="copyEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg><span class="context-menu__item-label">复制</span></button>
-      <button v-if="isArchiveEntry(contextMenu.entry)" type="button" class="context-menu__item" @click="extractEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--extract"><path d="M5 6.5h14" /><path d="M7 6.5v11a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 17 17.5v-11" /><path d="M10 4h4" /><path d="M12 8.75v5.25" /><path d="m9.75 12.25 2.25 2.25 2.25-2.25" /></svg><span class="context-menu__item-label">解压</span></button>
+      <button v-if="isArchiveEntry(contextMenu.entry)" type="button" class="context-menu__item" @click="extractEntryFromContext"><svg viewBox="0 0 24 24" aria-hidden="true" class="context-menu__item-icon context-menu__item-icon--extract"><path d="M7.25 3.75h6.05l3.45 3.45v13.05H7.25Z" /><path d="M13.25 3.95V7.3h3.35" /><path d="M10.15 6.7h1.05" /><path d="M11.2 8.75h1.05" /><path d="M10.15 10.8h1.05" /><path d="M11.2 12.85h1.05" /><path d="M10.15 14.9h1.05" /><path d="M10.1 17.05h2.15v1.95H10.1Z" /></svg><span class="context-menu__item-label">解压</span></button>
       <button type="button" class="context-menu__item context-menu__item--danger" @click="deleteEntryFromContext"><el-icon class="context-menu__item-icon"><Delete /></el-icon><span class="context-menu__item-label">删除</span></button>
     </div>
 
