@@ -37,6 +37,13 @@ func Open(env config.Env) (*Store, error) {
 	db.SetMaxOpenConns(1)
 	log.Printf("sqlite: max open conns set to 1")
 
+	if _, err := db.Exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY;`); err != nil {
+		log.Printf("sqlite: configure pragmas failed: %v", err)
+		_ = db.Close()
+		return nil, fmt.Errorf("configure sqlite pragmas: %w", err)
+	}
+	log.Printf("sqlite: performance pragmas configured")
+
 	store := &Store{db: db}
 	log.Printf("sqlite: starting migration")
 	if err := store.migrate(); err != nil {

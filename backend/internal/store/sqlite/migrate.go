@@ -162,7 +162,31 @@ func (s *Store) migrate() error {
 		log.Printf("sqlite:migrate: ensure run_history link_mode column failed: %v", err)
 		return err
 	}
+
+	log.Printf("sqlite:migrate: ensure performance indexes")
+	if err := s.ensurePerformanceIndexes(); err != nil {
+		log.Printf("sqlite:migrate: ensure performance indexes failed: %v", err)
+		return err
+	}
 	log.Printf("sqlite:migrate: migration pipeline complete")
+
+	return nil
+}
+
+func (s *Store) ensurePerformanceIndexes() error {
+	statements := []string{
+		`CREATE INDEX IF NOT EXISTS idx_rules_sort_order ON rules(sort_order, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_rules_type_order ON rules(rule_type, sort_order, id);`,
+		`CREATE INDEX IF NOT EXISTS idx_run_history_started ON run_history(started_at DESC, id DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_run_history_status ON run_history(status);`,
+		`CREATE INDEX IF NOT EXISTS idx_run_history_archive_mode ON run_history(archive_mode);`,
+	}
+
+	for _, statement := range statements {
+		if _, err := s.db.Exec(statement); err != nil {
+			return fmt.Errorf("create performance index: %w", err)
+		}
+	}
 
 	return nil
 }

@@ -429,6 +429,16 @@ import {
 
 interface FileManagerEntry extends DirectoryEntry {}
 
+interface PreparedFileManagerEntry {
+  entry: FileManagerEntry
+  normalizedPath: string
+  lowerName: string
+  lowerPath: string
+  extension: string
+  modifiedTime: number
+  starred: boolean
+}
+
 interface BreadcrumbItem {
   label: string
   path: string
@@ -494,13 +504,33 @@ const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => 
 const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
 const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
-const sortedEntries = computed(() => [...entries.value].sort(compareEntries))
+const sortedRootsByDepth = computed(() => [...roots.value].sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length))
+const sortedEntries = computed(() => {
+  const items: PreparedFileManagerEntry[] = entries.value.map((entry) => {
+    const normalizedPath = normalizePath(entry.path)
+    const modifiedTime = entry.modified_at ? Date.parse(entry.modified_at) : 0
+
+    return {
+      entry,
+      normalizedPath,
+      lowerName: entry.name.toLowerCase(),
+      lowerPath: entry.path.toLowerCase(),
+      extension: getEntryExtension(entry),
+      modifiedTime: Number.isNaN(modifiedTime) ? 0 : modifiedTime,
+      starred: starredFolderSet.value.has(normalizedPath),
+    }
+  })
+
+  items.sort(comparePreparedEntries)
+  return items
+})
 const filteredEntries = computed(() => {
 	const keyword = searchKeyword.value.trim().toLowerCase()
+	const source = sortedEntries.value
 	if (!keyword) {
-		return sortedEntries.value
+		return source.map((item) => item.entry)
 	}
-	return sortedEntries.value.filter((entry) => entry.name.toLowerCase().includes(keyword) || entry.path.toLowerCase().includes(keyword))
+	return source.filter((item) => item.lowerName.includes(keyword) || item.lowerPath.includes(keyword)).map((item) => item.entry)
 })
 const pageSizeOptions = [25, 50, 100]
 const pageSize = ref(25)
@@ -528,8 +558,7 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
     return []
   }
 
-  const sortedRoots = [...roots.value].sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length)
-  const matchedRoot = sortedRoots.find((root) => isPathWithin(root.path, directoryPath.value))
+  const matchedRoot = sortedRootsByDepth.value.find((root) => isPathWithin(root.path, directoryPath.value))
   if (!matchedRoot) {
     return [{ label: directoryPath.value, path: directoryPath.value }]
   }
@@ -622,39 +651,41 @@ function getEntryExtension(entry: FileManagerEntry) {
   return entry.name.slice(index + 1).toLowerCase()
 }
 
-function compareEntries(a: FileManagerEntry, b: FileManagerEntry) {
-  const starredDelta = Number(isStarred(b.path)) - Number(isStarred(a.path))
+const entryNameCollator = new Intl.Collator('zh-CN', { sensitivity: 'base', numeric: true })
+const entryTypeCollator = new Intl.Collator('zh-CN', { sensitivity: 'base' })
+
+function comparePreparedEntries(a: PreparedFileManagerEntry, b: PreparedFileManagerEntry) {
+  const starredDelta = Number(b.starred) - Number(a.starred)
   if (starredDelta !== 0) {
     return starredDelta
   }
 
-  if (a.is_dir !== b.is_dir) {
-    return a.is_dir ? -1 : 1
+  if (a.entry.is_dir !== b.entry.is_dir) {
+    return a.entry.is_dir ? -1 : 1
   }
 
   let result = 0
 
   if (sortBy.value === 'modified_at') {
-    result = compareByModifiedAt(a, b)
+    result = b.modifiedTime - a.modifiedTime
+    if (result === 0) {
+      result = b.entry.modified_at.localeCompare(a.entry.modified_at)
+    }
   } else if (sortBy.value === 'type') {
-    result = getEntryExtension(a).localeCompare(getEntryExtension(b), 'zh-CN', { sensitivity: 'base' })
+    result = entryTypeCollator.compare(a.extension, b.extension)
   } else {
-    result = compareByName(a, b)
+    result = comparePreparedByName(a, b)
   }
 
   if (result !== 0) {
-    return applySortOrder(result)
+    return sortOrder.value === 'asc' ? result : -result
   }
 
-  return compareByName(a, b)
+  return comparePreparedByName(a, b)
 }
 
-function compareByName(a: FileManagerEntry, b: FileManagerEntry) {
-  return a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base', numeric: true })
-}
-
-function applySortOrder(result: number) {
-  return sortOrder.value === 'asc' ? result : -result
+function comparePreparedByName(a: PreparedFileManagerEntry, b: PreparedFileManagerEntry) {
+  return entryNameCollator.compare(a.entry.name, b.entry.name)
 }
 
 function handleCurrentPageChange(page: number) {
@@ -664,15 +695,6 @@ function handleCurrentPageChange(page: number) {
 function handlePageSizeChange(size: number) {
 	pageSize.value = size
 	currentPage.value = 1
-}
-
-function compareByModifiedAt(a: FileManagerEntry, b: FileManagerEntry) {
-  const aTime = a.modified_at ? new Date(a.modified_at).getTime() : 0
-  const bTime = b.modified_at ? new Date(b.modified_at).getTime() : 0
-  if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
-    return b.modified_at.localeCompare(a.modified_at)
-  }
-  return bTime - aTime
 }
 
 function loadStarredFolders() {
