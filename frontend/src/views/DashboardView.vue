@@ -5,13 +5,15 @@
         <div class="dashboard-hero__eyebrow">DASHBOARD</div>
         <h1>运行总览</h1>
         <p>集中查看规则状态、今日处理量、实时任务与系统资源，快速掌握 Nestify 当前运行情况。</p>
+      </div>
+      <div class="dashboard-hero__top-right">
         <div class="dashboard-hero__meta">
           <span>检查时间：{{ healthTime }}</span>
         </div>
-      </div>
-      <div class="dashboard-hero__status">
-        <span class="dashboard-live-dot"></span>
-        <span>{{ healthStatus }}</span>
+        <div class="dashboard-hero__status">
+          <span class="dashboard-live-dot"></span>
+          <span>{{ healthStatus }}</span>
+        </div>
       </div>
     </section>
 
@@ -521,6 +523,7 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-hero__content,
+.dashboard-hero__top-right,
 .dashboard-hero__status {
   position: relative;
   z-index: 1;
@@ -554,11 +557,18 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
+.dashboard-hero__top-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
 .dashboard-hero__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 18px;
 }
 
 .dashboard-hero__meta span {
