@@ -153,8 +153,9 @@ type loginRequest struct {
 }
 
 type prepareRuleExecutionRequest struct {
-	RuleID      int64  `json:"rule_id"`
-	TriggerMode string `json:"trigger_mode"`
+	RuleID      int64           `json:"rule_id"`
+	TriggerMode string          `json:"trigger_mode"`
+	Options     map[string]bool `json:"options"`
 }
 
 type createFolderRequest struct {
@@ -697,6 +698,11 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	options := executor.ParseBoolOptionsJSON(rule.OptionsJSON)
+	for key, value := range input.Options {
+		options[key] = value
+	}
+
 	prepared, err := executor.PrepareMode(executor.ExecuteRuleRequest{
 		RuleID:            rule.ID,
 		RuleName:          rule.Name,
@@ -707,7 +713,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
 		TargetDir:         rule.TargetDir,
-		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		Options:           options,
 		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
@@ -737,7 +743,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
 		TargetDir:         rule.TargetDir,
-		Options:           executor.ParseBoolOptionsJSON(rule.OptionsJSON),
+		Options:           options,
 		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),

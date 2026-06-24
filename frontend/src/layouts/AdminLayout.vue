@@ -5,7 +5,7 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v6.8</div>
+          <div class="brand__version">v7.0</div>
         </div>
       </div>
       <div class="aside-scroll">

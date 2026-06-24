@@ -411,7 +411,20 @@
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
-              <el-tooltip content="执行" placement="top">
+              <template v-if="scope.row.link_mode === 'strm'">
+                <el-dropdown trigger="click" @command="(command: string) => handleStrmSyncCommand(scope.row.id, command)">
+                  <el-button link class="rule-action rule-action--success" aria-label="Strm 同步">
+                    <el-icon><MoreFilled /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="incremental">增量同步</el-dropdown-item>
+                      <el-dropdown-item command="full">全量同步</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <el-tooltip v-else content="执行" placement="top">
                 <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
                   <el-icon><Operation /></el-icon>
                 </el-button>
@@ -446,7 +459,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="createForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="createForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${createForm.archive_mode}`]"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -507,7 +520,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="editForm.archive_mode" class="archive-mode-group"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="editForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${editForm.archive_mode}`]"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -568,7 +581,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode" class="archive-mode-group"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${createPurifyForm.archive_mode}`]"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -642,7 +655,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode" class="archive-mode-group"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${editPurifyForm.archive_mode}`]"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
@@ -716,7 +729,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" :class="['archive-mode-group', `archive-mode-group--${createLinkForm.link_mode}`]"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
@@ -724,29 +737,24 @@
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">Strm 同步方式</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">同步策略</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-radio-group v-model="createLinkForm.strm_sync_mode" class="uniform-mode-group">
-              <el-radio-button value="incremental">增量同步</el-radio-button>
-              <el-radio-button value="full">全量同步</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">命中文件后缀</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-button size="small" @click="fillCreateStrmPreset('video')">视频</el-button>
-              <el-button size="small" @click="fillCreateStrmPreset('audio')">音频</el-button>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
               <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateStrmSuffix" />
             </div>
           </div>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
@@ -764,7 +772,7 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" :class="['archive-mode-group', `archive-mode-group--${editLinkForm.link_mode}`]"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
@@ -772,29 +780,24 @@
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">Strm 同步方式</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">同步策略</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-radio-group v-model="editLinkForm.strm_sync_mode" class="uniform-mode-group">
-              <el-radio-button value="incremental">增量同步</el-radio-button>
-              <el-radio-button value="full">全量同步</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">命中文件后缀</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-button size="small" @click="fillEditStrmPreset('video')">视频</el-button>
-              <el-button size="small" @click="fillEditStrmPreset('audio')">音频</el-button>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
               <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditStrmSuffix" />
             </div>
           </div>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
@@ -813,7 +816,7 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit, Operation } from '@element-plus/icons-vue'
+import { Delete, Edit, MoreFilled, Operation } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
@@ -1570,7 +1573,7 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.link_mode = normalizeLinkMode(rule.link_mode)
     editLinkForm.strm_sync_mode = parseStrmSyncMode(rule.options_json)
     editLinkForm.strm_suffixes = normalizeStrmSuffixes(parseFiltersArray(rule.filters_json))
-    editLinkForm.filters_text = editLinkForm.link_mode === 'strm' ? '' : parseFiltersJSON(rule.filters_json)
+    editLinkForm.filters_text = editLinkForm.link_mode === 'strm' ? parseFiltersJSON(rule.whitelist_json) : parseFiltersJSON(rule.filters_json)
     editLinkStrmSuffixInput.value = ''
     editLinkDialogVisible.value = true
   } catch (error) {
@@ -2199,6 +2202,7 @@ async function submitCreateLinkRule() {
       package_options: {},
       collect_options: {},
       filters: createLinkForm.link_mode === 'strm' ? [...createLinkForm.strm_suffixes] : parseFiltersText(createLinkForm.filters_text),
+      whitelist: createLinkForm.link_mode === 'strm' ? parseFiltersText(createLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则创建成功')
     createLinkDialogVisible.value = false
@@ -2244,6 +2248,7 @@ async function submitUpdateLinkRule() {
       package_options: {},
       collect_options: {},
       filters: editLinkForm.link_mode === 'strm' ? [...editLinkForm.strm_suffixes] : parseFiltersText(editLinkForm.filters_text),
+      whitelist: editLinkForm.link_mode === 'strm' ? parseFiltersText(editLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则更新成功')
     editLinkDialogVisible.value = false
@@ -2257,11 +2262,11 @@ async function submitUpdateLinkRule() {
   }
 }
 
-async function prepareExecution(ruleID: number) {
+async function prepareExecution(ruleID: number, options: Record<string, boolean> = {}) {
   loading.value = true
   errorMessage.value = ''
   try {
-    await prepareRuleExecution(ruleID, 'once')
+    await prepareRuleExecution(ruleID, 'once', options)
     ElMessage.success('规则执行已启动')
     await loadArchiveRules()
     await loadPurifyRules()
@@ -2273,6 +2278,10 @@ async function prepareExecution(ruleID: number) {
   } finally {
     loading.value = false
   }
+}
+
+async function handleStrmSyncCommand(ruleID: number, command: string) {
+  await prepareExecution(ruleID, { strm_full_sync: command === 'full' })
 }
 
 async function refreshRuleList(type: RuleListType) {
@@ -2545,6 +2554,14 @@ onMounted(() => {
   padding-inline: 18px;
 }
 
+.archive-mode-group--package :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #d58a2f; border-color: #d58a2f; box-shadow: -1px 0 0 0 #d58a2f; }
+.archive-mode-group--collect :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #8a74d6; border-color: #8a74d6; box-shadow: -1px 0 0 0 #8a74d6; }
+.archive-mode-group--cleanup :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #5f9f45; border-color: #5f9f45; box-shadow: -1px 0 0 0 #5f9f45; }
+.archive-mode-group--transform :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #64b9d8; border-color: #64b9d8; box-shadow: -1px 0 0 0 #64b9d8; }
+.archive-mode-group--soft :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #c47c98; border-color: #c47c98; box-shadow: -1px 0 0 0 #c47c98; }
+.archive-mode-group--hard :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #2f3136; border-color: #2f3136; box-shadow: -1px 0 0 0 #2f3136; }
+.archive-mode-group--strm :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: -1px 0 0 0 #2f8f9d; }
+
 .rules-page :deep(.rules-table--sortable .el-table__row) {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -2599,7 +2616,9 @@ onMounted(() => {
 :global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
-.strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 14px; }
+.strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: #2f8f9d; background: var(--el-bg-color); }
+.strm-preset-button__icon { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
 

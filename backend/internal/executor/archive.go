@@ -364,6 +364,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	if len(extensions) == 0 {
 		return *stats, fmt.Errorf("strm extensions are required")
 	}
+	matchers := buildFileNameMatchers(req.Whitelist)
 
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
@@ -371,7 +372,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		}
 	}
 
-	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, stats); err != nil {
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, stats); err != nil {
 		return *stats, err
 	}
 
@@ -393,7 +394,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	return *stats, nil
 }
 
-func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, stats *executionStats) error {
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
@@ -404,7 +405,18 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		sourcePath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, stats)
+			if matchesFileName(entry.Name(), true, matchers) {
+				stats.SkipCount++
+				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
+				return nil
+			}
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, stats)
+		}
+
+		if matchesFileName(entry.Name(), false, matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm file %s", sourcePath))
+			return nil
 		}
 
 		if !matchesStrmExtension(entry.Name(), extensions) {

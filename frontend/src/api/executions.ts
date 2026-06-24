@@ -71,10 +71,11 @@ export function prepareManualPreflight(sourceDir: string, outputDir?: string) {
   })
 }
 
-export function prepareRuleExecution(ruleID: number, triggerMode = 'once') {
+export function prepareRuleExecution(ruleID: number, triggerMode = 'once', options: Record<string, boolean> = {}) {
   return postJSON<PrepareRuleExecutionPayload>('/api/v1/executions/prepare-rule', {
     rule_id: ruleID,
     trigger_mode: triggerMode,
+    options,
   })
 }
 
