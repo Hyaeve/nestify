@@ -619,14 +619,15 @@ async function handleLogout() {
 }
 
 .nav-icon--dashboard svg {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.2;
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.25;
 }
 
 .nav-icon--dashboard .nav-icon__arc,
 .nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(0.25px);
+  transform: translateY(0.55px) scale(1.08);
+  transform-origin: 12px 14px;
 }
 
 .nav-icon--folder svg {
