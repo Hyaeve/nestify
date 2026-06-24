@@ -354,8 +354,8 @@
         </el-table-column>
         <el-table-column label="模式" width="110">
           <template #default="scope">
-            <span class="custom-mode-tag" :class="scope.row.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'">
-              {{ scope.row.link_mode === 'hard' ? '硬链' : '软链' }}
+            <span class="custom-mode-tag" :class="historyModeTagClass({ archive_mode: 'link', link_mode: scope.row.link_mode })">
+              {{ historyModeLabel({ archive_mode: 'link', link_mode: scope.row.link_mode }) }}
             </span>
           </template>
         </el-table-column>
@@ -450,13 +450,10 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <div class="compatibility-mode-field">
-            <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
-              <el-radio-button value="local">本地模式</el-radio-button>
-              <el-radio-button value="compatibility">兼容模式</el-radio-button>
-            </el-radio-group>
-            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
-          </div>
+          <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createArchiveOptionsExpanded = !createArchiveOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div></div>
@@ -514,13 +511,10 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <div class="compatibility-mode-field">
-            <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
-              <el-radio-button value="local">本地模式</el-radio-button>
-              <el-radio-button value="compatibility">兼容模式</el-radio-button>
-            </el-radio-group>
-            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
-          </div>
+          <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editArchiveOptionsExpanded = !editArchiveOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div></div>
@@ -578,13 +572,10 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <div class="compatibility-mode-field">
-            <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
-              <el-radio-button value="local">本地模式</el-radio-button>
-              <el-radio-button value="compatibility">兼容模式</el-radio-button>
-            </el-radio-group>
-            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
-          </div>
+          <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createPurifyOptionsExpanded = !createPurifyOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</div></div>
@@ -655,13 +646,10 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <div class="compatibility-mode-field">
-            <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
-              <el-radio-button value="local">本地模式</el-radio-button>
-              <el-radio-button value="compatibility">兼容模式</el-radio-button>
-            </el-radio-group>
-            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
-          </div>
+          <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
+            <el-radio-button value="local">本地模式</el-radio-button>
+            <el-radio-button value="compatibility">兼容模式</el-radio-button>
+          </el-radio-group>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editPurifyOptionsExpanded = !editPurifyOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</div></div>
@@ -728,17 +716,45 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤名单</div></div>
-          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-        </button>
-        <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <template v-if="createLinkForm.link_mode === 'strm'">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">Strm 同步方式</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">同步策略</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-radio-group v-model="createLinkForm.strm_sync_mode" class="uniform-mode-group">
+              <el-radio-button value="incremental">增量同步</el-radio-button>
+              <el-radio-button value="full">全量同步</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">命中文件后缀</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
+          </button>
+          <div class="strm-suffix-editor">
+            <div class="strm-suffix-editor__actions">
+              <el-button size="small" @click="fillCreateStrmPreset('video')">视频</el-button>
+              <el-button size="small" @click="fillCreateStrmPreset('audio')">音频</el-button>
+            </div>
+            <div class="strm-suffix-editor__tags">
+              <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
+              <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateStrmSuffix" />
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
@@ -748,17 +764,45 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button></el-radio-group></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" class="archive-mode-group"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤名单</div></div>
-          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-        </button>
-        <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <template v-if="editLinkForm.link_mode === 'strm'">
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">Strm 同步方式</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">同步策略</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input">
+            <el-radio-group v-model="editLinkForm.strm_sync_mode" class="uniform-mode-group">
+              <el-radio-button value="incremental">增量同步</el-radio-button>
+              <el-radio-button value="full">全量同步</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">命中文件后缀</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
+          </button>
+          <div class="strm-suffix-editor">
+            <div class="strm-suffix-editor__actions">
+              <el-button size="small" @click="fillEditStrmPreset('video')">视频</el-button>
+              <el-button size="small" @click="fillEditStrmPreset('audio')">音频</el-button>
+            </div>
+            <div class="strm-suffix-editor__tags">
+              <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
+              <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditStrmSuffix" />
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">过滤名单</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+          </button>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
@@ -790,6 +834,8 @@ import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
+type LinkMode = 'soft' | 'hard' | 'strm'
+type StrmSyncMode = 'incremental' | 'full'
 type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting' | 'hierarchical_archive'
 type CollectOptionKey = 'recursive_collect' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files' | 'cleanup_expired_files'
@@ -906,6 +952,51 @@ function parseFiltersText(value: string) {
   return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
 }
 
+const strmVideoSuffixPreset = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts', '.rmvb', '.rm', '.3gp', '.iso']
+const strmAudioSuffixPreset = ['.mp3', '.flac', '.wav', '.aac', '.m4a', '.ogg', '.wma', '.ape', '.alac', '.opus']
+
+function normalizeLinkMode(value?: string): LinkMode {
+  if (value === 'hard' || value === 'strm') return value
+  return 'soft'
+}
+
+function normalizeStrmSuffix(value: string) {
+  const trimmed = value.trim().replace(/^['"]+|['"]+$/g, '').replace(/^\*+/, '')
+  if (!trimmed) return ''
+  return (trimmed.startsWith('.') ? trimmed : `.${trimmed}`).toLowerCase()
+}
+
+function normalizeStrmSuffixes(values: string[]) {
+  const seen = new Set<string>()
+  const suffixes: string[] = []
+  for (const value of values) {
+    const suffix = normalizeStrmSuffix(value)
+    if (!suffix || seen.has(suffix)) continue
+    seen.add(suffix)
+    suffixes.push(suffix)
+  }
+  return suffixes
+}
+
+function parseFiltersArray(raw?: string) {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((item) => String(item).trim()).filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function parseStrmSyncMode(raw?: string): StrmSyncMode {
+  return parseOptionJSON(raw, { strm_full_sync: false }).strm_full_sync ? 'full' : 'incremental'
+}
+
+function buildStrmOptions(syncMode: StrmSyncMode) {
+  return { strm_full_sync: syncMode === 'full' }
+}
+
 function parseFiltersJSON(raw?: string) {
   if (!raw) return ''
   try {
@@ -1001,6 +1092,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
   const ruleType = normalizeRuleType(rule)
   const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
   const purifyOptions = ruleType === 'cleanup' ? parseOptionJSON(rule.options_json, createDefaultPurifyOptions()) : null
+  const linkMode = ruleType === 'link' ? normalizeLinkMode(rule.link_mode) : undefined
   const transformRules = parseFiltersText(parseFiltersJSON(rule.transform_rules_json))
   const transformFilters = parseFiltersText(parseFiltersJSON(rule.transform_filters_json))
 
@@ -1012,14 +1104,14 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
     archive_mode: rule.archive_mode,
     rule_type: ruleType,
-    link_mode: ruleType === 'link' ? (rule.link_mode === 'hard' ? 'hard' : 'soft') : undefined,
+    link_mode: linkMode,
     run_mode: resolveRunMode(rule.monitor_enabled, scheduleEnabled),
     source_dir: rule.source_dir,
     target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
-    options: purifyOptions ?? {},
+    options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json)) : {}),
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
       ? normalizeFixedPackageOptions(parseOptionJSON(rule.package_options_json, createDefaultPackageOptions()))
       : {},
@@ -1199,7 +1291,9 @@ const createLinkForm = reactive({
   cron_expression: '30 4 * * *',
   watch_debounce_ms: 2000,
   run_on_start: false,
-  link_mode: 'soft' as 'soft' | 'hard',
+  link_mode: 'soft' as LinkMode,
+  strm_sync_mode: 'incremental' as StrmSyncMode,
+  strm_suffixes: [] as string[],
   filters_text: '',
 })
 
@@ -1213,9 +1307,14 @@ const editLinkForm = reactive({
   cron_expression: '30 4 * * *',
   watch_debounce_ms: 2000,
   run_on_start: false,
-  link_mode: 'soft' as 'soft' | 'hard',
+  link_mode: 'soft' as LinkMode,
+  strm_sync_mode: 'incremental' as StrmSyncMode,
+  strm_suffixes: [] as string[],
   filters_text: '',
 })
+
+const createLinkStrmSuffixInput = ref('')
+const editLinkStrmSuffixInput = ref('')
 
 function resetCreateForm() {
   createForm.name = ''
@@ -1304,7 +1403,10 @@ function resetCreateLinkForm() {
   createLinkForm.watch_debounce_ms = 2000
   createLinkForm.run_on_start = false
   createLinkForm.link_mode = 'soft'
+  createLinkForm.strm_sync_mode = 'incremental'
+  createLinkForm.strm_suffixes = []
   createLinkForm.filters_text = ''
+  createLinkStrmSuffixInput.value = ''
 }
 
 function resetEditLinkForm() {
@@ -1318,7 +1420,45 @@ function resetEditLinkForm() {
   editLinkForm.watch_debounce_ms = 2000
   editLinkForm.run_on_start = false
   editLinkForm.link_mode = 'soft'
+  editLinkForm.strm_sync_mode = 'incremental'
+  editLinkForm.strm_suffixes = []
   editLinkForm.filters_text = ''
+  editLinkStrmSuffixInput.value = ''
+}
+
+function addStrmSuffix(target: string[], value: string) {
+  const suffix = normalizeStrmSuffix(value)
+  if (!suffix || target.includes(suffix)) return false
+  target.push(suffix)
+  return true
+}
+
+function addCreateStrmSuffix() {
+  if (addStrmSuffix(createLinkForm.strm_suffixes, createLinkStrmSuffixInput.value)) {
+    createLinkStrmSuffixInput.value = ''
+  }
+}
+
+function addEditStrmSuffix() {
+  if (addStrmSuffix(editLinkForm.strm_suffixes, editLinkStrmSuffixInput.value)) {
+    editLinkStrmSuffixInput.value = ''
+  }
+}
+
+function removeCreateStrmSuffix(suffix: string) {
+  createLinkForm.strm_suffixes = createLinkForm.strm_suffixes.filter((item) => item !== suffix)
+}
+
+function removeEditStrmSuffix(suffix: string) {
+  editLinkForm.strm_suffixes = editLinkForm.strm_suffixes.filter((item) => item !== suffix)
+}
+
+function fillCreateStrmPreset(type: 'video' | 'audio') {
+  createLinkForm.strm_suffixes = normalizeStrmSuffixes([...createLinkForm.strm_suffixes, ...(type === 'video' ? strmVideoSuffixPreset : strmAudioSuffixPreset)])
+}
+
+function fillEditStrmPreset(type: 'video' | 'audio') {
+  editLinkForm.strm_suffixes = normalizeStrmSuffixes([...editLinkForm.strm_suffixes, ...(type === 'video' ? strmVideoSuffixPreset : strmAudioSuffixPreset)])
 }
 
 function buildDuplicateRuleName(name: string) {
@@ -1427,7 +1567,11 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.cron_expression = rule.cron_expression || '30 4 * * *'
     editLinkForm.watch_debounce_ms = rule.watch_debounce_ms
     editLinkForm.run_on_start = rule.run_on_start
-    editLinkForm.link_mode = rule.link_mode === 'hard' ? 'hard' : 'soft'
+    editLinkForm.link_mode = normalizeLinkMode(rule.link_mode)
+    editLinkForm.strm_sync_mode = parseStrmSyncMode(rule.options_json)
+    editLinkForm.strm_suffixes = normalizeStrmSuffixes(parseFiltersArray(rule.filters_json))
+    editLinkForm.filters_text = editLinkForm.link_mode === 'strm' ? '' : parseFiltersJSON(rule.filters_json)
+    editLinkStrmSuffixInput.value = ''
     editLinkDialogVisible.value = true
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '链路规则加载失败')
@@ -1785,7 +1929,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
 	case 'transform':
 		return '转换'
 	case 'link':
-		return item?.link_mode === 'soft' ? '软链' : '硬链'
+		if (item?.link_mode === 'strm') return 'Strm'
+		return item?.link_mode === 'hard' ? '硬链' : '软链'
 	default:
 		return '—'
 	}
@@ -1802,7 +1947,8 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
 	case 'transform':
 		return 'custom-mode-tag--transform'
 	case 'link':
-		return item?.link_mode === 'soft' ? 'custom-mode-tag--softlink' : 'custom-mode-tag--hardlink'
+		if (item?.link_mode === 'strm') return 'custom-mode-tag--strm'
+		return item?.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'
 	default:
 		return ''
 	}
@@ -2026,6 +2172,11 @@ async function submitUpdatePurifyRule() {
 }
 
 async function submitCreateLinkRule() {
+  if (createLinkForm.link_mode === 'strm' && createLinkForm.strm_suffixes.length === 0) {
+    errorMessage.value = 'Strm 模式至少需要添加一个命中文件后缀'
+    return
+  }
+
   creating.value = true
   errorMessage.value = ''
   try {
@@ -2044,10 +2195,10 @@ async function submitCreateLinkRule() {
       watch_debounce_ms: createLinkForm.watch_debounce_ms,
       cron_expression: createLinkForm.schedule_enabled ? createLinkForm.cron_expression : '',
       run_on_start: createLinkForm.run_on_start,
-      options: {},
+      options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode) : {},
       package_options: {},
       collect_options: {},
-      filters: parseFiltersText(createLinkForm.filters_text),
+      filters: createLinkForm.link_mode === 'strm' ? [...createLinkForm.strm_suffixes] : parseFiltersText(createLinkForm.filters_text),
     })
     ElMessage.success('链路规则创建成功')
     createLinkDialogVisible.value = false
@@ -2063,6 +2214,11 @@ async function submitCreateLinkRule() {
 async function submitUpdateLinkRule() {
   if (!editingLinkRuleID.value) {
     errorMessage.value = '缺少链路规则 ID'
+    return
+  }
+
+  if (editLinkForm.link_mode === 'strm' && editLinkForm.strm_suffixes.length === 0) {
+    errorMessage.value = 'Strm 模式至少需要添加一个命中文件后缀'
     return
   }
 
@@ -2084,10 +2240,10 @@ async function submitUpdateLinkRule() {
       watch_debounce_ms: editLinkForm.watch_debounce_ms,
       cron_expression: editLinkForm.schedule_enabled ? editLinkForm.cron_expression : '',
       run_on_start: editLinkForm.run_on_start,
-      options: {},
+      options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode) : {},
       package_options: {},
       collect_options: {},
-      filters: parseFiltersText(editLinkForm.filters_text),
+      filters: editLinkForm.link_mode === 'strm' ? [...editLinkForm.strm_suffixes] : parseFiltersText(editLinkForm.filters_text),
     })
     ElMessage.success('链路规则更新成功')
     editLinkDialogVisible.value = false
@@ -2338,6 +2494,7 @@ onMounted(() => {
 .custom-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
+.custom-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
 .rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }
@@ -2387,9 +2544,6 @@ onMounted(() => {
   width: 100%;
   padding-inline: 18px;
 }
-
-.compatibility-mode-field { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-.compatibility-mode-field__hint { max-width: 560px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
@@ -2444,6 +2598,10 @@ onMounted(() => {
 .mode-option-tooltip__content { max-width: 18em; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
 :global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
+.strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
+.strm-suffix-editor__input { width: 150px; }
 
 @media (max-width: 900px) {
   .history-toolbar { flex-direction: column; align-items: stretch; }

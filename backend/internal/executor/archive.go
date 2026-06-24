@@ -259,6 +259,10 @@ func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executi
 		return stats, fmt.Errorf("create target dir: %w", err)
 	}
 
+	if strings.EqualFold(strings.TrimSpace(req.LinkMode), "strm") {
+		return s.executeStrmRule(runID, req, sourceDir, targetDir, &stats)
+	}
+
 	matchers := buildFileNameMatchers(req.Filters)
 	if err := s.linkDirectory(runID, sourceDir, sourceDir, targetDir, req.LinkMode, req.CompatibilityMode, matchers, &stats); err != nil {
 		return stats, err
@@ -353,6 +357,167 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 		s.appendLog(runID, "info", fmt.Sprintf("created link %s -> %s", targetPath, sourcePath))
 		return nil
 	})
+}
+
+func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
+	extensions := normalizeStrmExtensions(req.Filters)
+	if len(extensions) == 0 {
+		return *stats, fmt.Errorf("strm extensions are required")
+	}
+
+	if req.Options["strm_full_sync"] {
+		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
+			return *stats, err
+		}
+	}
+
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, stats); err != nil {
+		return *stats, err
+	}
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "未发现可生成 Strm 的文件"
+	} else {
+		syncLabel := "增量同步"
+		if req.Options["strm_full_sync"] {
+			syncLabel = "全量同步"
+		}
+		stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+	}
+
+	if stats.FailureCount > 0 {
+		return *stats, fmt.Errorf("strm execution finished with %d failures", stats.FailureCount)
+	}
+
+	return *stats, nil
+}
+
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+
+	sortEntriesNaturally(entries)
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		sourcePath := filepath.Join(currentPath, entry.Name())
+		if entry.IsDir() {
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, stats)
+		}
+
+		if !matchesStrmExtension(entry.Name(), extensions) {
+			stats.SkipCount++
+			return nil
+		}
+
+		targetPath, relErr := strmTargetPath(rootPath, sourcePath, targetRoot)
+		if relErr != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("resolve strm target for %s failed: %v", sourcePath, relErr))
+			return nil
+		}
+
+		if _, err := os.Lstat(targetPath); err == nil {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing strm target %s", targetPath))
+			return nil
+		} else if !os.IsNotExist(err) {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("inspect strm target %s failed: %v", targetPath, err))
+			return nil
+		}
+
+		if err := writeStrmFile(sourcePath, targetPath); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create strm %s -> %s failed: %v", targetPath, sourcePath, err))
+			return nil
+		}
+
+		stats.ProcessedFiles++
+		stats.SuccessCount++
+		s.appendLog(runID, "info", fmt.Sprintf("created strm %s -> %s", targetPath, sourcePath))
+		return nil
+	})
+}
+
+func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode string, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read strm target directory %s: %w", currentPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+
+	sortEntriesNaturally(entries)
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(currentPath, entry.Name())
+		if entry.IsDir() {
+			return s.removeExistingStrmFiles(runID, entryPath, compatibilityMode, stats)
+		}
+		if !strings.EqualFold(filepath.Ext(entry.Name()), ".strm") {
+			return nil
+		}
+		fileOperationWithMode(compatibilityMode)
+		if err := os.Remove(entryPath); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("remove existing strm %s failed: %v", entryPath, err))
+			return nil
+		}
+		stats.SkipCount++
+		s.appendLog(runID, "info", fmt.Sprintf("removed existing strm %s", entryPath))
+		return nil
+	})
+}
+
+func normalizeStrmExtensions(filters []string) map[string]struct{} {
+	extensions := make(map[string]struct{})
+	for _, filter := range filters {
+		trimmed := strings.TrimSpace(filter)
+		trimmed = strings.Trim(trimmed, `"'`)
+		trimmed = strings.TrimPrefix(trimmed, "*")
+		if trimmed == "" {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, ".") {
+			trimmed = "." + trimmed
+		}
+		extensions[strings.ToLower(trimmed)] = struct{}{}
+	}
+	return extensions
+}
+
+func matchesStrmExtension(name string, extensions map[string]struct{}) bool {
+	_, ok := extensions[strings.ToLower(filepath.Ext(name))]
+	return ok
+}
+
+func strmTargetPath(rootPath, sourcePath, targetRoot string) (string, error) {
+	relPath, err := filepath.Rel(rootPath, sourcePath)
+	if err != nil {
+		return "", err
+	}
+	if relPath == "." {
+		return "", fmt.Errorf("invalid source path")
+	}
+	ext := filepath.Ext(relPath)
+	if ext == "" {
+		return filepath.Join(targetRoot, relPath+".strm"), nil
+	}
+	return filepath.Join(targetRoot, strings.TrimSuffix(relPath, ext)+".strm"), nil
+}
+
+func writeStrmFile(sourcePath, targetPath string) error {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create strm parent: %w", err)
+	}
+	if err := os.WriteFile(targetPath, []byte(sourcePath+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write strm file: %w", err)
+	}
+	return nil
 }
 
 func createFileLink(sourcePath, targetPath, linkMode string) error {

@@ -15,7 +15,7 @@ export interface RuleItem {
   compatibility_mode: 'local' | 'compatibility'
   archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
   rule_type?: 'archive' | 'cleanup' | 'link'
-  link_mode?: 'soft' | 'hard'
+  link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
   target_dir: string
@@ -61,7 +61,7 @@ export interface CreateRulePayload {
   compatibility_mode: 'local' | 'compatibility'
   archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
   rule_type?: 'archive' | 'cleanup' | 'link'
-  link_mode?: 'soft' | 'hard'
+  link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
   target_dir?: string
