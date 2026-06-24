@@ -450,10 +450,13 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <div class="compatibility-mode-field">
+            <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
+              <el-radio-button value="local">本地模式</el-radio-button>
+              <el-radio-button value="compatibility">兼容模式</el-radio-button>
+            </el-radio-group>
+            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
+          </div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createArchiveOptionsExpanded = !createArchiveOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div></div>
@@ -511,10 +514,13 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <div class="compatibility-mode-field">
+            <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
+              <el-radio-button value="local">本地模式</el-radio-button>
+              <el-radio-button value="compatibility">兼容模式</el-radio-button>
+            </el-radio-group>
+            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
+          </div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editArchiveOptionsExpanded = !editArchiveOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div></div>
@@ -572,10 +578,13 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <div class="compatibility-mode-field">
+            <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
+              <el-radio-button value="local">本地模式</el-radio-button>
+              <el-radio-button value="compatibility">兼容模式</el-radio-button>
+            </el-radio-group>
+            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
+          </div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="createPurifyOptionsExpanded = !createPurifyOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</div></div>
@@ -646,10 +655,13 @@
           <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <div class="compatibility-mode-field">
+            <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
+              <el-radio-button value="local">本地模式</el-radio-button>
+              <el-radio-button value="compatibility">兼容模式</el-radio-button>
+            </el-radio-group>
+            <div class="compatibility-mode-field__hint">兼容模式适用于网盘/网络存储：降低轮询频率，放慢读取、统计与文件处理节奏，避免云盘接口限速或风控。</div>
+          </div>
         </el-form-item>
           <button type="button" class="mode-config-toggle" @click="editPurifyOptionsExpanded = !editPurifyOptionsExpanded">
             <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</div></div>
@@ -778,7 +790,7 @@ import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
-type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting'
+type PackageOptionKey = 'flat_archive' | 'include_manifest' | 'verify_after_archive' | 'cleanup_source_after_archive' | 'package_nested_folders' | 'match_archive' | 'match_archive_parent_rename' | 'single_file_nesting' | 'hierarchical_archive'
 type CollectOptionKey = 'recursive_collect' | 'cleanup_source_after_archive'
 type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files' | 'cleanup_expired_files'
 type CleanupOptionValueKey = 'cleanup_retention_days'
@@ -802,7 +814,7 @@ const packageModeOptions = [
   { key: 'match_archive_parent_rename', label: '父级重名', description: '可独立开启。\n对打包生成的 CBZ 按父目录名重命名；若同时开启匹配归档，则命中项也会按父目录名重命名。\n扁平归档开启时直接输出到目标路径；同一父级多个命中项时，按数字顺序追加 -part1、-part2、-part3、-part4……' },
   { key: 'flat_archive', label: '扁平归档', description: '勾选后直接输出到目标路径；取消勾选时默认额外套一层源文件夹后再生成 CBZ。' },
   { key: 'single_file_nesting', label: '单件归巢', description: '对监控目录下裸露文件按规则命中后，以文件名创建同名目录再转移进去。' },
-  { key: 'package_nested_folders', label: '嵌套打包', description: '遇到多层子文件夹时，按原有层级在归档目录内生成对应 CBZ；关闭时默认跳过并记录。' },
+  { key: 'hierarchical_archive', label: '层级归档', description: '勾选后，打包生成的 CBZ 会按原监控目录下的相对目录结构放置到目标路径中；关闭时保持当前打包输出规则。' },
   { key: 'cleanup_source_after_archive', label: '清理源件', description: '确认已归档后再清理原目录中的已处理源件。' },
 ] as const
 
@@ -825,11 +837,11 @@ const transformModeOptions = [
 ] as const
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
-  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: false, match_archive: false, match_archive_parent_rename: false, single_file_nesting: false }
+  return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: true, match_archive: false, match_archive_parent_rename: false, single_file_nesting: false, hierarchical_archive: false }
 }
 
 function normalizeFixedPackageOptions(options: Record<PackageOptionKey, boolean>): Record<PackageOptionKey, boolean> {
-  return { ...options, include_manifest: true, verify_after_archive: true }
+  return { ...options, include_manifest: true, verify_after_archive: true, package_nested_folders: true }
 }
 
 function createDefaultCollectOptions(): Record<CollectOptionKey, boolean> {
@@ -2375,6 +2387,9 @@ onMounted(() => {
   width: 100%;
   padding-inline: 18px;
 }
+
+.compatibility-mode-field { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.compatibility-mode-field__hint { max-width: 560px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;

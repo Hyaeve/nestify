@@ -131,8 +131,8 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 	if interval < 2*time.Second {
 		interval = 2 * time.Second
 	}
-	if isCompatibilityMode(rule.CompatibilityMode) && interval < 10*time.Second {
-		interval = 10 * time.Second
+	if isCompatibilityMode(rule.CompatibilityMode) && interval < 30*time.Second {
+		interval = 30 * time.Second
 	}
 
 	go func() {

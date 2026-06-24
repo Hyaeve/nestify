@@ -91,7 +91,8 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	directMatchers := buildArchiveDirectMatchers(req.MatchFilters)
 	singleFileNestingEnabled := req.ArchiveMode == "package" && req.PackageOptions["single_file_nesting"]
 	nestMatchers := buildArchiveDirectMatchers(req.NestFilters)
-	packageNestedFolders := req.PackageOptions["package_nested_folders"]
+	packageNestedFolders := req.ArchiveMode == "package"
+	hierarchicalArchive := req.ArchiveMode == "package" && req.PackageOptions["hierarchical_archive"]
 	flatArchive := req.PackageOptions["flat_archive"]
 	collectRecursiveEnabled := req.ArchiveMode != "collect" || req.CollectOptions["recursive_collect"]
 	collectDeduplicateEnabled := req.ArchiveMode == "collect"
@@ -150,10 +151,10 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		}
 		if entry.IsDir() {
 			targetSeriesDir := filepath.Join(targetDir, entry.Name())
-			if req.ArchiveMode == "package" && flatArchive {
+			if req.ArchiveMode == "package" && (flatArchive || hierarchicalArchive) {
 				targetSeriesDir = targetDir
 			}
-			if err := s.processSeriesDir(runID, sourceDir, entryPath, targetSeriesDir, req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, flatArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, &stats); err != nil {
+			if err := s.processSeriesDir(runID, sourceDir, entryPath, targetDir, targetSeriesDir, req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, &stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
@@ -192,7 +193,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 	if req.ArchiveMode == "package" && len(topLevelImageFiles) > 0 {
 		archiveTargetDir := targetDir
-		if !flatArchive {
+		if !flatArchive && !hierarchicalArchive {
 			archiveTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
 		}
 		archivePath, packErr := createPackageCBZFromFiles(sourceDir, sourceDir, topLevelImageFiles, archiveTargetDir, matchArchiveParentRenameEnabled, false)
@@ -368,7 +369,7 @@ func createFileLink(sourcePath, targetPath, linkMode string) error {
 	return nil
 }
 
-func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
+func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootDir, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive, hierarchicalArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, seriesPath)
 	if err != nil {
 		return fmt.Errorf("read series dir: %w", err)
@@ -387,7 +388,11 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 		if err != nil {
 			return err
 		}
-		if err := s.finalizePackageDirectory(runID, rootSourceDir, seriesPath, targetSeriesDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, false, stats); err != nil {
+		packageTargetDir := targetSeriesDir
+		if hierarchicalArchive {
+			packageTargetDir = hierarchicalPackageTargetDir(rootSourceDir, seriesPath, targetRootDir)
+		}
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, seriesPath, packageTargetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, false, stats); err != nil {
 			return err
 		}
 		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
@@ -424,7 +429,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
 				return nil
 			}
-			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
+			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetRootDir, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
@@ -455,7 +460,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetSerie
 	return nil
 }
 
-func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
+func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootDir, targetDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive, hierarchicalArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, volumePath)
 	if err != nil {
 		return fmt.Errorf("read volume dir: %w", err)
@@ -476,7 +481,11 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 			return err
 		}
 		packageStage = &stageResult
-		if err := s.finalizePackageDirectory(runID, rootSourceDir, volumePath, targetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, shouldUsePlainParentCBZName(rootSourceDir, volumePath), stats); err != nil {
+		packageTargetDir := targetDir
+		if hierarchicalArchive {
+			packageTargetDir = hierarchicalPackageTargetDir(rootSourceDir, volumePath, targetRootDir)
+		}
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, volumePath, packageTargetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, shouldUsePlainParentCBZName(rootSourceDir, volumePath), stats); err != nil {
 			return err
 		}
 		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
@@ -494,7 +503,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 	nextTargetDir := targetDir
 	fileTargetDir := targetDir
 	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs {
-		if flatArchive {
+		if flatArchive || hierarchicalArchive {
 			nextTargetDir = targetDir
 			fileTargetDir = targetDir
 		} else {
@@ -532,7 +541,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetDir, 
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
 				return nil
 			}
-			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
+			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetRootDir, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
 				stats.FailureCount++
 				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
@@ -904,6 +913,31 @@ func (s *Service) moveMatchedArchiveEntries(runID, rootSourceDir, basePath strin
 	}
 
 	return nil
+}
+
+func hierarchicalPackageTargetDir(rootSourceDir, dirPath, targetRootDir string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	cleanTarget := filepath.Clean(strings.TrimSpace(targetRootDir))
+	if cleanRoot == "" || cleanRoot == "." || cleanDir == "" || cleanDir == "." || cleanTarget == "" || cleanTarget == "." || sameCleanPath(cleanRoot, cleanDir) {
+		return cleanTarget
+	}
+
+	relPath, err := filepath.Rel(cleanRoot, cleanDir)
+	if err != nil {
+		return cleanTarget
+	}
+	relPath = filepath.Clean(relPath)
+	if relPath == "" || relPath == "." || strings.HasPrefix(relPath, "..") {
+		return cleanTarget
+	}
+
+	parentRelPath := filepath.Dir(relPath)
+	if parentRelPath == "" || parentRelPath == "." {
+		return cleanTarget
+	}
+
+	return filepath.Join(cleanTarget, parentRelPath)
 }
 
 func matchedArchiveTargetDir(rootSourceDir, dirPath, targetDir string) string {
