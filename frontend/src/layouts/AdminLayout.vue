@@ -13,8 +13,8 @@
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__arc" d="M6.05 17.25a5.95 5.95 0 1 1 11.9 0" />
-                <path class="nav-icon__needle" d="M12.35 15.45l3.05-3.05" />
+                <path class="nav-icon__arc" fill-rule="evenodd" d="M3.35 16.15a8.65 8.65 0 0 1 17.3 0 1.42 1.42 0 0 1-2.84 0 5.81 5.81 0 0 0-11.62 0 1.42 1.42 0 0 1-2.84 0Zm2.92-5.3 1.9 1.12a6.75 6.75 0 0 0-.78 1.9H5.16a8.8 8.8 0 0 1 1.11-3.02Zm4.58-2.37v2.22a6.64 6.64 0 0 0-1.7.62L8.03 9.38a8.62 8.62 0 0 1 2.82-.9Zm2.3 0a8.62 8.62 0 0 1 2.82.9l-1.12 1.94a6.64 6.64 0 0 0-1.7-.62V8.48Zm4.58 2.37a8.8 8.8 0 0 1 1.11 3.02h-2.23a6.75 6.75 0 0 0-.78-1.9l1.9-1.12Z" />
+                <path class="nav-icon__needle" d="M12.45 14.35 16.2 9.2a.78.78 0 0 1 1.22.95l-3.85 5.08a1.6 1.6 0 1 1-1.12-.88Z" />
               </svg>
             </el-icon>
             <span>仪表盘</span>
@@ -619,22 +619,23 @@ async function handleLogout() {
 }
 
 .nav-icon--dashboard svg {
-  width: 29px;
-  height: 29px;
-  stroke-width: 2.45;
+  width: 30px;
+  height: 30px;
+  fill: currentColor;
+  stroke: none;
 }
 
 .nav-icon--dashboard .nav-icon__arc,
 .nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(0.4px) scale(1.2);
-  transform-origin: 12px 14px;
+  transform: translateY(0.2px) scale(1.08);
+  transform-origin: 12px 13px;
 }
 
 .nav-icon--folder svg {
   width: 26px;
   height: 26px;
-  stroke-width: 2;
-  opacity: 0.86;
+  stroke-width: 1.65;
+  opacity: 0.72;
 }
 
 :deep(.el-menu-item.is-active) {
