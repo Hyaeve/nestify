@@ -10,10 +10,11 @@ import (
 )
 
 type fileNameMatcher struct {
-	target  ruleMatcherTarget
-	literal string
-	regex   *regexp.Regexp
-	fuzzy   bool
+	target        ruleMatcherTarget
+	literal       string
+	regex         *regexp.Regexp
+	fuzzy         bool
+	caseSensitive bool
 }
 
 type ruleMatcherTarget int
@@ -55,7 +56,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 		return stats, nil
 	}
 
-	matchers := buildFileNameMatchers(req.Filters)
+	matchers := buildCaseSensitiveFileNameMatchers(req.Filters)
 	whitelist := buildDirectoryWhitelist(req.Whitelist)
 	if cleanupMatchingFiles && len(matchers) == 0 {
 		stats.SkipCount = 1
@@ -213,6 +214,14 @@ func removeDirIfEmptyWithMode(compatibilityMode, path string) (bool, error) {
 }
 
 func buildFileNameMatchers(filters []string) []fileNameMatcher {
+	return buildFileNameMatchersWithCaseSensitivity(filters, false)
+}
+
+func buildCaseSensitiveFileNameMatchers(filters []string) []fileNameMatcher {
+	return buildFileNameMatchersWithCaseSensitivity(filters, true)
+}
+
+func buildFileNameMatchersWithCaseSensitivity(filters []string, caseSensitive bool) []fileNameMatcher {
 	items := make([]fileNameMatcher, 0, len(filters))
 	for _, filter := range filters {
 		value := strings.TrimSpace(filter)
@@ -241,12 +250,16 @@ func buildFileNameMatchers(filters []string) []fileNameMatcher {
 		if looksLikeRegexPattern(value) {
 			compiled, err := regexp.Compile(value)
 			if err == nil {
-				items = append(items, fileNameMatcher{target: target, regex: compiled, fuzzy: fuzzy})
+				items = append(items, fileNameMatcher{target: target, regex: compiled, fuzzy: fuzzy, caseSensitive: caseSensitive})
 				continue
 			}
 		}
 
-		items = append(items, fileNameMatcher{target: target, literal: strings.ToLower(value), fuzzy: fuzzy})
+		literal := value
+		if !caseSensitive {
+			literal = strings.ToLower(value)
+		}
+		items = append(items, fileNameMatcher{target: target, literal: literal, fuzzy: fuzzy, caseSensitive: caseSensitive})
 	}
 
 	return items
@@ -278,42 +291,54 @@ func looksLikeRegexPattern(value string) bool {
 }
 
 func matchesFileName(name string, isDir bool, matchers []fileNameMatcher) bool {
-	normalized := strings.ToLower(strings.TrimSpace(name))
 	rawName := strings.TrimSpace(name)
-	ext := strings.ToLower(filepath.Ext(rawName))
+	normalized := strings.ToLower(rawName)
+	rawExt := filepath.Ext(rawName)
+	ext := strings.ToLower(rawExt)
+	rawExtWithoutDot := strings.TrimPrefix(rawExt, ".")
 	extWithoutDot := strings.TrimPrefix(ext, ".")
-	stem := strings.TrimSuffix(rawName, filepath.Ext(rawName))
+	stem := strings.TrimSuffix(rawName, rawExt)
 	lowerStem := strings.ToLower(stem)
 	for _, matcher := range matchers {
 		candidates := make([]string, 0, 3)
 		literalCandidates := make([]string, 0, 3)
+		directoryLiteral := normalized
+		extLiteral := ext
+		extWithoutDotLiteral := extWithoutDot
+		stemLiteral := lowerStem
+		if matcher.caseSensitive {
+			directoryLiteral = rawName
+			extLiteral = rawExt
+			extWithoutDotLiteral = rawExtWithoutDot
+			stemLiteral = stem
+		}
 		switch matcher.target {
 		case ruleMatcherDirectoryName:
 			if !isDir {
 				continue
 			}
 			candidates = append(candidates, rawName)
-			literalCandidates = append(literalCandidates, normalized)
+			literalCandidates = append(literalCandidates, directoryLiteral)
 		case ruleMatcherExtension:
 			if isDir {
 				continue
 			}
-			candidates = append(candidates, ext, extWithoutDot)
-			literalCandidates = append(literalCandidates, ext, extWithoutDot)
+			candidates = append(candidates, rawExt, rawExtWithoutDot)
+			literalCandidates = append(literalCandidates, extLiteral, extWithoutDotLiteral)
 		case ruleMatcherGlobal:
 			if isDir {
 				candidates = append(candidates, rawName)
-				literalCandidates = append(literalCandidates, normalized)
+				literalCandidates = append(literalCandidates, directoryLiteral)
 			} else {
-				candidates = append(candidates, stem, ext, extWithoutDot)
-				literalCandidates = append(literalCandidates, lowerStem, ext, extWithoutDot)
+				candidates = append(candidates, stem, rawExt, rawExtWithoutDot)
+				literalCandidates = append(literalCandidates, stemLiteral, extLiteral, extWithoutDotLiteral)
 			}
 		default:
 			if isDir {
 				continue
 			}
 			candidates = append(candidates, stem)
-			literalCandidates = append(literalCandidates, lowerStem)
+			literalCandidates = append(literalCandidates, stemLiteral)
 		}
 		if matcher.regex != nil {
 			for _, candidate := range candidates {

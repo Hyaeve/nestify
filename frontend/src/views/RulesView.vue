@@ -2554,13 +2554,13 @@ onMounted(() => {
   padding-inline: 18px;
 }
 
-.archive-mode-group--package :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #d58a2f; border-color: #d58a2f; box-shadow: -1px 0 0 0 #d58a2f; }
-.archive-mode-group--collect :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #8a74d6; border-color: #8a74d6; box-shadow: -1px 0 0 0 #8a74d6; }
-.archive-mode-group--cleanup :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #5f9f45; border-color: #5f9f45; box-shadow: -1px 0 0 0 #5f9f45; }
-.archive-mode-group--transform :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #64b9d8; border-color: #64b9d8; box-shadow: -1px 0 0 0 #64b9d8; }
-.archive-mode-group--soft :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #c47c98; border-color: #c47c98; box-shadow: -1px 0 0 0 #c47c98; }
-.archive-mode-group--hard :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #2f3136; border-color: #2f3136; box-shadow: -1px 0 0 0 #2f3136; }
-.archive-mode-group--strm :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: -1px 0 0 0 #2f8f9d; }
+.archive-mode-group--package :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #d58a2f; background: rgba(213, 138, 47, 0.08); border-color: #d58a2f; box-shadow: -1px 0 0 0 #d58a2f; }
+.archive-mode-group--collect :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #8a74d6; background: rgba(138, 116, 214, 0.1); border-color: #8a74d6; box-shadow: -1px 0 0 0 #8a74d6; }
+.archive-mode-group--cleanup :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #5f9f45; background: rgba(95, 159, 69, 0.12); border-color: #5f9f45; box-shadow: -1px 0 0 0 #5f9f45; }
+.archive-mode-group--transform :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #64b9d8; background: rgba(100, 185, 216, 0.12); border-color: #64b9d8; box-shadow: -1px 0 0 0 #64b9d8; }
+.archive-mode-group--soft :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #c47c98; background: rgba(196, 124, 152, 0.12); border-color: #c47c98; box-shadow: -1px 0 0 0 #c47c98; }
+.archive-mode-group--hard :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #2f3136; background: rgba(47, 49, 54, 0.08); border-color: #2f3136; box-shadow: -1px 0 0 0 #2f3136; }
+.archive-mode-group--strm :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); border-color: #2f8f9d; box-shadow: -1px 0 0 0 #2f8f9d; }
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
