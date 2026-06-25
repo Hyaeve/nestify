@@ -138,6 +138,10 @@
             <span>跳过 {{ skipCount }}</span>
             <span>失败 {{ failedCount }}</span>
             <span class="history-summary__controls">
+              <el-radio-group v-model="historyViewMode" size="small" class="history-view-toggle" aria-label="历史展示方式">
+                <el-radio-button value="flat">平铺</el-radio-button>
+                <el-radio-button value="tree">堆放</el-radio-button>
+              </el-radio-group>
               <el-select v-model="historySortBy" size="small" class="history-summary__control" @change="handleHistorySortChange">
                 <el-option label="修改时间" value="modified_at" />
                 <el-option label="文件名称" value="name" />
@@ -172,7 +176,7 @@
           </div>
         </div>
 
-        <el-table v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
+        <el-table v-if="historyViewMode === 'flat'" v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
           <el-table-column label="规则 / 摘要" min-width="360">
             <template #default="scope">
               <div class="history-rule">
@@ -188,24 +192,63 @@
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="scope">
-              <span class="history-status" :class="`is-${scope.row.status}`">{{ scope.row.status }}</span>
+              <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
             </template>
           </el-table-column>
-        <el-table-column label="统计" width="140">
-          <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
-        </el-table-column>
-        <el-table-column label="时间" min-width="180">
-          <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
-        </el-table-column>
-        <el-table-column label="大小" width="120">
-          <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="90">
-          <template #default="scope">
-            <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          <el-table-column label="统计" width="140">
+            <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
+          </el-table-column>
+          <el-table-column label="时间" min-width="180">
+            <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
+          </el-table-column>
+          <el-table-column label="大小" width="120">
+            <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="90">
+            <template #default="scope">
+              <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-table v-else v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" :tree-props="{ children: 'children' }">
+          <el-table-column label="任务 / 条目" min-width="420">
+            <template #default="scope">
+              <div class="history-rule" :class="{ 'history-rule--child': !scope.row.is_group }">
+                <div class="history-rule__title">{{ scope.row.title }}</div>
+                <div class="history-rule__desc">{{ scope.row.description }}</div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="模式" width="120">
+            <template #default="scope">
+              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="scope">
+              <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="数量" width="120">
+            <template #default="scope">{{ scope.row.processed_files }}</template>
+          </el-table-column>
+          <el-table-column label="统计" width="140">
+            <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
+          </el-table-column>
+          <el-table-column label="时间" min-width="180">
+            <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
+          </el-table-column>
+          <el-table-column label="大小" width="120">
+            <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="90">
+            <template #default="scope">
+              <el-button v-if="!scope.row.is_group" link type="danger" @click="removeHistoryItem(scope.row.source.id)">删除</el-button>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+        </el-table>
 
       <div v-if="historyTotal > 0" class="history-pagination">
         <el-pagination
@@ -846,6 +889,15 @@ type CleanupOptionValueKey = 'cleanup_retention_days'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text' | 'merge_same_name_dirs'
 type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
+type HistoryViewMode = 'flat' | 'tree'
+type HistoryTreeRow = RunHistoryItem & {
+  id: string
+  title: string
+  description: string
+  is_group: boolean
+  source?: RunHistoryItem
+  children?: HistoryTreeRow[]
+}
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
 type TabKey = 'rules' | 'purify' | 'link' | 'history'
 type RuleListType = 'archive' | 'cleanup' | 'link'
@@ -1079,10 +1131,11 @@ async function handleCronPreviewShow(ruleId: number, expression: string) {
   }
 }
 
-function historyStatusText(status: HistoryStatus) {
+function historyStatusText(status: string) {
   if (status === 'success') return '成功'
   if (status === 'skip') return '跳过'
-  return '失败'
+  if (status === 'failed') return '失败'
+  return status || '未知'
 }
 
 function normalizeRuleType(rule: RuleItem): RuleListType {
@@ -1189,6 +1242,7 @@ const historySortBy = ref<'name' | 'modified_at'>('modified_at')
 const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
+const historyViewMode = ref<HistoryViewMode>('flat')
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1199,6 +1253,7 @@ const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
 const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
+const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
 
 const purifyRulesTotal = ref(0)
 
@@ -1921,6 +1976,75 @@ function handleHistoryRuleTypeChange() {
 	void loadHistory()
 }
 
+function buildHistoryGroupKey(item: RunHistoryItem) {
+  return [item.rule_id ?? 'manual', item.rule_name || '', item.trigger_mode || '', item.archive_mode || '', item.link_mode || '', item.started_at || ''].join('|')
+}
+
+function buildHistoryChildRow(item: RunHistoryItem): HistoryTreeRow {
+  return {
+    ...item,
+    id: `item-${item.id}`,
+    title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
+    description: `${item.rule_name || '未知规则'} · ${triggerModeText(item.trigger_mode)} · ${formatDateTime(item.started_at)}`,
+    is_group: false,
+    source: item,
+  }
+}
+
+function resolveHistoryGroupStatus(items: RunHistoryItem[]) {
+  if (items.some((item) => item.status === 'failed')) return 'failed'
+  if (items.some((item) => item.status === 'skip')) return 'skip'
+  return 'success'
+}
+
+function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
+  const groups = new Map<string, RunHistoryItem[]>()
+  for (const item of items) {
+    const key = buildHistoryGroupKey(item)
+    const current = groups.get(key)
+    if (current) {
+      current.push(item)
+    } else {
+      groups.set(key, [item])
+    }
+  }
+
+  return Array.from(groups.entries()).map(([key, groupItems]) => {
+    const first = groupItems[0]
+    const processed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.processed_files || 0)), 0) || groupItems.length
+    const success = groupItems.reduce((total, item) => total + Math.max(0, Number(item.success_count || 0)), 0)
+    const skipped = groupItems.reduce((total, item) => total + Math.max(0, Number(item.skip_count || 0)), 0)
+    const failed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.failure_count || 0)), 0)
+    const sizeBytes = groupItems.reduce((total, item) => total + Math.max(0, Number(item.size_bytes || 0)), 0)
+    const updatedAt = groupItems.reduce((latest, item) => {
+      const value = item.updated_at || item.finished_at || item.started_at
+      return !latest || new Date(value).getTime() > new Date(latest).getTime() ? value : latest
+    }, first.updated_at || first.finished_at || first.started_at)
+
+    return {
+      ...first,
+      id: `group-${key}`,
+      status: resolveHistoryGroupStatus(groupItems),
+      processed_files: processed,
+      success_count: success,
+      skip_count: skipped,
+      failure_count: failed,
+      size_bytes: sizeBytes,
+      updated_at: updatedAt,
+      title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
+      description: `${first.rule_name || '未知规则'} · ${triggerModeText(first.trigger_mode)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      is_group: true,
+      children: groupItems.map(buildHistoryChildRow),
+    }
+  })
+}
+
+function triggerModeText(mode?: string) {
+  if (mode === 'cron') return '定时'
+  if (mode === 'watch') return '监听'
+  return '手动'
+}
+
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
 	switch (item?.archive_mode) {
 	case 'package':
@@ -2450,9 +2574,14 @@ onMounted(() => {
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
+.history-view-toggle { flex: 0 0 auto; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
+.history-rule--child { padding-left: 6px; border-left: 3px solid var(--el-border-color-lighter); }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
 .history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
+.history-tree-table :deep(.el-table__placeholder) { width: 28px; }
+.history-tree-table :deep(.el-table__expand-icon) { color: var(--el-color-primary); }
+.history-tree-table :deep(.el-table__row--level-1 .history-rule__title) { font-weight: 500; }
 .history-status { display: inline-flex; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; transform: rotate(-8deg); }
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }

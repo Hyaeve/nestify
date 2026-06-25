@@ -75,6 +75,10 @@
             @keyup.enter="handleSearch"
           />
 
+          <el-radio-group v-model="logsViewMode" class="logs-view-toggle" size="default" aria-label="日志展示方式">
+            <el-radio-button value="flat">平铺</el-radio-button>
+            <el-radio-button value="tree">堆放</el-radio-button>
+          </el-radio-group>
           <el-button class="logs-action logs-action--search" type="primary" @click="handleSearch">搜索</el-button>
           <el-button class="logs-action logs-action--clear" type="danger" :disabled="!historyItems.length" @click="handleClearHistory">清空日志</el-button>
           <el-button class="logs-action logs-action--live" @click="loadHistory">实时</el-button>
@@ -89,7 +93,7 @@
       </div>
 
       <div class="logs-table-shell">
-        <el-table v-loading="loading" :data="historyItems" class="logs-table" empty-text="暂无任务日志">
+        <el-table v-if="logsViewMode === 'flat'" v-loading="loading" :data="historyItems" class="logs-table" empty-text="暂无任务日志">
           <el-table-column label="时间" min-width="180">
             <template #default="scope">
               <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
@@ -126,6 +130,41 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" :tree-props="{ children: 'children' }" empty-text="暂无任务日志">
+          <el-table-column label="任务 / 明细" min-width="520">
+            <template #default="scope">
+              <div class="logs-message" :class="{ 'logs-message--child': !scope.row.is_group }">
+                <div class="logs-message__title">{{ scope.row.title }}</div>
+                <div class="logs-message__meta">
+                  <span>{{ scope.row.description }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="级别" width="120" align="center">
+            <template #default="scope">
+              <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="模式" width="130" align="center">
+            <template #default="scope">
+              <span class="logs-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="数量" width="110" align="center">
+            <template #default="scope">{{ scope.row.processed_files }}</template>
+          </el-table-column>
+
+          <el-table-column label="时间" min-width="180">
+            <template #default="scope">
+              <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
       </div>
 
       <div v-if="filteredTotal > 0" class="logs-pagination">
@@ -151,6 +190,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
+type LogsViewMode = 'flat' | 'tree'
+type LogTreeRow = RunHistoryItem & {
+  id: string
+  title: string
+  description: string
+  is_group: boolean
+  children?: LogTreeRow[]
+}
+
 function createDefaultHistorySummary(): RunHistorySummary {
   return {
     total: 0,
@@ -172,12 +220,14 @@ const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
 const logsPageSizeOptions = [25, 50]
 const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
+const logsViewMode = ref<LogsViewMode>('flat')
 
 const totalLogs = computed(() => historySummary.value.total)
 const todayLogs = computed(() => historySummary.value.today)
 const successLogs = computed(() => historySummary.value.success)
 const failedLogs = computed(() => historySummary.value.failed)
 const skippedLogs = computed(() => historySummary.value.skipped)
+const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
 
 async function loadHistory() {
   loading.value = true
@@ -287,6 +337,67 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' {
   return 'warning'
 }
 
+function buildLogGroupKey(item: RunHistoryItem) {
+  return [item.rule_id ?? 'manual', item.rule_name || '', item.trigger_mode || '', item.archive_mode || '', item.link_mode || '', item.started_at || ''].join('|')
+}
+
+function triggerModeText(mode: string) {
+  if (mode === 'cron') return '定时'
+  if (mode === 'watch') return '监听'
+  return '手动'
+}
+
+function resolveLogGroupStatus(items: RunHistoryItem[]) {
+  if (items.some((item) => item.status === 'failed')) return 'failed'
+  if (items.some((item) => item.status === 'skip')) return 'skip'
+  return 'success'
+}
+
+function buildLogChildRow(item: RunHistoryItem): LogTreeRow {
+  return {
+    ...item,
+    id: `item-${item.id}`,
+    title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
+    description: `${item.rule_name || '手动任务'} · ${triggerModeText(item.trigger_mode)} · 成功 ${item.success_count} / 警告 ${item.skip_count} / 错误 ${item.failure_count}`,
+    is_group: false,
+  }
+}
+
+function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
+  const groups = new Map<string, RunHistoryItem[]>()
+  for (const item of items) {
+    const key = buildLogGroupKey(item)
+    const current = groups.get(key)
+    if (current) {
+      current.push(item)
+    } else {
+      groups.set(key, [item])
+    }
+  }
+
+  return Array.from(groups.entries()).map(([key, groupItems]) => {
+    const first = groupItems[0]
+    const processed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.processed_files || 0)), 0) || groupItems.length
+    const success = groupItems.reduce((total, item) => total + Math.max(0, Number(item.success_count || 0)), 0)
+    const skipped = groupItems.reduce((total, item) => total + Math.max(0, Number(item.skip_count || 0)), 0)
+    const failed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.failure_count || 0)), 0)
+
+    return {
+      ...first,
+      id: `group-${key}`,
+      status: resolveLogGroupStatus(groupItems),
+      processed_files: processed,
+      success_count: success,
+      skip_count: skipped,
+      failure_count: failed,
+      title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
+      description: `${first.rule_name || '手动任务'} · ${triggerModeText(first.trigger_mode)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      is_group: true,
+      children: groupItems.map(buildLogChildRow),
+    }
+  })
+}
+
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
   switch (item?.archive_mode) {
     case 'package':
@@ -298,7 +409,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
     case 'transform':
       return '转换'
     case 'link':
-      return item?.link_mode === 'soft' ? '软链' : '硬链'
+      if (item?.link_mode === 'strm') return 'Strm'
+      return item?.link_mode === 'hard' ? '硬链' : '软链'
     default:
       return '未知'
   }
@@ -315,7 +427,8 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
     case 'transform':
       return 'logs-mode-tag--transform'
     case 'link':
-      return item?.link_mode === 'soft' ? 'logs-mode-tag--softlink' : 'logs-mode-tag--hardlink'
+      if (item?.link_mode === 'strm') return 'logs-mode-tag--strm'
+      return item?.link_mode === 'hard' ? 'logs-mode-tag--hardlink' : 'logs-mode-tag--softlink'
     default:
       return ''
   }
@@ -546,6 +659,14 @@ onMounted(() => {
   box-shadow: 0 0 0 1px #e2e8f0 inset;
 }
 
+.logs-view-toggle :deep(.el-radio-button__inner) {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  border-color: #e2e8f0;
+  font-weight: 700;
+}
+
 .logs-action {
   min-height: 42px;
   border: 0;
@@ -640,12 +761,22 @@ onMounted(() => {
 .logs-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .logs-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .logs-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
+.logs-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
+
+.logs-tree-table :deep(.el-table__placeholder) { width: 28px; }
+.logs-tree-table :deep(.el-table__expand-icon) { color: #2563eb; }
+.logs-tree-table :deep(.el-table__row--level-1 .logs-message__title) { font-weight: 500; }
 
 .logs-message {
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+}
+
+.logs-message--child {
+  padding-left: 6px;
+  border-left: 3px solid #e2e8f0;
 }
 
 .logs-message__title {
