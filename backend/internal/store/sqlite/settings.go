@@ -32,7 +32,7 @@ func (s *Store) ensureDefaultSettings() error {
 
 func (s *Store) GetSettings() (*model.Settings, error) {
 	row := s.db.QueryRow(`
-		SELECT id, timezone, log_level, log_retention_days, log_retention_max_records, created_at, updated_at
+		SELECT id, timezone, log_level, log_retention_days, log_retention_max_records, history_view_mode, created_at, updated_at
 		FROM settings
 		WHERE id = 1
 	`)
@@ -45,6 +45,7 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 		&item.LogLevel,
 		&item.LogRetentionDays,
 		&item.LogRetentionMaxRecords,
+		&item.HistoryViewMode,
 		&createdAt,
 		&updatedAt,
 	)
@@ -67,9 +68,10 @@ func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings
 		UPDATE settings
 		SET log_retention_days = ?,
 		    log_retention_max_records = ?,
+		    history_view_mode = ?,
 		    updated_at = ?
 		WHERE id = 1
-	`, input.LogRetentionDays, input.LogRetentionMaxRecords, now)
+	`, input.LogRetentionDays, input.LogRetentionMaxRecords, input.HistoryViewMode, now)
 	if err != nil {
 		return nil, fmt.Errorf("update settings: %w", err)
 	}

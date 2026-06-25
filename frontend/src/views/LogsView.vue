@@ -75,15 +75,60 @@
             @keyup.enter="handleSearch"
           />
 
-          <el-radio-group v-model="logsViewMode" class="logs-view-toggle" size="default" aria-label="日志展示方式">
-            <el-radio-button value="flat">平铺</el-radio-button>
-            <el-radio-button value="tree">堆放</el-radio-button>
-          </el-radio-group>
-          <el-button class="logs-action logs-action--search" type="primary" @click="handleSearch">搜索</el-button>
-          <el-button class="logs-action logs-action--clear" type="danger" :disabled="!historyItems.length" @click="handleClearHistory">清空日志</el-button>
-          <el-button class="logs-action logs-action--live" @click="loadHistory">实时</el-button>
-          <el-button class="logs-action logs-action--pause" @click="resetFilters">暂停</el-button>
-          <el-button class="logs-action logs-action--refresh" circle :loading="loading" @click="loadHistory">↻</el-button>
+          <div class="logs-view-toggle" role="group" aria-label="日志展示方式">
+            <el-tooltip content="平铺" placement="top" :show-after="300">
+              <button
+                type="button"
+                class="logs-view-toggle__button"
+                :class="{ 'is-active': logsViewMode === 'flat' }"
+                aria-label="平铺"
+                :aria-pressed="logsViewMode === 'flat'"
+                @click="logsViewMode = 'flat'"
+              >
+                <svg class="logs-view-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 6.5h14" />
+                  <path d="M5 12h14" />
+                  <path d="M5 17.5h14" />
+                </svg>
+              </button>
+            </el-tooltip>
+            <el-tooltip content="堆放" placement="top" :show-after="300">
+              <button
+                type="button"
+                class="logs-view-toggle__button"
+                :class="{ 'is-active': logsViewMode === 'tree' }"
+                aria-label="堆放"
+                :aria-pressed="logsViewMode === 'tree'"
+                @click="logsViewMode = 'tree'"
+              >
+                <svg class="logs-view-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6 6.5h12" />
+                  <path d="M6 6.5v11" />
+                  <path d="M9 12h9" />
+                  <path d="M9 17.5h9" />
+                  <path d="M6 12h3" />
+                  <path d="M6 17.5h3" />
+                </svg>
+              </button>
+            </el-tooltip>
+          </div>
+          <el-button class="logs-action logs-action--clear" type="danger" :disabled="!historyItems.length" @click="handleClearHistory">
+            <svg class="logs-action__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.5 7.5h15" />
+              <path d="M9 7.5V5.8a1.3 1.3 0 0 1 1.3-1.3h3.4A1.3 1.3 0 0 1 15 5.8v1.7" />
+              <path d="M7.5 7.5l.6 10.5a1.5 1.5 0 0 0 1.5 1.4h5.4a1.5 1.5 0 0 0 1.5-1.4l.6-10.5" />
+              <path d="M10 11v4.5" />
+              <path d="M14 11v4.5" />
+            </svg>
+          </el-button>
+          <el-button class="logs-action logs-action--refresh" circle :loading="loading" @click="loadHistory">
+            <svg class="logs-action__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 7v4h-4" />
+              <path d="M5.5 17a8 8 0 0 1 13.5-6" />
+              <path d="M5 17v-4h4" />
+              <path d="M18.5 7A8 8 0 0 1 5 13" />
+            </svg>
+          </el-button>
         </div>
 
         <div class="logs-summary">
@@ -184,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
@@ -209,6 +254,28 @@ function createDefaultHistorySummary(): RunHistorySummary {
   }
 }
 
+const logsViewModeStorageKey = 'nestify.logs.viewMode'
+
+function normalizeLogsViewMode(value: unknown): LogsViewMode {
+  return value === 'tree' ? 'tree' : 'flat'
+}
+
+function readLogsViewModePreference(): LogsViewMode {
+  if (typeof window === 'undefined') {
+    return 'flat'
+  }
+
+  return normalizeLogsViewMode(window.localStorage.getItem(logsViewModeStorageKey))
+}
+
+function persistLogsViewModePreference(mode: LogsViewMode) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(logsViewModeStorageKey, mode)
+}
+
 const loading = ref(false)
 const historyItems = ref<RunHistoryItem[]>([])
 const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
@@ -220,7 +287,7 @@ const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
 const logsPageSizeOptions = [25, 50]
 const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
-const logsViewMode = ref<LogsViewMode>('flat')
+const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 
 const totalLogs = computed(() => historySummary.value.total)
 const todayLogs = computed(() => historySummary.value.today)
@@ -444,6 +511,10 @@ function triggerModeLabel(mode: string) {
   return '手动'
 }
 
+watch(logsViewMode, (mode) => {
+  persistLogsViewModePreference(mode)
+})
+
 onMounted(() => {
   void loadHistory()
 })
@@ -659,12 +730,58 @@ onMounted(() => {
   box-shadow: 0 0 0 1px #e2e8f0 inset;
 }
 
-.logs-view-toggle :deep(.el-radio-button__inner) {
-  min-height: 42px;
+.logs-view-toggle {
   display: inline-flex;
   align-items: center;
-  border-color: #e2e8f0;
-  font-weight: 700;
+  gap: 6px;
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.logs-view-toggle__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.logs-view-toggle__button:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.logs-view-toggle__button.is-active {
+  color: #ffffff;
+  background: #2563eb;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.26);
+}
+
+.logs-view-toggle__button:active {
+  transform: translateY(1px);
+}
+
+.logs-view-toggle__icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .logs-action {
@@ -674,28 +791,27 @@ onMounted(() => {
   font-weight: 700;
 }
 
-.logs-action--search {
-  background: #2563eb;
-}
-
 .logs-action--clear {
-  background: #ef4444;
-}
-
-.logs-action--live {
-  color: #047857;
-  background: #d1fae5;
-}
-
-.logs-action--pause {
-  color: #b45309;
-  background: #fef3c7;
+  min-width: 42px;
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .logs-action--refresh {
   width: 42px;
+  min-width: 42px;
   color: #2563eb;
   background: #dbeafe;
+}
+
+.logs-action__icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .logs-summary {

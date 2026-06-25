@@ -54,6 +54,7 @@ func (s *Store) migrate() error {
 			log_level TEXT NOT NULL,
 			log_retention_days INTEGER NOT NULL,
 			log_retention_max_records INTEGER NOT NULL,
+			history_view_mode TEXT NOT NULL DEFAULT 'flat',
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
@@ -163,12 +164,47 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure settings history_view_mode column")
+	if err := s.ensureSettingsHistoryViewModeColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure settings history_view_mode column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure performance indexes")
 	if err := s.ensurePerformanceIndexes(); err != nil {
 		log.Printf("sqlite:migrate: ensure performance indexes failed: %v", err)
 		return err
 	}
 	log.Printf("sqlite:migrate: migration pipeline complete")
+
+	return nil
+}
+
+func (s *Store) ensureSettingsHistoryViewModeColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(settings);`)
+	if err != nil {
+		return fmt.Errorf("query settings schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan settings schema: %w", err)
+		}
+		if strings.EqualFold(name, "history_view_mode") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE settings ADD COLUMN history_view_mode TEXT NOT NULL DEFAULT 'flat';`); err != nil {
+		return fmt.Errorf("add settings history_view_mode column: %w", err)
+	}
 
 	return nil
 }

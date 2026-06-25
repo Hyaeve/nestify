@@ -22,6 +22,7 @@ export interface SettingsPayload {
   log_level: string
   log_retention_days: number
   log_retention_max_records: number
+  history_view_mode: string
   created_at: string
   updated_at: string
 }
@@ -29,6 +30,7 @@ export interface SettingsPayload {
 export interface UpdateSettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
+  history_view_mode: string
 }
 
 export interface RuleBackupPayload {

@@ -138,10 +138,6 @@
             <span>跳过 {{ skipCount }}</span>
             <span>失败 {{ failedCount }}</span>
             <span class="history-summary__controls">
-              <el-radio-group v-model="historyViewMode" size="small" class="history-view-toggle" aria-label="历史展示方式">
-                <el-radio-button value="flat">平铺</el-radio-button>
-                <el-radio-button value="tree">堆放</el-radio-button>
-              </el-radio-group>
               <el-select v-model="historySortBy" size="small" class="history-summary__control" @change="handleHistorySortChange">
                 <el-option label="修改时间" value="modified_at" />
                 <el-option label="文件名称" value="name" />
@@ -876,6 +872,7 @@ import {
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
+import { fetchSettings } from '../api/system'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
@@ -936,6 +933,10 @@ const transformModeOptions = [
   { key: 'filter_matching_text', label: '匹配过滤', description: '按自定义规则过滤文件夹名称中的指定片段，支持普通文本与正则匹配，命中后会在重命名结果中移除匹配内容。' },
   { key: 'merge_same_name_dirs', label: '同名合并', description: '默认不勾选；关闭时文件夹转换后若出现同名冲突，则自动追加 -re、-re1、-re2……；开启后会将转换后同名的文件夹自动合并为一个目录。' },
 ] as const
+
+function normalizeHistoryViewMode(value?: string): HistoryViewMode {
+  return value === 'tree' ? 'tree' : 'flat'
+}
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
   return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: true, match_archive: false, match_archive_parent_rename: false, single_file_nesting: false, hierarchical_archive: false }
@@ -1860,6 +1861,15 @@ async function handleRuleReorder(ruleType: RuleListType, oldIndex: number, newIn
   }
 }
 
+async function loadHistoryViewModeSetting() {
+  try {
+    const response = await fetchSettings()
+    historyViewMode.value = normalizeHistoryViewMode(response.data?.history_view_mode)
+  } catch {
+    historyViewMode.value = 'flat'
+  }
+}
+
 async function loadHistory() {
   historyLoading.value = true
   errorMessage.value = ''
@@ -1901,6 +1911,7 @@ async function switchTab(tab: TabKey) {
     return
   }
 
+  await loadHistoryViewModeSetting()
   await loadHistory()
 }
 
@@ -2574,7 +2585,6 @@ onMounted(() => {
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
-.history-view-toggle { flex: 0 0 auto; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
 .history-rule--child { padding-left: 6px; border-left: 3px solid var(--el-border-color-lighter); }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }

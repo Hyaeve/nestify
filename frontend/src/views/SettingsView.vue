@@ -16,6 +16,13 @@
             <el-input-number v-model="settingsForm.logRetentionMaxRecords" :min="1" :max="1000000" />
             <div class="settings-help">默认保留 10000 条，超过上限后会自动删除更早的日志。</div>
           </el-form-item>
+          <el-form-item label="归巢历史展示方式">
+            <el-radio-group v-model="settingsForm.historyViewMode" class="settings-view-mode-group">
+              <el-radio-button value="flat">平铺</el-radio-button>
+              <el-radio-button value="tree">堆放</el-radio-button>
+            </el-radio-group>
+            <div class="settings-help">控制规则管理中归巢历史的默认展示方式，保存后刷新或重新进入页面仍会保持当前选择。</div>
+          </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </el-form-item>
@@ -80,9 +87,16 @@ const adminForm = reactive({
   newPassword: '',
 })
 
+type HistoryViewMode = 'flat' | 'tree'
+
+function normalizeHistoryViewMode(value?: string): HistoryViewMode {
+  return value === 'tree' ? 'tree' : 'flat'
+}
+
 const settingsForm = reactive({
   logRetentionDays: 5,
   logRetentionMaxRecords: 10000,
+  historyViewMode: 'flat' as HistoryViewMode,
 })
 
 onMounted(() => {
@@ -96,6 +110,7 @@ async function loadSettings() {
     if (response.data) {
       settingsForm.logRetentionDays = response.data.log_retention_days || 5
       settingsForm.logRetentionMaxRecords = response.data.log_retention_max_records || 10000
+      settingsForm.historyViewMode = normalizeHistoryViewMode(response.data.history_view_mode)
     }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '系统设置加载失败')
@@ -108,6 +123,7 @@ async function submitSettings() {
     await updateSettings({
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
+      history_view_mode: settingsForm.historyViewMode,
     })
     ElMessage.success('系统设置已保存')
   } catch (error) {
@@ -214,5 +230,9 @@ async function handleBackupFileChange(file: UploadFile) {
   gap: 12px;
   margin-top: 16px;
   flex-wrap: wrap;
+}
+
+.settings-view-mode-group {
+  display: inline-flex;
 }
 </style>

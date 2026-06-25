@@ -8,11 +8,13 @@ type Settings struct {
 	LogLevel               string    `json:"log_level"`
 	LogRetentionDays       int       `json:"log_retention_days"`
 	LogRetentionMaxRecords int       `json:"log_retention_max_records"`
+	HistoryViewMode        string    `json:"history_view_mode"`
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type UpdateSettingsInput struct {
-	LogRetentionDays       int `json:"log_retention_days"`
-	LogRetentionMaxRecords int `json:"log_retention_max_records"`
+	LogRetentionDays       int    `json:"log_retention_days"`
+	LogRetentionMaxRecords int    `json:"log_retention_max_records"`
+	HistoryViewMode        string `json:"history_view_mode"`
 }

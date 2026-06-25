@@ -184,8 +184,9 @@ type updateAdminAccountRequest struct {
 }
 
 type updateSettingsRequest struct {
-	LogRetentionDays       int `json:"log_retention_days"`
-	LogRetentionMaxRecords int `json:"log_retention_max_records"`
+	LogRetentionDays       int    `json:"log_retention_days"`
+	LogRetentionMaxRecords int    `json:"log_retention_max_records"`
+	HistoryViewMode        string `json:"history_view_mode"`
 }
 
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -1066,9 +1067,23 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	historyViewMode := input.HistoryViewMode
+	if historyViewMode == "" {
+		historyViewMode = "flat"
+	}
+	if historyViewMode != "flat" && historyViewMode != "tree" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_HISTORY_VIEW_MODE",
+			Message: "归巢历史展示方式无效",
+		})
+		return
+	}
+
 	settings, err := a.store.UpdateSettings(model.UpdateSettingsInput{
 		LogRetentionDays:       input.LogRetentionDays,
 		LogRetentionMaxRecords: input.LogRetentionMaxRecords,
+		HistoryViewMode:        historyViewMode,
 	})
 	if err != nil {
 		writeInternalError(w, err)
