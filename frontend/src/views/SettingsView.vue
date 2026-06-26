@@ -7,25 +7,70 @@
     <div class="settings-grid">
       <section class="settings-panel">
         <div class="settings-panel__title">基础设置</div>
-        <el-form label-position="top">
-          <el-form-item label="日志保留天数">
+        <el-form label-position="top" class="settings-basic-form">
+          <div class="settings-field-card">
+            <div class="settings-field-card__main">
+              <div class="settings-field-card__label">日志保留天数</div>
+              <div class="settings-help">默认保留 5 天，超过 {{ settingsForm.logRetentionDays || 5 }} 天的日志会自动清理。</div>
+            </div>
             <el-input-number v-model="settingsForm.logRetentionDays" :min="1" :max="3650" />
-            <div class="settings-help">默认保留 5 天，超过 {{ settingsForm.logRetentionDays || 5 }} 天的日志会自动清理。</div>
-          </el-form-item>
-          <el-form-item label="最大日志条数">
+          </div>
+
+          <div class="settings-field-card">
+            <div class="settings-field-card__main">
+              <div class="settings-field-card__label">最大日志条数</div>
+              <div class="settings-help">默认保留 10000 条，超过上限后会自动删除更早的日志。</div>
+            </div>
             <el-input-number v-model="settingsForm.logRetentionMaxRecords" :min="1" :max="1000000" />
-            <div class="settings-help">默认保留 10000 条，超过上限后会自动删除更早的日志。</div>
-          </el-form-item>
-          <el-form-item label="归巢历史展示方式">
-            <el-radio-group v-model="settingsForm.historyViewMode" class="settings-view-mode-group">
-              <el-radio-button value="flat">平铺</el-radio-button>
-              <el-radio-button value="tree">堆放</el-radio-button>
-            </el-radio-group>
-            <div class="settings-help">控制规则管理中归巢历史的默认展示方式，保存后刷新或重新进入页面仍会保持当前选择。</div>
-          </el-form-item>
-          <el-form-item>
+          </div>
+
+          <div class="settings-field-card settings-field-card--mode">
+            <div class="settings-field-card__main">
+              <div class="settings-field-card__label">归巢历史展示方式</div>
+              <div class="settings-help">控制规则管理中归巢历史的默认展示方式，保存后刷新或重新进入页面仍会保持当前选择。</div>
+            </div>
+            <div class="settings-view-mode-group" role="group" aria-label="归巢历史展示方式">
+              <el-tooltip content="平铺" placement="top" :show-after="300">
+                <button
+                  type="button"
+                  class="settings-view-mode-button"
+                  :class="{ 'is-active': settingsForm.historyViewMode === 'flat' }"
+                  aria-label="平铺"
+                  :aria-pressed="settingsForm.historyViewMode === 'flat'"
+                  @click="settingsForm.historyViewMode = 'flat'"
+                >
+                  <svg class="settings-view-mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 6.5h14" />
+                    <path d="M5 12h14" />
+                    <path d="M5 17.5h14" />
+                  </svg>
+                </button>
+              </el-tooltip>
+              <el-tooltip content="折叠" placement="top" :show-after="300">
+                <button
+                  type="button"
+                  class="settings-view-mode-button"
+                  :class="{ 'is-active': settingsForm.historyViewMode === 'tree' }"
+                  aria-label="折叠"
+                  :aria-pressed="settingsForm.historyViewMode === 'tree'"
+                  @click="settingsForm.historyViewMode = 'tree'"
+                >
+                  <svg class="settings-view-mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 6.5h12" />
+                    <path d="M6 6.5v11" />
+                    <path d="M9 12h9" />
+                    <path d="M9 17.5h9" />
+                    <path d="M6 12h3" />
+                    <path d="M6 17.5h3" />
+                  </svg>
+                </button>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <div class="settings-submit-row">
             <el-button type="primary" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
-          </el-form-item>
+          </div>
         </el-form>
       </section>
 
@@ -206,23 +251,64 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .settings-panel {
-  padding: 16px;
+  padding: 22px;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
+  border-radius: 18px;
   background: var(--el-bg-color);
 }
 
 .settings-panel__title {
-  margin-bottom: 12px;
-  font-size: 16px;
-  font-weight: 600;
+  margin-bottom: 18px;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .settings-help {
-  margin-top: 8px;
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+.settings-basic-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-field-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid #edf2f7;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.settings-field-card__main {
+  min-width: 0;
+}
+
+.settings-field-card__label {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.settings-field-card :deep(.el-input-number) {
+  flex: 0 0 auto;
+}
+
+.settings-field-card--mode {
+  align-items: flex-start;
+}
+
+.settings-submit-row {
+  display: flex;
+  margin-top: 4px;
 }
 
 .settings-actions {
@@ -234,5 +320,56 @@ async function handleBackupFileChange(file: UploadFile) {
 
 .settings-view-mode-group {
   display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.settings-view-mode-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.settings-view-mode-button:hover {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.settings-view-mode-button.is-active {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18), 0 8px 18px rgba(37, 99, 235, 0.1);
+}
+
+.settings-view-mode-button:active {
+  transform: translateY(1px);
+}
+
+.settings-view-mode-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 </style>
