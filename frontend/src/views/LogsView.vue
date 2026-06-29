@@ -367,6 +367,7 @@ async function loadHistory() {
       keyword: searchKeyword.value || undefined,
       status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
       rule_type: ruleTypeFilter.value !== 'all' ? ruleTypeFilter.value : undefined,
+      view_mode: logsViewMode.value,
     })
     historyItems.value = response.data?.items ?? []
     filteredTotal.value = response.data?.total ?? 0
@@ -582,6 +583,8 @@ function triggerModeLabel(mode: string) {
 
 watch(logsViewMode, (mode) => {
   persistLogsViewModePreference(mode)
+  logsCurrentPage.value = 1
+  void loadHistory()
 })
 
 onMounted(() => {

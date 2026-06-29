@@ -47,6 +47,7 @@ export interface FetchRunHistoryParams {
   rule_type?: 'archive' | 'cleanup' | 'link'
   sort_by?: 'name' | 'modified_at'
   sort_order?: 'asc' | 'desc'
+  view_mode?: 'flat' | 'tree'
 }
 
 function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
@@ -82,6 +83,10 @@ function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
 
   if (params.sort_order) {
     query.set('sort_order', params.sort_order)
+  }
+
+  if (params.view_mode) {
+    query.set('view_mode', params.view_mode)
   }
 
   const queryString = query.toString()

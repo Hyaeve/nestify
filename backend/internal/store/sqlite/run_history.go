@@ -133,6 +133,14 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 }
 
 func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, false)
+}
+
+func (s *Store) ListRunHistoryGroupPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, true)
+}
+
+func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string, grouped bool) ([]model.RunHistoryItem, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -141,6 +149,9 @@ func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	}
 
 	whereClause, args := buildRunHistoryWhereClause(keyword, status, archiveMode, ruleType)
+	if grouped {
+		return s.listRunHistoryGroupedPage(page, pageSize, whereClause, args, sortBy, sortOrder)
+	}
 
 	countQuery := `SELECT COUNT(*) FROM run_history` + whereClause
 	var total int
@@ -177,6 +188,101 @@ func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	}
 
 	return items, total, nil
+}
+
+func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string, args []any, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+	groupExpr := buildRunHistoryGroupExpression()
+	countQuery := `SELECT COUNT(*) FROM (SELECT ` + groupExpr + ` AS group_key FROM run_history` + whereClause + ` GROUP BY group_key)`
+	var total int
+	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count grouped run history: %w", err)
+	}
+	if total == 0 {
+		return []model.RunHistoryItem{}, 0, nil
+	}
+
+	orderClause := buildRunHistoryGroupOrderClause(sortBy, sortOrder)
+	groupArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	groupRows, err := s.db.Query(`
+		SELECT `+groupExpr+` AS group_key
+		FROM run_history`+whereClause+`
+		GROUP BY group_key
+		ORDER BY `+orderClause+`
+		LIMIT ? OFFSET ?
+	`, groupArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list run history groups: %w", err)
+	}
+	defer groupRows.Close()
+
+	groupKeys := make([]string, 0, pageSize)
+	for groupRows.Next() {
+		var key string
+		if err := groupRows.Scan(&key); err != nil {
+			return nil, 0, fmt.Errorf("scan run history group: %w", err)
+		}
+		groupKeys = append(groupKeys, key)
+	}
+	if err := groupRows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate run history groups: %w", err)
+	}
+	if len(groupKeys) == 0 {
+		return []model.RunHistoryItem{}, total, nil
+	}
+
+	placeholders := make([]string, len(groupKeys))
+	queryArgs := make([]any, 0, len(groupKeys))
+	for index, key := range groupKeys {
+		placeholders[index] = "?"
+		queryArgs = append(queryArgs, key)
+	}
+
+	rows, err := s.db.Query(`
+		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
+		       processed_files, success_count, skip_count, failure_count, size_bytes,
+		       summary, started_at, updated_at, finished_at
+		FROM run_history
+		WHERE `+groupExpr+` IN (`+strings.Join(placeholders, ",")+`)
+		ORDER BY `+buildRunHistoryOrderClause(sortBy, sortOrder)+`
+	`, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list grouped run history items: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]model.RunHistoryItem, 0, len(groupKeys)*pageSize)
+	for rows.Next() {
+		item, scanErr := scanRunHistory(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate grouped run history items: %w", err)
+	}
+
+	return items, total, nil
+}
+
+func buildRunHistoryGroupExpression() string {
+	return `COALESCE(CAST(rule_id AS TEXT), 'manual') || '|' || COALESCE(rule_name, '') || '|' || COALESCE(trigger_mode, '') || '|' || COALESCE(archive_mode, '') || '|' || COALESCE(link_mode, '') || '|' || COALESCE(started_at, '')`
+}
+
+func buildRunHistoryGroupOrderClause(sortBy, sortOrder string) string {
+	direction := "DESC"
+	if strings.EqualFold(strings.TrimSpace(sortOrder), "asc") {
+		direction = "ASC"
+	}
+
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "name":
+		return "LOWER(COALESCE(rule_name, '')) " + direction + ", MAX(started_at) DESC, group_key DESC"
+	case "modified_at":
+		return "MAX(started_at) " + direction + ", group_key DESC"
+	default:
+		return "MAX(started_at) DESC, group_key DESC"
+	}
 }
 
 func buildRunHistoryOrderClause(sortBy, sortOrder string) string {

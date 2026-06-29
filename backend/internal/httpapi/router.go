@@ -870,7 +870,8 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		sortBy := strings.TrimSpace(r.URL.Query().Get("sort_by"))
 		sortOrder := strings.TrimSpace(r.URL.Query().Get("sort_order"))
 
-		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode", "rule_type", "sort_by", "sort_order")
+		viewMode := strings.TrimSpace(r.URL.Query().Get("view_mode"))
+		page, pageSize, paged, err := parsePaginationQuery(r, 25, "keyword", "status", "archive_mode", "rule_type", "sort_by", "sort_order", "view_mode")
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{
 				Success: false,
@@ -881,7 +882,13 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if paged {
-			items, total, err := a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
+			var items []model.RunHistoryItem
+			var total int
+			if viewMode == "tree" {
+				items, total, err = a.store.ListRunHistoryGroupPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
+			} else {
+				items, total, err = a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
+			}
 			if err != nil {
 				writeInternalError(w, err)
 				return

@@ -1940,6 +1940,7 @@ async function loadHistory() {
       rule_type: historyRuleTypeFilter.value === 'all' ? undefined : historyRuleTypeFilter.value,
       sort_by: historySortBy.value,
       sort_order: historySortOrder.value,
+      view_mode: historyViewMode.value,
     })
     historyItems.value = response.data?.items ?? []
     historyTotal.value = response.data?.total ?? 0
