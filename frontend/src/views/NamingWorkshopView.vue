@@ -1,19 +1,6 @@
 <template>
   <div class="naming-workshop-view">
     <el-card class="workshop-card" shadow="never">
-      <template #header>
-        <div class="workshop-card__header">
-          <div>
-            <div class="workshop-card__title">命名工坊</div>
-            <div class="workshop-card__subtitle">先搭建文件预览、规则编排、结果展示的基础工作台，具体命名执行能力后续接入。</div>
-          </div>
-          <div class="workshop-card__status">
-            <span class="status-dot"></span>
-            页面预览版
-          </div>
-        </div>
-      </template>
-
       <div class="workshop-shell">
         <section class="workshop-pane workshop-pane--source">
           <header class="pane-header">
@@ -26,7 +13,7 @@
 
           <div class="source-toolbar">
             <el-tooltip content="添加文件" placement="top" :show-after="500">
-              <el-button class="icon-action icon-action--file" circle aria-label="添加文件" @click="handlePlaceholderAction('添加文件功能将在后续接入')">
+              <el-button class="icon-action icon-action--file" circle aria-label="添加文件" @click="openFilePicker">
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
                   <path d="M7.2 3.8h6.65L18.8 8.7v9.65a2.05 2.05 0 0 1-2.05 2.05H7.2a2.05 2.05 0 0 1-2.05-2.05V5.85A2.05 2.05 0 0 1 7.2 3.8Z" />
                   <path d="M13.65 3.95v4.9h4.9" />
@@ -36,7 +23,7 @@
               </el-button>
             </el-tooltip>
             <el-tooltip content="添加文件夹" placement="top" :show-after="500">
-              <el-button class="icon-action icon-action--folder" circle aria-label="添加文件夹" @click="handlePlaceholderAction('添加文件夹功能将在后续接入')">
+              <el-button class="icon-action icon-action--folder" circle aria-label="添加文件夹" @click="openFolderPicker">
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
                   <path d="M3.9 7.1a2 2 0 0 1 2-2h4.05l1.65 2h6.5a2 2 0 0 1 2 2v1.05" />
                   <path d="M4.25 10.35h15.5a1.75 1.75 0 0 1 1.72 2.1l-.9 4.48a2.55 2.55 0 0 1-2.5 2.05H5.95a2.55 2.55 0 0 1-2.5-2.08l-.88-4.52a1.75 1.75 0 0 1 1.68-2.03Z" />
@@ -67,17 +54,8 @@
             </el-tooltip>
           </div>
 
-          <div class="drop-zone">
-            <svg viewBox="0 0 24 24" aria-hidden="true" class="drop-zone__icon">
-              <path d="M4.2 7.4a2.15 2.15 0 0 1 2.15-2.15h4.1l1.75 2.1h5.45A2.15 2.15 0 0 1 19.8 9.5v8.15a2.15 2.15 0 0 1-2.15 2.15H6.35a2.15 2.15 0 0 1-2.15-2.15V7.4Z" />
-              <path d="M12 16.2V10" />
-              <path d="m8.95 13.05 3.05-3.05 3.05 3.05" />
-            </svg>
-            <div>
-              <div class="drop-zone__title">文件 / 文件夹预览区</div>
-              <div class="drop-zone__desc">当前为页面占位，后续接入本地选择与拖拽导入。</div>
-            </div>
-          </div>
+          <input ref="fileInputRef" type="file" multiple class="native-file-input" @change="handleFilesSelected" />
+          <input ref="folderInputRef" type="file" multiple webkitdirectory directory class="native-file-input" @change="handleFolderSelected" />
 
           <div class="item-list">
             <article v-for="item in sortedSourceItems" :key="item.path" class="file-item">
@@ -157,7 +135,7 @@
         </aside>
 
         <section class="workshop-pane workshop-pane--result">
-          <header class="pane-header">
+          <header class="pane-header pane-header--result">
             <div>
               <div class="pane-title">命名结果</div>
               <div class="pane-desc">预览或确认重命名后，会在这里展示改名前后的结果。</div>
@@ -172,6 +150,7 @@
               </el-button>
             </el-tooltip>
           </header>
+          <div class="result-toolbar-spacer" aria-hidden="true"></div>
 
           <div v-if="resultItems.length" class="result-list">
             <article v-for="item in resultItems" :key="item.path" class="result-item">
@@ -450,32 +429,9 @@ const resultItems = ref<SourceItem[]>([])
 const resultMode = ref<ResultMode>('preview')
 const activeRuleCategory = ref<RuleCategoryKey>('insert')
 
-const sourceItems = ref<SourceItem[]>([
-  {
-    name: '第01话_归巢测试.cbz',
-    nextName: 'Nestify_归巢测试_001.cbz',
-    path: 'D:/Library/Comics/归巢测试/第01话_归巢测试.cbz',
-    type: 'CBZ',
-    modifiedAt: '2026-06-29 21:12',
-    kind: 'file',
-  },
-  {
-    name: '第02话_归巢测试.cbz',
-    nextName: 'Nestify_归巢测试_002.cbz',
-    path: 'D:/Library/Comics/归巢测试/第02话_归巢测试.cbz',
-    type: 'CBZ',
-    modifiedAt: '2026-06-29 21:16',
-    kind: 'file',
-  },
-  {
-    name: '番外篇',
-    nextName: 'Nestify_归巢测试_番外篇',
-    path: 'D:/Library/Comics/归巢测试/番外篇',
-    type: '文件夹',
-    modifiedAt: '2026-06-28 18:35',
-    kind: 'folder',
-  },
-])
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const folderInputRef = ref<HTMLInputElement | null>(null)
+const sourceItems = ref<SourceItem[]>([])
 
 const filterDraft = reactive({
   includeFiles: true,
@@ -576,8 +532,77 @@ function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
 }
 
-function handlePlaceholderAction(message: string) {
-  ElMessage.info(message)
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+function openFolderPicker() {
+  folderInputRef.value?.click()
+}
+
+function handleFilesSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  appendSelectedFiles(Array.from(input.files ?? []), 'file')
+  input.value = ''
+}
+
+function handleFolderSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  appendSelectedFiles(Array.from(input.files ?? []), 'folder')
+  input.value = ''
+}
+
+function appendSelectedFiles(files: File[], sourceKind: SourceItemKind) {
+  if (!files.length) {
+    return
+  }
+
+  const nextItems = files.map((file) => createSourceItemFromFile(file, sourceKind))
+  const existingPaths = new Set(sourceItems.value.map((item) => item.path))
+  sourceItems.value = [...sourceItems.value, ...nextItems.filter((item) => !existingPaths.has(item.path))]
+  resultItems.value = []
+  ElMessage.success(`已添加 ${nextItems.length} 个待命名条目`)
+}
+
+function createSourceItemFromFile(file: File, sourceKind: SourceItemKind): SourceItem {
+  const relativePath = file.webkitRelativePath || file.name
+  const isFolderImport = sourceKind === 'folder'
+  const path = isFolderImport ? relativePath : file.name
+  const name = isFolderImport ? relativePath.split('/').pop() || file.name : file.name
+
+  return {
+    name,
+    nextName: name,
+    path,
+    type: resolveFileType(name, isFolderImport),
+    modifiedAt: formatLocalDateTime(file.lastModified),
+    kind: 'file',
+  }
+}
+
+function resolveFileType(name: string, isFolderImport: boolean) {
+  if (isFolderImport && !name.includes('.')) {
+    return '文件夹'
+  }
+
+  const extension = name.split('.').pop()
+  return extension && extension !== name ? extension.toUpperCase() : '文件'
+}
+
+function formatLocalDateTime(timestamp: number) {
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replace(/\//g, '-')
 }
 
 function handlePreview() {
@@ -691,47 +716,6 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
 }
 
-.workshop-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.workshop-card__title {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.workshop-card__subtitle {
-  margin-top: 6px;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.workshop-card__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  color: #1f7a62;
-  background: rgba(32, 201, 151, 0.12);
-  border: 1px solid rgba(32, 201, 151, 0.18);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #20c997;
-  box-shadow: 0 0 0 5px rgba(32, 201, 151, 0.14);
-}
-
 .workshop-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
@@ -788,7 +772,17 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-height: 56px;
   margin-bottom: 16px;
+}
+
+.result-toolbar-spacer {
+  min-height: 56px;
+  margin-bottom: 16px;
+}
+
+.native-file-input {
+  display: none;
 }
 
 .icon-action,
@@ -838,39 +832,6 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .sort-select {
   width: 112px;
-}
-
-.drop-zone {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding: 18px;
-  border: 1px dashed rgba(64, 158, 255, 0.36);
-  border-radius: 18px;
-  background: rgba(64, 158, 255, 0.06);
-}
-
-.drop-zone__icon {
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  fill: none;
-  stroke: #2f6fd6;
-  stroke-width: 1.55;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.drop-zone__title {
-  color: var(--text-primary);
-  font-weight: 800;
-}
-
-.drop-zone__desc {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 
 .item-list,
@@ -965,7 +926,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 18px;
   padding: 18px 0;
   border-radius: 999px;
 }
@@ -974,6 +936,14 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.rail-actions--top {
+  margin-bottom: 2px;
+}
+
+.rail-actions--bottom {
+  margin-top: 2px;
 }
 
 .rail-button--filter:not(.is-disabled):hover {

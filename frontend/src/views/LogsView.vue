@@ -67,6 +67,24 @@
             <el-option label="链路规则" value="link" />
           </el-select>
 
+          <el-select v-model="logsSortBy" class="logs-toolbar__select logs-toolbar__select--sort" placeholder="排序" @change="handleFiltersChange">
+            <el-option label="修改时间" value="modified_at" />
+            <el-option label="文件名称" value="name" />
+          </el-select>
+
+          <el-tooltip :content="logsSortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="300">
+            <el-button class="logs-action logs-action--sort" circle :aria-label="logsSortOrder === 'asc' ? '正序' : '倒序'" @click="toggleLogsSortOrder">
+              <svg class="logs-action__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 5.2v13.6" />
+                <path v-if="logsSortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
+                <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
+                <path d="M13 7h7" />
+                <path d="M13 12h5.2" />
+                <path d="M13 17h3.4" />
+              </svg>
+            </el-button>
+          </el-tooltip>
+
           <el-input
             v-model="keywordInput"
             class="logs-toolbar__search"
@@ -337,6 +355,8 @@ const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
+const logsSortBy = ref<'name' | 'modified_at'>('modified_at')
+const logsSortOrder = ref<'asc' | 'desc'>('desc')
 const logsPageSizeOptions = [25, 50]
 const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
@@ -367,6 +387,8 @@ async function loadHistory() {
       keyword: searchKeyword.value || undefined,
       status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
       rule_type: ruleTypeFilter.value !== 'all' ? ruleTypeFilter.value : undefined,
+      sort_by: logsSortBy.value,
+      sort_order: logsSortOrder.value,
       view_mode: logsViewMode.value,
     })
     historyItems.value = response.data?.items ?? []
@@ -390,11 +412,18 @@ function handleFiltersChange() {
   void loadHistory()
 }
 
+function toggleLogsSortOrder() {
+  logsSortOrder.value = logsSortOrder.value === 'asc' ? 'desc' : 'asc'
+  handleFiltersChange()
+}
+
 function resetFilters() {
   keywordInput.value = ''
   searchKeyword.value = ''
   statusFilter.value = 'all'
   ruleTypeFilter.value = 'all'
+  logsSortBy.value = 'modified_at'
+  logsSortOrder.value = 'desc'
   logsCurrentPage.value = 1
   void loadHistory()
 }
@@ -791,6 +820,10 @@ onMounted(() => {
   width: 150px;
 }
 
+.logs-toolbar__select--sort {
+  width: 128px;
+}
+
 .logs-toolbar__search {
   width: min(360px, 100%);
 }
@@ -871,11 +904,25 @@ onMounted(() => {
   background: #fee2e2;
 }
 
-.logs-action--refresh {
+.logs-action--refresh,
+.logs-action--sort {
   width: 42px;
   min-width: 42px;
   color: #2563eb;
   background: #dbeafe;
+}
+
+.logs-action--sort {
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.logs-action--sort:not(.is-disabled):hover {
+  color: #2f6fd6;
+  border-color: #b7d8ff;
+  background: #edf7ff;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
 }
 
 .logs-action__icon {

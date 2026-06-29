@@ -142,10 +142,18 @@
                 <el-option label="修改时间" value="modified_at" />
                 <el-option label="文件名称" value="name" />
               </el-select>
-              <el-select v-model="historySortOrder" size="small" class="history-summary__control" @change="handleHistorySortChange">
-                <el-option label="倒序" value="desc" />
-                <el-option label="正序" value="asc" />
-              </el-select>
+              <el-tooltip :content="historySortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="300">
+                <el-button class="history-sort-order-button" circle :aria-label="historySortOrder === 'asc' ? '正序' : '倒序'" @click="toggleHistorySortOrder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="history-sort-order-button__icon">
+                    <path d="M7 5.2v13.6" />
+                    <path v-if="historySortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
+                    <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
+                    <path d="M13 7h7" />
+                    <path d="M13 12h5.2" />
+                    <path d="M13 17h3.4" />
+                  </svg>
+                </el-button>
+              </el-tooltip>
               <el-select v-model="historyStatusFilter" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
                 <el-option label="全部状态" value="all" />
                 <el-option label="成功" value="success" />
@@ -2036,6 +2044,11 @@ function handleHistorySortChange() {
 	void loadHistory()
 }
 
+function toggleHistorySortOrder() {
+  historySortOrder.value = historySortOrder.value === 'asc' ? 'desc' : 'asc'
+  handleHistorySortChange()
+}
+
 function handleHistoryStatusChange() {
 	historyCurrentPage.value = 1
 	void loadHistory()
@@ -2664,6 +2677,9 @@ onMounted(() => {
 .history-summary { display: flex; flex-wrap: wrap; gap: 12px; color: var(--el-text-color-secondary); }
 .history-summary__controls { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .history-summary__control { width: 120px; }
+.history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
+.history-sort-order-button:not(.is-disabled):hover { color: #2f6fd6; border-color: #b7d8ff; background: #edf7ff; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
+.history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
@@ -2853,7 +2869,7 @@ onMounted(() => {
 @media (max-width: 900px) {
   .history-toolbar { flex-direction: column; align-items: stretch; }
   .history-summary__controls { width: 100%; }
-  .history-summary__control { width: calc((100% - 16px) / 3); min-width: 0; }
+  .history-summary__control { width: calc((100% - 48px) / 3); min-width: 0; }
   .history-search { flex-wrap: wrap; }
   .history-search :deep(.el-input) { width: 100%; }
 }
