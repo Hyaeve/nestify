@@ -32,6 +32,19 @@
             </el-icon>
             <span>文件管理</span>
           </el-menu-item>
+          <el-menu-item index="/naming-workshop">
+            <el-icon class="nav-icon nav-icon--naming">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5.2 5.2h8.8l4.8 4.8v8.8H5.2V5.2Z" />
+                <path d="M13.75 5.35v4.9h4.9" />
+                <path d="M8.2 14.15h4.9" />
+                <path d="M8.2 17.05h7.6" />
+                <path d="M15.4 12.95 17 11.35l1.6 1.6" />
+                <path d="M17 11.35v4.8" />
+              </svg>
+            </el-icon>
+            <span>命名工坊</span>
+          </el-menu-item>
           <el-menu-item index="/logs">
             <el-icon><Document /></el-icon>
             <span>任务日志</span>
@@ -132,6 +145,7 @@ const currentSectionLabel = computed(() => {
     '/dashboard': '仪表盘',
     '/rules': '规则管理',
     '/manual-pack': '文件管理',
+    '/naming-workshop': '命名工坊',
     '/logs': '任务日志',
     '/settings': '系统设置',
   }
@@ -636,6 +650,13 @@ async function handleLogout() {
   height: 26px;
   stroke-width: 1.65;
   opacity: 0.72;
+}
+
+.nav-icon--naming svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.75;
+  opacity: 0.82;
 }
 
 :deep(.el-menu-item.is-active) {

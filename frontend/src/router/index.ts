@@ -6,6 +6,7 @@ const DashboardView = () => import('../views/DashboardView.vue')
 const LoginView = () => import('../views/LoginView.vue')
 const LogsView = () => import('../views/LogsView.vue')
 const ManualPackView = () => import('../views/ManualPackView.vue')
+const NamingWorkshopView = () => import('../views/NamingWorkshopView.vue')
 const RulesView = () => import('../views/RulesView.vue')
 const SettingsView = () => import('../views/SettingsView.vue')
 
@@ -36,6 +37,11 @@ const router = createRouter({
           path: 'manual-pack',
           name: 'manual-pack',
           component: ManualPackView,
+        },
+        {
+          path: 'naming-workshop',
+          name: 'naming-workshop',
+          component: NamingWorkshopView,
         },
         {
           path: 'logs',
