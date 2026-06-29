@@ -176,15 +176,13 @@
           </el-table-column>
         </el-table>
 
-        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" :tree-props="{ children: 'children' }" empty-text="暂无任务日志">
-          <el-table-column label="任务 / 明细" min-width="520">
+        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无任务日志" @row-click="openLogDetailDialog">
+          <el-table-column label="折叠任务" min-width="520">
             <template #default="scope">
-              <div class="logs-message" :class="{ 'logs-message--child': !scope.row.is_group }">
-                <div class="logs-message__title">{{ scope.row.title }}</div>
-                <div class="logs-message__meta">
-                  <span>{{ scope.row.description }}</span>
-                </div>
-              </div>
+              <button type="button" class="logs-detail-card" @click.stop="openLogDetailDialog(scope.row)">
+                <span class="logs-detail-card__title">{{ scope.row.title }}</span>
+                <span class="logs-detail-card__desc">{{ scope.row.description }}</span>
+              </button>
             </template>
           </el-table-column>
 
@@ -209,8 +207,63 @@
               <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
             </template>
           </el-table-column>
+
+          <el-table-column label="操作" width="90" align="center">
+            <template #default="scope">
+              <el-button link type="primary" @click.stop="openLogDetailDialog(scope.row)">详情</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
+
+      <el-dialog v-model="logDetailDialogVisible" class="logs-detail-dialog" title="任务详情" width="920px" destroy-on-close>
+        <template v-if="selectedLogGroup">
+          <div class="logs-detail-summary">
+            <div>
+              <div class="logs-detail-summary__title">{{ selectedLogGroup.title }}</div>
+              <div class="logs-detail-summary__desc">{{ selectedLogGroup.description }}</div>
+            </div>
+            <div class="logs-detail-summary__tags">
+              <el-tag class="logs-level-tag" :type="statusTagType(selectedLogGroup.status)" effect="light">{{ statusLabel(selectedLogGroup.status) }}</el-tag>
+              <span class="logs-mode-tag" :class="historyModeTagClass(selectedLogGroup)">{{ historyModeLabel(selectedLogGroup) }}</span>
+            </div>
+          </div>
+          <el-table :data="pagedLogDetailRows" class="logs-table logs-detail-table" empty-text="暂无明细">
+            <el-table-column label="明细" min-width="520">
+              <template #default="scope">
+                <div class="logs-message logs-message--child">
+                  <div class="logs-message__title">{{ scope.row.title }}</div>
+                  <div class="logs-message__meta">
+                    <span>{{ scope.row.description }}</span>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="级别" width="120" align="center">
+              <template #default="scope">
+                <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="数量" width="110" align="center">
+              <template #default="scope">{{ scope.row.processed_files }}</template>
+            </el-table-column>
+            <el-table-column label="时间" min-width="180">
+              <template #default="scope">
+                <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div v-if="selectedLogGroupChildren.length > logDetailPageSize" class="logs-detail-pagination">
+            <el-pagination
+              v-model:current-page="logDetailCurrentPage"
+              background
+              layout="total, prev, pager, next"
+              :page-size="logDetailPageSize"
+              :total="selectedLogGroupChildren.length"
+            />
+          </div>
+        </template>
+      </el-dialog>
 
       <div v-if="filteredTotal > 0" class="logs-pagination">
         <el-pagination
@@ -288,6 +341,10 @@ const logsPageSizeOptions = [25, 50]
 const logsPageSize = ref(25)
 const logsCurrentPage = ref(1)
 const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
+const logDetailDialogVisible = ref(false)
+const selectedLogGroup = ref<LogTreeRow | null>(null)
+const logDetailPageSize = 25
+const logDetailCurrentPage = ref(1)
 
 const totalLogs = computed(() => historySummary.value.total)
 const todayLogs = computed(() => historySummary.value.today)
@@ -295,6 +352,11 @@ const successLogs = computed(() => historySummary.value.success)
 const failedLogs = computed(() => historySummary.value.failed)
 const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
+const selectedLogGroupChildren = computed(() => selectedLogGroup.value?.children ?? [])
+const pagedLogDetailRows = computed(() => {
+  const start = (logDetailCurrentPage.value - 1) * logDetailPageSize
+  return selectedLogGroupChildren.value.slice(start, start + logDetailPageSize)
+})
 
 async function loadHistory() {
   loading.value = true
@@ -463,6 +525,13 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
       children: groupItems.map(buildLogChildRow),
     }
   })
+}
+
+function openLogDetailDialog(row: LogTreeRow) {
+  if (!row.is_group) return
+  selectedLogGroup.value = row
+  logDetailCurrentPage.value = 1
+  logDetailDialogVisible.value = true
 }
 
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
@@ -881,9 +950,73 @@ onMounted(() => {
 .logs-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .logs-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
 
-.logs-tree-table :deep(.el-table__placeholder) { width: 28px; }
-.logs-tree-table :deep(.el-table__expand-icon) { color: #2563eb; }
-.logs-tree-table :deep(.el-table__row--level-1 .logs-message__title) { font-weight: 500; }
+.logs-tree-table :deep(.el-table__row) { cursor: pointer; }
+
+.logs-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.logs-detail-card__title {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.logs-detail-card__desc {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.logs-detail-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.logs-detail-summary__title {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.logs-detail-summary__desc {
+  margin-top: 6px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.logs-detail-summary__tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.logs-detail-table {
+  margin-top: 8px;
+}
+
+.logs-detail-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
 
 .logs-message {
   display: flex;

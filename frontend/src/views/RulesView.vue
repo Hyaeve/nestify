@@ -207,13 +207,13 @@
           </el-table-column>
         </el-table>
 
-        <el-table v-else v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" :tree-props="{ children: 'children' }">
-          <el-table-column label="任务 / 条目" min-width="420">
+        <el-table v-else v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" @row-click="openHistoryDetailDialog">
+          <el-table-column label="折叠任务" min-width="420">
             <template #default="scope">
-              <div class="history-rule" :class="{ 'history-rule--child': !scope.row.is_group }">
-                <div class="history-rule__title">{{ scope.row.title }}</div>
-                <div class="history-rule__desc">{{ scope.row.description }}</div>
-              </div>
+              <button type="button" class="history-detail-card" @click.stop="openHistoryDetailDialog(scope.row)">
+                <span class="history-detail-card__title">{{ scope.row.title }}</span>
+                <span class="history-detail-card__desc">{{ scope.row.description }}</span>
+              </button>
             </template>
           </el-table-column>
           <el-table-column label="模式" width="120">
@@ -240,11 +240,60 @@
           </el-table-column>
           <el-table-column label="操作" width="90">
             <template #default="scope">
-              <el-button v-if="!scope.row.is_group" link type="danger" @click="removeHistoryItem(scope.row.source.id)">删除</el-button>
-              <span v-else>—</span>
+              <el-button link type="primary" @click.stop="openHistoryDetailDialog(scope.row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
+
+        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="920px" destroy-on-close>
+          <template v-if="selectedHistoryGroup">
+            <div class="detail-dialog-summary">
+              <div>
+                <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
+                <div class="detail-dialog-summary__desc">{{ selectedHistoryGroup.description }}</div>
+              </div>
+              <div class="detail-dialog-summary__tags">
+                <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
+                <span class="history-status" :class="`is-${selectedHistoryGroup.status}`">{{ historyStatusText(selectedHistoryGroup.status) }}</span>
+              </div>
+            </div>
+            <el-table :data="pagedHistoryDetailRows" class="rules-table detail-dialog-table" table-layout="auto" empty-text="暂无明细">
+              <el-table-column label="条目" min-width="360">
+                <template #default="scope">
+                  <div class="history-rule history-rule--child">
+                    <div class="history-rule__title">{{ scope.row.title }}</div>
+                    <div class="history-rule__desc">{{ scope.row.description }}</div>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="scope">
+                  <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="统计" width="140">
+                <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
+              </el-table-column>
+              <el-table-column label="大小" width="120">
+                <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="90">
+                <template #default="scope">
+                  <el-button link type="danger" @click="removeHistoryDetailItem(scope.row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-if="selectedHistoryGroupChildren.length > historyDetailPageSize" class="detail-dialog-pagination">
+              <el-pagination
+                v-model:current-page="historyDetailCurrentPage"
+                background
+                layout="total, prev, pager, next"
+                :page-size="historyDetailPageSize"
+                :total="selectedHistoryGroupChildren.length"
+              />
+            </div>
+          </template>
+        </el-dialog>
 
       <div v-if="historyTotal > 0" class="history-pagination">
         <el-pagination
@@ -1244,6 +1293,10 @@ const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
 const historyViewMode = ref<HistoryViewMode>('flat')
+const historyDetailDialogVisible = ref(false)
+const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
+const historyDetailPageSize = 25
+const historyDetailCurrentPage = ref(1)
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1255,6 +1308,11 @@ const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
+const selectedHistoryGroupChildren = computed(() => selectedHistoryGroup.value?.children ?? [])
+const pagedHistoryDetailRows = computed(() => {
+  const start = (historyDetailCurrentPage.value - 1) * historyDetailPageSize
+  return selectedHistoryGroupChildren.value.slice(start, start + historyDetailPageSize)
+})
 
 const purifyRulesTotal = ref(0)
 
@@ -2050,6 +2108,29 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
   })
 }
 
+function openHistoryDetailDialog(row: HistoryTreeRow) {
+  if (!row.is_group) return
+  selectedHistoryGroup.value = row
+  historyDetailCurrentPage.value = 1
+  historyDetailDialogVisible.value = true
+}
+
+async function removeHistoryDetailItem(row: HistoryTreeRow) {
+  const sourceID = row.source?.id
+  if (!sourceID) return
+  await removeHistoryItem(sourceID)
+  const remainingRows = selectedHistoryGroupChildren.value.filter((item) => item.source?.id !== sourceID)
+  if (remainingRows.length === 0) {
+    historyDetailDialogVisible.value = false
+    selectedHistoryGroup.value = null
+    return
+  }
+  const maxPage = Math.max(1, Math.ceil(remainingRows.length / historyDetailPageSize))
+  if (historyDetailCurrentPage.value > maxPage) {
+    historyDetailCurrentPage.value = maxPage
+  }
+}
+
 function triggerModeText(mode?: string) {
   if (mode === 'cron') return '定时'
   if (mode === 'watch') return '监听'
@@ -2589,9 +2670,16 @@ onMounted(() => {
 .history-rule--child { padding-left: 6px; border-left: 3px solid var(--el-border-color-lighter); }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
 .history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
-.history-tree-table :deep(.el-table__placeholder) { width: 28px; }
-.history-tree-table :deep(.el-table__expand-icon) { color: var(--el-color-primary); }
-.history-tree-table :deep(.el-table__row--level-1 .history-rule__title) { font-weight: 500; }
+.history-tree-table :deep(.el-table__row) { cursor: pointer; }
+.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; }
+.history-detail-card__title { font-weight: 700; color: var(--el-text-color-primary); }
+.history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
+.detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; padding: 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 18px; background: var(--el-fill-color-extra-light); }
+.detail-dialog-summary__title { font-size: 16px; font-weight: 800; color: var(--el-text-color-primary); }
+.detail-dialog-summary__desc { margin-top: 6px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.detail-dialog-table { margin-top: 8px; }
+.detail-dialog-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-status { display: inline-flex; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; transform: rotate(-8deg); }
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
