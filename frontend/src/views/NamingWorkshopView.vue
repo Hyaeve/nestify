@@ -4,12 +4,11 @@
       <div class="workshop-shell">
         <section class="workshop-pane workshop-pane--source">
           <header class="pane-header">
-            <div>
-              <div class="pane-title">待命名文件</div>
-              <div class="pane-desc">选择文件或文件夹后，会在这里展示待处理条目。</div>
+            <div class="pane-title-row">
+              <div class="pane-title">待命名</div>
+              <div class="pane-count">{{ sortedSourceItems.length }} 项</div>
             </div>
             <div class="pane-header__tools">
-              <div class="pane-count">{{ sortedSourceItems.length }} 项</div>
               <div class="source-toolbar">
                 <el-tooltip content="添加文件" placement="top" :show-after="500">
                   <el-button class="icon-action icon-action--file" circle aria-label="添加文件" @click="openFilePicker">
@@ -54,9 +53,6 @@
               </div>
             </div>
           </header>
-
-          <input ref="fileInputRef" type="file" multiple class="native-file-input" @change="handleFilesSelected" />
-          <input ref="folderInputRef" type="file" multiple webkitdirectory directory class="native-file-input" @change="handleFolderSelected" />
 
           <div class="item-list">
             <article v-for="item in sortedSourceItems" :key="item.path" class="file-item">
@@ -137,9 +133,8 @@
 
         <section class="workshop-pane workshop-pane--result">
           <header class="pane-header pane-header--result">
-            <div>
+            <div class="pane-title-row">
               <div class="pane-title">命名结果</div>
-              <div class="pane-desc">预览或确认重命名后，会在这里展示改名前后的结果。</div>
             </div>
             <el-tooltip content="撤销" placement="top" :show-after="500">
               <el-button class="icon-action icon-action--undo" circle aria-label="撤销" @click="confirmUndo">
@@ -167,6 +162,60 @@
         </section>
       </div>
     </el-card>
+
+    <DirectoryPickerDialog v-model="folderPickerVisible" title="添加挂载目录文件夹" :initial-path="mountedPickerInitialPath" @selected="handleMountedFolderSelected" />
+
+    <el-dialog v-model="filePickerVisible" title="添加挂载目录文件" width="860px" destroy-on-close>
+      <div class="mounted-file-picker">
+        <div class="mounted-file-picker__toolbar">
+          <div class="mounted-file-picker__path">
+            <span>当前目录</span>
+            <el-tag type="info">{{ mountedCurrentPath || '未选择' }}</el-tag>
+          </div>
+          <div class="mounted-file-picker__actions">
+            <el-button size="small" :disabled="!mountedParentPath || mountedFilePickerLoading" @click="openMountedPath(mountedParentPath)">上级目录</el-button>
+            <el-button size="small" :loading="mountedFilePickerLoading" :disabled="!mountedCurrentPath" @click="reloadMountedPath">刷新</el-button>
+          </div>
+        </div>
+
+        <el-alert v-if="mountedFilePickerError" type="error" :closable="false" :title="mountedFilePickerError" />
+
+        <el-table
+          v-loading="mountedFilePickerLoading"
+          :data="mountedEntries"
+          height="420"
+          class="mounted-file-picker__table"
+          @selection-change="handleMountedFileSelectionChange"
+          @row-dblclick="handleMountedEntryDoubleClick"
+        >
+          <el-table-column type="selection" width="48" :selectable="isMountedFileSelectable" />
+          <el-table-column label="名称" min-width="360">
+            <template #default="scope">
+              <div :class="['mounted-entry-name', { 'is-folder': scope.row.is_dir }]">
+                <span :class="['mounted-entry-name__icon', scope.row.is_dir ? 'is-folder' : 'is-file']">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path v-if="scope.row.is_dir" d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
+                    <path v-else d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
+                    <path v-if="!scope.row.is_dir" d="M13.55 4.05v5.05h5.05" />
+                  </svg>
+                </span>
+                <span>{{ scope.row.name }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="类型" width="120">
+            <template #default="scope">{{ scope.row.is_dir ? '文件夹' : resolveFileType(scope.row.name, false) }}</template>
+          </el-table-column>
+          <el-table-column label="修改时间" width="190">
+            <template #default="scope">{{ formatMountedTimestamp(scope.row.modified_at) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="filePickerVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="mountedSelectedFiles.length === 0" @click="appendSelectedMountedFiles">添加所选文件</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="filterDialogVisible" title="筛选器" width="560px" destroy-on-close>
       <div class="folder-options">
@@ -398,6 +447,9 @@
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
+import { browseDirectories, fetchBrowseRoots, type DirectoryEntry } from '../api/paths'
+
 type SourceItemKind = 'file' | 'folder'
 type SortBy = 'name' | 'type' | 'modifiedAt'
 type SortOrder = 'asc' | 'desc'
@@ -420,6 +472,8 @@ interface AddedNamingRule {
   description: string
 }
 
+interface MountedEntry extends DirectoryEntry {}
+
 const sortBy = ref<SortBy>('name')
 const sortOrder = ref<SortOrder>('asc')
 const filterDialogVisible = ref(false)
@@ -429,9 +483,15 @@ const resultItems = ref<SourceItem[]>([])
 const resultMode = ref<ResultMode>('preview')
 const activeRuleCategory = ref<RuleCategoryKey>('insert')
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const folderInputRef = ref<HTMLInputElement | null>(null)
 const sourceItems = ref<SourceItem[]>([])
+const filePickerVisible = ref(false)
+const folderPickerVisible = ref(false)
+const mountedCurrentPath = ref('')
+const mountedParentPath = ref('')
+const mountedEntries = ref<MountedEntry[]>([])
+const mountedSelectedFiles = ref<MountedEntry[]>([])
+const mountedFilePickerLoading = ref(false)
+const mountedFilePickerError = ref('')
 
 const filterDraft = reactive({
   includeFiles: true,
@@ -527,56 +587,125 @@ const sortedSourceItems = computed(() => {
 
 const resultModeLabel = computed(() => (resultMode.value === 'preview' ? '预览' : '已命名'))
 const activeRuleCategoryLabel = computed(() => ruleCategories.find((item) => item.key === activeRuleCategory.value)?.label ?? '插入')
+const mountedPickerInitialPath = computed(() => mountedCurrentPath.value || '')
 
 function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
 }
 
-function openFilePicker() {
-  fileInputRef.value?.click()
-}
-
-function openFolderPicker() {
-  folderInputRef.value?.click()
-}
-
-function handleFilesSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  appendSelectedFiles(Array.from(input.files ?? []), 'file')
-  input.value = ''
-}
-
-function handleFolderSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  appendSelectedFiles(Array.from(input.files ?? []), 'folder')
-  input.value = ''
-}
-
-function appendSelectedFiles(files: File[], sourceKind: SourceItemKind) {
-  if (!files.length) {
+async function openFilePicker() {
+  filePickerVisible.value = true
+  if (!mountedCurrentPath.value) {
+    await openDefaultMountedPath()
     return
   }
 
-  const nextItems = files.map((file) => createSourceItemFromFile(file, sourceKind))
-  const existingPaths = new Set(sourceItems.value.map((item) => item.path))
-  sourceItems.value = [...sourceItems.value, ...nextItems.filter((item) => !existingPaths.has(item.path))]
-  resultItems.value = []
-  ElMessage.success(`已添加 ${nextItems.length} 个待命名条目`)
+  await openMountedPath(mountedCurrentPath.value)
 }
 
-function createSourceItemFromFile(file: File, sourceKind: SourceItemKind): SourceItem {
-  const relativePath = file.webkitRelativePath || file.name
-  const isFolderImport = sourceKind === 'folder'
-  const path = isFolderImport ? relativePath : file.name
-  const name = isFolderImport ? relativePath.split('/').pop() || file.name : file.name
+function openFolderPicker() {
+  folderPickerVisible.value = true
+}
 
+async function openDefaultMountedPath() {
+  mountedFilePickerLoading.value = true
+  mountedFilePickerError.value = ''
+
+  try {
+    const response = await fetchBrowseRoots()
+    const rootPath = response.data?.items?.[0]?.path ?? ''
+    if (!rootPath) {
+      mountedEntries.value = []
+      mountedFilePickerError.value = '未配置可选择的挂载目录'
+      return
+    }
+
+    await openMountedPath(rootPath)
+  } catch (error) {
+    mountedFilePickerError.value = error instanceof Error ? error.message : '挂载目录加载失败'
+  } finally {
+    mountedFilePickerLoading.value = false
+  }
+}
+
+async function openMountedPath(path: string) {
+  const targetPath = path.trim()
+  if (!targetPath) return
+
+  mountedFilePickerLoading.value = true
+  mountedFilePickerError.value = ''
+  mountedSelectedFiles.value = []
+
+  try {
+    const response = await browseDirectories(targetPath)
+    mountedCurrentPath.value = response.data?.current_path ?? targetPath
+    mountedParentPath.value = response.data?.parent_path ?? ''
+    mountedEntries.value = response.data?.entries ?? []
+  } catch (error) {
+    mountedFilePickerError.value = error instanceof Error ? error.message : '目录浏览失败'
+  } finally {
+    mountedFilePickerLoading.value = false
+  }
+}
+
+async function reloadMountedPath() {
+  if (!mountedCurrentPath.value) return
+  await openMountedPath(mountedCurrentPath.value)
+}
+
+function handleMountedFileSelectionChange(selection: MountedEntry[]) {
+  mountedSelectedFiles.value = selection.filter((item) => !item.is_dir)
+}
+
+function isMountedFileSelectable(row: MountedEntry) {
+  return !row.is_dir
+}
+
+async function handleMountedEntryDoubleClick(row: MountedEntry) {
+  if (!row.is_dir) return
+  await openMountedPath(row.path)
+}
+
+function appendSelectedMountedFiles() {
+  appendSourceItems(mountedSelectedFiles.value.map((entry) => createSourceItemFromMountedEntry(entry)))
+  filePickerVisible.value = false
+}
+
+function handleMountedFolderSelected(path: string) {
+  const name = getPathName(path)
+  appendSourceItems([
+    {
+      name,
+      nextName: name,
+      path,
+      type: '文件夹',
+      modifiedAt: '—',
+      kind: 'folder',
+    },
+  ])
+  mountedCurrentPath.value = path
+}
+
+function appendSourceItems(nextItems: SourceItem[]) {
+  if (!nextItems.length) {
+    return
+  }
+
+  const existingPaths = new Set(sourceItems.value.map((item) => item.path))
+  const uniqueItems = nextItems.filter((item) => !existingPaths.has(item.path))
+  sourceItems.value = [...sourceItems.value, ...uniqueItems]
+  resultItems.value = []
+  ElMessage.success(`已添加 ${uniqueItems.length} 个待命名条目`)
+}
+
+function createSourceItemFromMountedEntry(entry: MountedEntry): SourceItem {
   return {
-    name,
-    nextName: name,
-    path,
-    type: resolveFileType(name, isFolderImport),
-    modifiedAt: formatLocalDateTime(file.lastModified),
-    kind: 'file',
+    name: entry.name,
+    nextName: entry.name,
+    path: entry.path,
+    type: resolveFileType(entry.name, false),
+    modifiedAt: formatMountedTimestamp(entry.modified_at),
+    kind: entry.is_dir ? 'folder' : 'file',
   }
 }
 
@@ -589,20 +718,16 @@ function resolveFileType(name: string, isFolderImport: boolean) {
   return extension && extension !== name ? extension.toUpperCase() : '文件'
 }
 
-function formatLocalDateTime(timestamp: number) {
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) {
-    return '—'
-  }
+function formatMountedTimestamp(value: string) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
 
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).replace(/\//g, '-')
+function getPathName(path: string) {
+  const normalizedPath = path.replace(/\\/g, '/').replace(/\/+$/, '')
+  return normalizedPath.split('/').pop() || path
 }
 
 function handlePreview() {
@@ -738,32 +863,31 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .pane-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 92px;
+  min-height: 32px;
   margin-bottom: 16px;
 }
 
 .pane-header__tools {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
   flex-shrink: 0;
+}
+
+.pane-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .pane-title {
   color: var(--text-primary);
   font-size: 17px;
   font-weight: 800;
-}
-
-.pane-desc {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .pane-count {
@@ -782,11 +906,81 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: nowrap;
-  min-height: 42px;
+  margin-top: 0;
 }
 
-.native-file-input {
-  display: none;
+.mounted-file-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mounted-file-picker__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.mounted-file-picker__path,
+.mounted-file-picker__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mounted-file-picker__path span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.mounted-file-picker__table {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.mounted-entry-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mounted-entry-name.is-folder {
+  cursor: pointer;
+}
+
+.mounted-entry-name__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.mounted-entry-name__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mounted-entry-name__icon.is-folder {
+  color: #b7791f;
+  background: rgba(245, 210, 123, 0.18);
+}
+
+.mounted-entry-name__icon.is-file {
+  color: #2f6fd6;
+  background: rgba(64, 158, 255, 0.1);
 }
 
 .icon-action,
