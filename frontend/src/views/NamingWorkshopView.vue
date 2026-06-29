@@ -8,51 +8,52 @@
               <div class="pane-title">待命名文件</div>
               <div class="pane-desc">选择文件或文件夹后，会在这里展示待处理条目。</div>
             </div>
-            <div class="pane-count">{{ sortedSourceItems.length }} 项</div>
+            <div class="pane-header__tools">
+              <div class="pane-count">{{ sortedSourceItems.length }} 项</div>
+              <div class="source-toolbar">
+                <el-tooltip content="添加文件" placement="top" :show-after="500">
+                  <el-button class="icon-action icon-action--file" circle aria-label="添加文件" @click="openFilePicker">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
+                      <path d="M7.2 3.8h6.65L18.8 8.7v9.65a2.05 2.05 0 0 1-2.05 2.05H7.2a2.05 2.05 0 0 1-2.05-2.05V5.85A2.05 2.05 0 0 1 7.2 3.8Z" />
+                      <path d="M13.65 3.95v4.9h4.9" />
+                      <path d="M12 11.25v5.5" />
+                      <path d="M9.25 14h5.5" />
+                    </svg>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="添加文件夹" placement="top" :show-after="500">
+                  <el-button class="icon-action icon-action--folder" circle aria-label="添加文件夹" @click="openFolderPicker">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
+                      <path d="M3.9 7.1a2 2 0 0 1 2-2h4.05l1.65 2h6.5a2 2 0 0 1 2 2v1.05" />
+                      <path d="M4.25 10.35h15.5a1.75 1.75 0 0 1 1.72 2.1l-.9 4.48a2.55 2.55 0 0 1-2.5 2.05H5.95a2.55 2.55 0 0 1-2.5-2.08l-.88-4.52a1.75 1.75 0 0 1 1.68-2.03Z" />
+                      <path d="M12 12.7v4.2" />
+                      <path d="M9.9 14.8h4.2" />
+                    </svg>
+                  </el-button>
+                </el-tooltip>
+                <span class="toolbar-divider"></span>
+                <el-tooltip content="排序字段" placement="top" :show-after="500">
+                  <el-select v-model="sortBy" class="sort-select" size="small" aria-label="排序字段">
+                    <el-option label="名称" value="name" />
+                    <el-option label="文件类型" value="type" />
+                    <el-option label="修改时间" value="modifiedAt" />
+                  </el-select>
+                </el-tooltip>
+                <el-tooltip :content="sortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="500">
+                  <el-button class="icon-action icon-action--sort" circle :aria-label="sortOrder === 'asc' ? '正序' : '倒序'" @click="toggleSortOrder">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
+                      <path d="M7 5.2v13.6" />
+                      <path v-if="sortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
+                      <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
+                      <path d="M13 7h7" />
+                      <path d="M13 12h5.2" />
+                      <path d="M13 17h3.4" />
+                    </svg>
+                  </el-button>
+                </el-tooltip>
+              </div>
+            </div>
           </header>
-
-          <div class="source-toolbar">
-            <el-tooltip content="添加文件" placement="top" :show-after="500">
-              <el-button class="icon-action icon-action--file" circle aria-label="添加文件" @click="openFilePicker">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                  <path d="M7.2 3.8h6.65L18.8 8.7v9.65a2.05 2.05 0 0 1-2.05 2.05H7.2a2.05 2.05 0 0 1-2.05-2.05V5.85A2.05 2.05 0 0 1 7.2 3.8Z" />
-                  <path d="M13.65 3.95v4.9h4.9" />
-                  <path d="M12 11.25v5.5" />
-                  <path d="M9.25 14h5.5" />
-                </svg>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="添加文件夹" placement="top" :show-after="500">
-              <el-button class="icon-action icon-action--folder" circle aria-label="添加文件夹" @click="openFolderPicker">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                  <path d="M3.9 7.1a2 2 0 0 1 2-2h4.05l1.65 2h6.5a2 2 0 0 1 2 2v1.05" />
-                  <path d="M4.25 10.35h15.5a1.75 1.75 0 0 1 1.72 2.1l-.9 4.48a2.55 2.55 0 0 1-2.5 2.05H5.95a2.55 2.55 0 0 1-2.5-2.08l-.88-4.52a1.75 1.75 0 0 1 1.68-2.03Z" />
-                  <path d="M12 12.7v4.2" />
-                  <path d="M9.9 14.8h4.2" />
-                </svg>
-              </el-button>
-            </el-tooltip>
-            <span class="toolbar-divider"></span>
-            <el-tooltip content="排序字段" placement="top" :show-after="500">
-              <el-select v-model="sortBy" class="sort-select" size="small" aria-label="排序字段">
-                <el-option label="名称" value="name" />
-                <el-option label="文件类型" value="type" />
-                <el-option label="修改时间" value="modifiedAt" />
-              </el-select>
-            </el-tooltip>
-            <el-tooltip :content="sortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="500">
-              <el-button class="icon-action icon-action--sort" circle :aria-label="sortOrder === 'asc' ? '正序' : '倒序'" @click="toggleSortOrder">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                  <path d="M7 5.2v13.6" />
-                  <path v-if="sortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
-                  <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
-                  <path d="M13 7h7" />
-                  <path d="M13 12h5.2" />
-                  <path d="M13 17h3.4" />
-                </svg>
-              </el-button>
-            </el-tooltip>
-          </div>
 
           <input ref="fileInputRef" type="file" multiple class="native-file-input" @change="handleFilesSelected" />
           <input ref="folderInputRef" type="file" multiple webkitdirectory directory class="native-file-input" @change="handleFolderSelected" />
@@ -150,7 +151,6 @@
               </el-button>
             </el-tooltip>
           </header>
-          <div class="result-toolbar-spacer" aria-hidden="true"></div>
 
           <div v-if="resultItems.length" class="result-list">
             <article v-for="item in resultItems" :key="item.path" class="result-item">
@@ -740,8 +740,17 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
+  gap: 18px;
+  min-height: 92px;
   margin-bottom: 16px;
+}
+
+.pane-header__tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .pane-title {
@@ -770,15 +779,10 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 .source-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
-  flex-wrap: wrap;
-  min-height: 56px;
-  margin-bottom: 16px;
-}
-
-.result-toolbar-spacer {
-  min-height: 56px;
-  margin-bottom: 16px;
+  flex-wrap: nowrap;
+  min-height: 42px;
 }
 
 .native-file-input {
@@ -934,16 +938,14 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .rail-actions {
   display: flex;
+  width: 100%;
   flex-direction: column;
+  align-items: center;
   gap: 12px;
 }
 
-.rail-actions--top {
-  margin-bottom: 2px;
-}
-
-.rail-actions--bottom {
-  margin-top: 2px;
+.rail-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .rail-button--filter:not(.is-disabled):hover {
