@@ -35,14 +35,15 @@
           <el-menu-item index="/naming-workshop">
             <el-icon class="nav-icon nav-icon--naming">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__badge" d="M4.5 6.4h8.9l2.1 2.1v9.1a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2Z" />
-                <path class="nav-icon__badge-fold" d="M13.35 6.55v2.25h2.25" />
-                <path class="nav-icon__letter" d="M7.25 16.2V10.9l4.25 5.3v-5.3" />
-                <path class="nav-icon__hammer" d="M15.35 5.1 18.9 8.65" />
-                <path class="nav-icon__hammer" d="M17.25 4.2 19.8 6.75" />
-                <path class="nav-icon__hammer" d="M16.2 6.15 14.25 8.1" />
-                <path class="nav-icon__spark" d="M18.55 13.05v4.4" />
-                <path class="nav-icon__spark" d="M16.35 15.25h4.4" />
+                <path class="nav-icon__nameplate" d="M4.35 8.05c0-1.3 1.05-2.35 2.35-2.35h7.25l3.7 3.68v6.57c0 1.3-1.05 2.35-2.35 2.35H6.7a2.35 2.35 0 0 1-2.35-2.35Z" />
+                <path class="nav-icon__fold" d="M13.75 5.85v3.78h3.72" />
+                <path class="nav-icon__text" d="M7.45 12.05h4.25" />
+                <path class="nav-icon__text" d="M7.45 15.05h3.25" />
+                <path class="nav-icon__pencil-body" d="M13.15 16.95 18.9 11.2a1.35 1.35 0 0 1 1.9 1.9l-5.75 5.75-2.45.55Z" />
+                <path class="nav-icon__pencil-tip" d="m17.75 12.35 1.9 1.9" />
+                <path class="nav-icon__gear" d="M7.1 4.2v-1" />
+                <path class="nav-icon__gear" d="M4.95 5.1 4.2 4.35" />
+                <path class="nav-icon__gear" d="M3.95 7.25h-1" />
               </svg>
             </el-icon>
             <span>命名工坊</span>
@@ -655,40 +656,39 @@ async function handleLogout() {
 }
 
 .nav-icon--naming svg {
-  width: 28px;
-  height: 28px;
-  opacity: 0.88;
+  width: 29px;
+  height: 29px;
+  opacity: 0.9;
 }
 
-.nav-icon--naming .nav-icon__badge,
-.nav-icon--naming .nav-icon__badge-fold,
-.nav-icon--naming .nav-icon__letter,
-.nav-icon--naming .nav-icon__hammer,
-.nav-icon--naming .nav-icon__spark {
+.nav-icon--naming .nav-icon__nameplate,
+.nav-icon--naming .nav-icon__fold,
+.nav-icon--naming .nav-icon__text,
+.nav-icon--naming .nav-icon__pencil-body,
+.nav-icon--naming .nav-icon__pencil-tip,
+.nav-icon--naming .nav-icon__gear {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.nav-icon--naming .nav-icon__badge {
+.nav-icon--naming .nav-icon__nameplate {
   stroke-width: 1.55;
 }
 
-.nav-icon--naming .nav-icon__badge-fold {
+.nav-icon--naming .nav-icon__fold,
+.nav-icon--naming .nav-icon__text {
   stroke-width: 1.35;
 }
 
-.nav-icon--naming .nav-icon__letter {
+.nav-icon--naming .nav-icon__pencil-body,
+.nav-icon--naming .nav-icon__pencil-tip {
   stroke-width: 1.65;
 }
 
-.nav-icon--naming .nav-icon__hammer {
-  stroke-width: 1.8;
-}
-
-.nav-icon--naming .nav-icon__spark {
-  stroke-width: 1.55;
+.nav-icon--naming .nav-icon__gear {
+  stroke-width: 1.45;
 }
 
 :deep(.el-menu-item.is-active) {

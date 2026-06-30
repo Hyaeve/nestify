@@ -6,7 +6,7 @@
           <header class="pane-header">
             <div class="pane-title-row">
               <div class="pane-title">待命名</div>
-              <div class="pane-count">{{ sortedSourceItems.length }} 项</div>
+              <div class="pane-count">{{ effectiveSourceItems.length }} 项</div>
             </div>
             <div class="pane-header__tools">
               <div class="source-toolbar">
@@ -55,35 +55,64 @@
           </header>
 
           <div class="item-list">
-            <article v-for="item in sortedSourceItems" :key="item.path" class="file-item">
-              <span :class="['file-item__icon', `file-item__icon--${item.kind}`]">
-                <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
-                </svg>
-                <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
-                  <path d="M13.55 4.05v5.05h5.05" />
-                </svg>
-              </span>
-              <div class="file-item__meta">
-                <div class="file-item__name">{{ item.name }}</div>
-                <div class="file-item__path">{{ item.path }}</div>
-              </div>
-              <div class="file-item__extra">
-                <span>{{ item.type }}</span>
-                <span>{{ item.modifiedAt }}</span>
-              </div>
-              <el-tooltip content="移除" placement="top" :show-after="300">
-                <el-button class="line-delete-button file-item__delete" text aria-label="移除待命名条目" @click="removeSourceItem(item.path)">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M5.2 6.8h13.6" />
-                    <path d="M9.2 6.8V5.2h5.6v1.6" />
-                    <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
-                    <path d="M10.8 11.8v4.6" />
-                    <path d="M13.2 11.8v4.6" />
+            <article v-for="item in sortedSourceItems" :key="item.path" :class="['file-item', { 'file-item--folder': item.kind === 'folder', 'is-expanded': item.expanded }]">
+              <div class="file-item__main">
+                <el-button v-if="item.kind === 'folder'" class="file-item__expand" text :loading="item.loadingChildren" :aria-label="item.expanded ? '收起文件夹' : '展开文件夹'" @click="toggleSourceFolder(item)">
+                  <svg v-if="!item.loadingChildren" viewBox="0 0 24 24" aria-hidden="true">
+                    <path :d="item.expanded ? 'm7.2 14.2 4.8-4.8 4.8 4.8' : 'm8.2 7.2 4.8 4.8-4.8 4.8'" />
                   </svg>
                 </el-button>
-              </el-tooltip>
+                <span v-else class="file-item__expand-placeholder"></span>
+                <span :class="['file-item__icon', `file-item__icon--${item.kind}`]">
+                  <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
+                    <path d="M13.55 4.05v5.05h5.05" />
+                  </svg>
+                </span>
+                <div class="file-item__meta">
+                  <div class="file-item__name">{{ item.name }}</div>
+                  <div class="file-item__path">{{ item.path }}</div>
+                </div>
+                <div class="file-item__extra">
+                  <span>{{ item.kind === 'folder' && item.childrenLoaded ? `${selectedFolderChildCount(item)} / ${folderChildFileCount(item)} 个文件` : item.type }}</span>
+                  <span>{{ item.modifiedAt }}</span>
+                </div>
+                <el-tooltip content="移除" placement="top" :show-after="300">
+                  <el-button class="line-delete-button file-item__delete" text aria-label="移除待命名条目" @click="removeSourceItem(item.path)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5.2 6.8h13.6" />
+                      <path d="M9.2 6.8V5.2h5.6v1.6" />
+                      <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
+                      <path d="M10.8 11.8v4.6" />
+                      <path d="M13.2 11.8v4.6" />
+                    </svg>
+                  </el-button>
+                </el-tooltip>
+              </div>
+
+              <div v-if="item.kind === 'folder' && item.expanded" class="folder-children">
+                <el-empty v-if="item.childrenLoaded && !folderChildFileCount(item)" description="该文件夹下没有可选择的文件" :image-size="56" />
+                <label v-for="child in sortedFolderChildren(item)" :key="child.path" class="folder-child-item">
+                  <el-checkbox v-model="child.selected" @change="clearNamingResult" />
+                  <span :class="['folder-child-item__icon', `folder-child-item__icon--${child.kind}`]">
+                    <svg v-if="child.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
+                      <path d="M13.55 4.05v5.05h5.05" />
+                    </svg>
+                  </span>
+                  <span class="folder-child-item__meta">
+                    <span class="folder-child-item__name">{{ child.name }}</span>
+                    <span class="folder-child-item__path">{{ child.path }}</span>
+                  </span>
+                  <span class="folder-child-item__type">{{ child.type }}</span>
+                </label>
+              </div>
             </article>
           </div>
         </section>
@@ -305,10 +334,6 @@
                   <el-input-number v-model="insertRuleDraft.index" :min="1" :max="999" size="small" controls-position="right" />
                   <span>个计数点位置开始插入</span>
                 </div>
-                <div class="insert-config__checks">
-                  <el-checkbox v-model="insertRuleDraft.fromRight">从右往左</el-checkbox>
-                </div>
-                <div class="insert-config__hint">默认不勾选时按从左到右计数，勾选后按从右到左计数确定插入点。</div>
               </div>
 
               <el-form-item label="自定义插入字段">
@@ -316,7 +341,10 @@
               </el-form-item>
 
               <el-form-item label="">
-                <el-checkbox v-model="insertRuleDraft.ignoreExtension">忽略扩展名</el-checkbox>
+                <div class="insert-config__checks insert-config__checks--below">
+                  <el-checkbox v-model="insertRuleDraft.fromRight">从右往左</el-checkbox>
+                  <el-checkbox v-model="insertRuleDraft.ignoreExtension">忽略扩展名</el-checkbox>
+                </div>
               </el-form-item>
             </el-form>
           </div>
@@ -516,6 +544,11 @@ interface SourceItem {
   type: string
   modifiedAt: string
   kind: SourceItemKind
+  selected?: boolean
+  expanded?: boolean
+  loadingChildren?: boolean
+  childrenLoaded?: boolean
+  children?: SourceItem[]
 }
 
 interface AddedNamingRule {
@@ -631,12 +664,22 @@ const nextRuleSetID = ref(1)
 const addedRules = ref<AddedNamingRule[]>([])
 const nextAddedRuleID = ref(1)
 
-const sortedSourceItems = computed(() => {
-  const items = [...sourceItems.value]
-  const direction = sortOrder.value === 'asc' ? 1 : -1
+const sortedSourceItems = computed(() => sortSourceItems(sourceItems.value))
 
-  return items.sort((left, right) => String(left[sortBy.value]).localeCompare(String(right[sortBy.value]), 'zh-CN') * direction)
+const effectiveSourceItems = computed(() => {
+  return sortedSourceItems.value.flatMap((item) => {
+    if (item.kind === 'folder') {
+      return item.childrenLoaded ? sortSourceItems(item.children ?? []).filter((child) => child.selected) : []
+    }
+
+    return [item]
+  })
 })
+
+function sortSourceItems(items: SourceItem[]) {
+  const direction = sortOrder.value === 'asc' ? 1 : -1
+  return [...items].sort((left, right) => String(left[sortBy.value]).localeCompare(String(right[sortBy.value]), 'zh-CN') * direction)
+}
 
 const resultModeLabel = computed(() => (resultMode.value === 'preview' ? '预览' : '已命名'))
 const activeRuleCategoryLabel = computed(() => ruleCategories.find((item) => item.key === activeRuleCategory.value)?.label ?? '插入')
@@ -735,9 +778,56 @@ function handleMountedFolderSelected(path: string) {
       type: '文件夹',
       modifiedAt: '—',
       kind: 'folder',
+      expanded: false,
+      loadingChildren: false,
+      childrenLoaded: false,
+      children: [],
     },
   ])
   mountedCurrentPath.value = path
+}
+
+async function toggleSourceFolder(item: SourceItem) {
+  if (item.kind !== 'folder') return
+
+  item.expanded = !item.expanded
+  if (!item.expanded || item.childrenLoaded || item.loadingChildren) {
+    return
+  }
+
+  item.loadingChildren = true
+  try {
+    const response = await browseDirectories(item.path)
+    item.children = (response.data?.entries ?? [])
+      .filter((entry) => !entry.is_dir)
+      .map((entry) => ({
+        ...createSourceItemFromMountedEntry(entry),
+        selected: true,
+      }))
+    item.childrenLoaded = true
+    clearNamingResult()
+  } catch (error) {
+    item.expanded = false
+    ElMessage.error(error instanceof Error ? error.message : '文件夹展开失败')
+  } finally {
+    item.loadingChildren = false
+  }
+}
+
+function sortedFolderChildren(item: SourceItem) {
+  return sortSourceItems(item.children ?? [])
+}
+
+function folderChildFileCount(item: SourceItem) {
+  return (item.children ?? []).length
+}
+
+function selectedFolderChildCount(item: SourceItem) {
+  return (item.children ?? []).filter((child) => child.selected).length
+}
+
+function clearNamingResult() {
+  clearNamingResult()
 }
 
 function appendSourceItems(nextItems: SourceItem[]) {
@@ -785,12 +875,24 @@ function getPathName(path: string) {
 }
 
 function handlePreview() {
+  const items = effectiveSourceItems.value
+  if (!items.length) {
+    ElMessage.warning('请先展开文件夹并选择需要重命名的文件')
+    return
+  }
+
   resultMode.value = 'preview'
-  resultItems.value = sortedSourceItems.value.map((item) => ({ ...item }))
+  resultItems.value = items.map((item) => ({ ...item }))
   ElMessage.success('已生成命名预览')
 }
 
 async function confirmRename() {
+  const items = effectiveSourceItems.value
+  if (!items.length) {
+    ElMessage.warning('请先展开文件夹并选择需要重命名的文件')
+    return
+  }
+
   try {
     await ElMessageBox.confirm('确认执行本次重命名？当前仅完成页面流程占位，实际文件操作将在后续接入。', '确认重命名', {
       type: 'warning',
@@ -799,7 +901,7 @@ async function confirmRename() {
     })
 
     resultMode.value = 'renamed'
-    resultItems.value = sortedSourceItems.value.map((item) => ({ ...item }))
+    resultItems.value = items.map((item) => ({ ...item }))
     ElMessage.success('已确认重命名占位流程，后续会记录为“命名”任务')
   } catch (error) {
     if (error !== 'cancel') {
@@ -1199,11 +1301,52 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.file-item:hover,
+.file-item--folder {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.file-item__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
 .result-item:hover {
   border-color: rgba(64, 158, 255, 0.32);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
   transform: translateY(-1px);
+}
+
+.file-item__expand,
+.file-item__expand-placeholder {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+
+.file-item__expand {
+  color: #64748b;
+  border-radius: 999px;
+}
+
+.file-item__expand svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.file-item__expand:not(.is-disabled):hover {
+  color: #2f6fd6;
+  background: rgba(64, 158, 255, 0.1);
 }
 
 .file-item__icon {
@@ -1303,6 +1446,89 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .file-item__delete {
   flex-shrink: 0;
+}
+
+.folder-children {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 36px;
+  padding: 10px 0 0 14px;
+  border-left: 1px dashed rgba(148, 163, 184, 0.32);
+}
+
+.folder-child-item {
+  display: grid;
+  grid-template-columns: 28px 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(226, 232, 240, 0.72);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.66);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.folder-child-item:hover {
+  border-color: rgba(64, 158, 255, 0.28);
+  background: rgba(237, 247, 255, 0.78);
+}
+
+.folder-child-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.folder-child-item__icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.folder-child-item__icon--file {
+  color: #2f6fd6;
+  background: rgba(64, 158, 255, 0.1);
+}
+
+.folder-child-item__icon--folder {
+  color: #b7791f;
+  background: rgba(245, 210, 123, 0.18);
+}
+
+.folder-child-item__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.folder-child-item__name {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.folder-child-item__path {
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-child-item__type {
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .control-rail {
