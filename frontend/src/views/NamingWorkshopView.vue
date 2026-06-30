@@ -73,6 +73,17 @@
                 <span>{{ item.type }}</span>
                 <span>{{ item.modifiedAt }}</span>
               </div>
+              <el-tooltip content="移除" placement="top" :show-after="300">
+                <el-button class="line-delete-button file-item__delete" text aria-label="移除待命名条目" @click="removeSourceItem(item.path)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5.2 6.8h13.6" />
+                    <path d="M9.2 6.8V5.2h5.6v1.6" />
+                    <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
+                    <path d="M10.8 11.8v4.6" />
+                    <path d="M13.2 11.8v4.6" />
+                  </svg>
+                </el-button>
+              </el-tooltip>
             </article>
           </div>
         </section>
@@ -86,6 +97,17 @@
                   <path d="M6.8 10.2h10.4" />
                   <path d="M9.7 15h4.6" />
                   <path d="M11.1 15v3.4l1.8.9V15" />
+                </svg>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip content="规则集" placement="right" :show-after="500">
+              <el-button class="rail-button rail-button--set" circle aria-label="规则集" @click="openRuleSetDialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
+                  <path d="M5.2 5.2h13.6v4.1H5.2V5.2Z" />
+                  <path d="M5.2 12.1h13.6v6.7H5.2v-6.7Z" />
+                  <path d="M8 7.25h4.8" />
+                  <path d="M8 14.7h5.7" />
+                  <path d="M15.9 15.7h2.4" />
                 </svg>
               </el-button>
             </el-tooltip>
@@ -271,19 +293,7 @@
 
         <section class="rule-config-panel">
           <header class="rule-config-panel__header">
-            <div>
-              <div class="rule-config-panel__title">配置：{{ activeRuleCategoryLabel }}</div>
-              <div class="rule-config-panel__desc">当前先完成规则栏目与“插入”基础配置，其他栏目后续逐步接入。</div>
-            </div>
-            <el-button class="rule-set-button" @click="ruleSetDialogVisible = true">
-              <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                <path d="M5.2 5.2h13.6v4.2H5.2V5.2Z" />
-                <path d="M5.2 12.1h13.6v6.7H5.2v-6.7Z" />
-                <path d="M8 14.7h5.7" />
-                <path d="M8 16.8h3.8" />
-              </svg>
-              规则集
-            </el-button>
+            <div class="rule-config-panel__title">配置：{{ activeRuleCategoryLabel }}</div>
           </header>
 
           <div v-if="activeRuleCategory === 'insert'" class="insert-config">
@@ -291,11 +301,14 @@
               <div class="insert-config__box">
                 <div class="insert-config__box-title">插入位置：</div>
                 <div class="insert-position-line">
-                  <span>从文件名左侧第</span>
+                  <span>从文件名{{ insertRuleDraft.fromRight ? '右侧' : '左侧' }}第</span>
                   <el-input-number v-model="insertRuleDraft.index" :min="1" :max="999" size="small" controls-position="right" />
                   <span>个计数点位置开始插入</span>
                 </div>
-                <div class="insert-config__hint">默认按从左到右计数，位置数值用于确定文件名中的插入点。</div>
+                <div class="insert-config__checks">
+                  <el-checkbox v-model="insertRuleDraft.fromRight">从右往左</el-checkbox>
+                </div>
+                <div class="insert-config__hint">默认不勾选时按从左到右计数，勾选后按从右到左计数确定插入点。</div>
               </div>
 
               <el-form-item label="自定义插入字段">
@@ -377,11 +390,22 @@
 
           <section class="added-rules-panel">
             <header class="added-rules-panel__header">
-              <div>
+              <div class="added-rules-panel__title-row">
                 <div class="added-rules-panel__title">已添加规则</div>
-                <div class="added-rules-panel__desc">当前批量重命名会按添加顺序依次执行，每条规则的具体配置都会保留在这里。</div>
+                <span class="added-rules-panel__count">{{ addedRules.length }} 条</span>
               </div>
-              <span class="added-rules-panel__count">{{ addedRules.length }} 条</span>
+              <el-button class="create-rule-set-button" :disabled="addedRules.length === 0" @click="createRuleSetFromAddedRules">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
+                  <path d="M5.2 6.1h8.2" />
+                  <path d="M5.2 10.4h6.3" />
+                  <path d="M5.2 14.7h5.1" />
+                  <path d="M15.6 5.4v6.2" />
+                  <path d="M12.5 8.5h6.2" />
+                  <path d="M13.2 15.2h5.6" />
+                  <path d="M13.2 18.5h3.8" />
+                </svg>
+                创建规则集
+              </el-button>
             </header>
 
             <el-empty v-if="addedRules.length === 0" description="暂未添加规则" :image-size="72" />
@@ -392,6 +416,17 @@
                   <div class="added-rule-item__title">{{ rule.label }}</div>
                   <div class="added-rule-item__desc">{{ rule.description }}</div>
                 </div>
+                <el-tooltip content="删除规则" placement="top" :show-after="300">
+                  <el-button class="line-delete-button added-rule-item__delete" text aria-label="删除已添加规则" @click="removeAddedRule(rule.id)">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5.2 6.8h13.6" />
+                      <path d="M9.2 6.8V5.2h5.6v1.6" />
+                      <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
+                      <path d="M10.8 11.8v4.6" />
+                      <path d="M13.2 11.8v4.6" />
+                    </svg>
+                  </el-button>
+                </el-tooltip>
               </article>
             </div>
           </section>
@@ -403,41 +438,59 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="ruleSetDialogVisible" title="规则集" width="720px" destroy-on-close>
+    <el-dialog v-model="ruleSetDialogVisible" title="规则集" width="820px" destroy-on-close>
       <div class="rule-set-dialog">
-        <div class="rule-set-dialog__toolbar">
-          <el-input v-model="ruleSetDraft.name" placeholder="自定义规则集名称" />
-          <el-button type="primary" @click="createRuleSet">创建规则集</el-button>
-          <el-button @click="applyRuleSet">应用规则集</el-button>
-        </div>
-        <div class="rule-set-dialog__hint">规则从上到下依次执行，可通过左侧拖拽手柄调整顺序。</div>
-        <div class="rule-set-list">
-          <article v-for="(item, index) in ruleSetRules" :key="item.id" class="rule-set-item">
-            <span class="rule-set-item__drag" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path d="M8 7h.01" />
-                <path d="M8 12h.01" />
-                <path d="M8 17h.01" />
-                <path d="M14 7h.01" />
-                <path d="M14 12h.01" />
-                <path d="M14 17h.01" />
-              </svg>
-            </span>
-            <span class="rule-set-item__order">{{ index + 1 }}</span>
-            <div class="rule-set-item__meta">
-              <div class="rule-set-item__title">{{ item.label }}</div>
-              <div class="rule-set-item__desc">{{ item.description }}</div>
+        <el-empty v-if="namingRuleSets.length === 0" description="暂未创建规则集，请先在添加规则窗口中创建" :image-size="88" />
+
+        <div v-else class="rule-set-manager">
+          <aside class="rule-set-manager__list" aria-label="已创建规则集">
+            <button
+              v-for="set in namingRuleSets"
+              :key="set.id"
+              type="button"
+              :class="['rule-set-card', { 'is-active': selectedRuleSetID === set.id }]"
+              @click="selectRuleSet(set.id)"
+            >
+              <span class="rule-set-card__name">{{ set.name }}</span>
+              <span class="rule-set-card__count">{{ set.rules.length }} 条规则</span>
+            </button>
+          </aside>
+
+          <section v-if="selectedRuleSet" class="rule-set-manager__detail">
+            <div class="rule-set-editor__header">
+              <el-input v-model="selectedRuleSet.name" placeholder="规则集名称" />
+              <el-button type="danger" plain @click="deleteSelectedRuleSet">删除规则集</el-button>
             </div>
-            <div class="rule-set-item__actions">
-              <el-button text :disabled="index === 0" @click="moveRuleSetItem(index, -1)">上移</el-button>
-              <el-button text :disabled="index === ruleSetRules.length - 1" @click="moveRuleSetItem(index, 1)">下移</el-button>
+            <div class="rule-set-dialog__hint">规则从上到下依次执行，可通过上移/下移调整当前规则集内的栏目顺序。</div>
+            <div class="rule-set-list">
+              <article v-for="(item, index) in selectedRuleSet.rules" :key="item.id" class="rule-set-item">
+                <span class="rule-set-item__drag" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 7h.01" />
+                    <path d="M8 12h.01" />
+                    <path d="M8 17h.01" />
+                    <path d="M14 7h.01" />
+                    <path d="M14 12h.01" />
+                    <path d="M14 17h.01" />
+                  </svg>
+                </span>
+                <span class="rule-set-item__order">{{ index + 1 }}</span>
+                <div class="rule-set-item__meta">
+                  <div class="rule-set-item__title">{{ item.label }}</div>
+                  <div class="rule-set-item__desc">{{ item.description }}</div>
+                </div>
+                <div class="rule-set-item__actions">
+                  <el-button text :disabled="index === 0" @click="moveRuleSetItem(index, -1)">上移</el-button>
+                  <el-button text :disabled="index === selectedRuleSet.rules.length - 1" @click="moveRuleSetItem(index, 1)">下移</el-button>
+                </div>
+              </article>
             </div>
-          </article>
+          </section>
         </div>
       </div>
       <template #footer>
         <el-button @click="ruleSetDialogVisible = false">关闭</el-button>
-        <el-button type="primary" @click="applyRuleSet">应用当前顺序</el-button>
+        <el-button type="primary" :disabled="!selectedRuleSet" @click="applySelectedRuleSet">应用选中规则集</el-button>
       </template>
     </el-dialog>
   </div>
@@ -470,6 +523,12 @@ interface AddedNamingRule {
   category: RuleCategoryKey
   label: string
   description: string
+}
+
+interface NamingRuleSet {
+  id: number
+  name: string
+  rules: AddedNamingRule[]
 }
 
 interface MountedEntry extends DirectoryEntry {}
@@ -547,6 +606,7 @@ const ruleDraft = reactive({
 const insertRuleDraft = reactive({
   content: '',
   index: 1,
+  fromRight: false,
   ignoreExtension: true,
 })
 
@@ -564,16 +624,9 @@ const deleteRuleDraft = reactive({
   customCharacters: '',
 })
 
-const ruleSetDraft = reactive({
-  name: '',
-})
-
-const ruleSetRules = ref([
-  { id: 'rule-insert', label: '插入', description: '按文件名计数点位置插入自定义字段' },
-  { id: 'rule-delete', label: '删除', description: '按位置、计数或分隔符删除文件名字符' },
-  { id: 'rule-replace', label: '替换', description: '替换命中的文件名片段' },
-  { id: 'rule-regex', label: '正则', description: '按正则表达式处理命名结果' },
-])
+const namingRuleSets = ref<NamingRuleSet[]>([])
+const selectedRuleSetID = ref<number | null>(null)
+const nextRuleSetID = ref(1)
 
 const addedRules = ref<AddedNamingRule[]>([])
 const nextAddedRuleID = ref(1)
@@ -588,6 +641,7 @@ const sortedSourceItems = computed(() => {
 const resultModeLabel = computed(() => (resultMode.value === 'preview' ? '预览' : '已命名'))
 const activeRuleCategoryLabel = computed(() => ruleCategories.find((item) => item.key === activeRuleCategory.value)?.label ?? '插入')
 const mountedPickerInitialPath = computed(() => mountedCurrentPath.value || '')
+const selectedRuleSet = computed(() => namingRuleSets.value.find((item) => item.id === selectedRuleSetID.value) ?? null)
 
 function toggleSortOrder() {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -777,6 +831,12 @@ function saveFilterDraft() {
   ElMessage.success('文件夹默认属性已保存')
 }
 
+function removeSourceItem(path: string) {
+  sourceItems.value = sourceItems.value.filter((item) => item.path !== path)
+  resultItems.value = resultItems.value.filter((item) => item.path !== path)
+  ElMessage.success('已移除待命名条目')
+}
+
 function saveRuleDraft() {
   addedRules.value.push({
     id: nextAddedRuleID.value,
@@ -788,9 +848,14 @@ function saveRuleDraft() {
   ElMessage.success(`已添加第 ${addedRules.value.length} 条命名规则`)
 }
 
+function removeAddedRule(id: number) {
+  addedRules.value = addedRules.value.filter((rule) => rule.id !== id)
+  ElMessage.success('已删除添加的命名规则')
+}
+
 function buildActiveRuleDescription() {
   if (activeRuleCategory.value === 'insert') {
-    return `从文件名左侧第 ${insertRuleDraft.index} 个计数点位置插入“${insertRuleDraft.content || '未填写'}”，${insertRuleDraft.ignoreExtension ? '忽略扩展名' : '包含扩展名'}`
+    return `从文件名${insertRuleDraft.fromRight ? '右侧' : '左侧'}第 ${insertRuleDraft.index} 个计数点位置插入“${insertRuleDraft.content || '未填写'}”，${insertRuleDraft.fromRight ? '从右到左' : '从左到右'}，${insertRuleDraft.ignoreExtension ? '忽略扩展名' : '包含扩展名'}`
   }
 
   if (activeRuleCategory.value === 'delete') {
@@ -807,25 +872,108 @@ function buildActiveRuleDescription() {
   return `${activeRuleCategoryLabel.value}规则栏目已添加，具体配置待后续接入`
 }
 
-function createRuleSet() {
-  ElMessage.success(ruleSetDraft.name ? `规则集“${ruleSetDraft.name}”已创建占位` : '规则集已创建占位')
+function cloneAddedRule(rule: AddedNamingRule): AddedNamingRule {
+  return {
+    id: rule.id,
+    category: rule.category,
+    label: rule.label,
+    description: rule.description,
+  }
 }
 
-function applyRuleSet() {
-  ruleSetDialogVisible.value = false
-  ElMessage.success('已应用当前规则集占位')
+function openRuleSetDialog() {
+  if (namingRuleSets.value.length > 0 && !selectedRuleSetID.value) {
+    selectedRuleSetID.value = namingRuleSets.value[0].id
+  }
+  ruleSetDialogVisible.value = true
 }
 
-function moveRuleSetItem(index: number, direction: -1 | 1) {
-  const targetIndex = index + direction
-  if (targetIndex < 0 || targetIndex >= ruleSetRules.value.length) {
+function selectRuleSet(id: number) {
+  selectedRuleSetID.value = id
+}
+
+async function createRuleSetFromAddedRules() {
+  if (addedRules.value.length === 0) {
+    ElMessage.warning('请先添加规则后再创建规则集')
     return
   }
 
-  const items = [...ruleSetRules.value]
+  try {
+    const { value } = await ElMessageBox.prompt('将按照当前已添加规则的先后顺序创建规则集，请输入规则集名称。', '创建规则集', {
+      confirmButtonText: '确认创建',
+      cancelButtonText: '取消',
+      inputPlaceholder: '例如：漫画文件名整理',
+      inputPattern: /\S+/,
+      inputErrorMessage: '规则集名称不能为空',
+      type: 'info',
+    })
+
+    const nextSet: NamingRuleSet = {
+      id: nextRuleSetID.value,
+      name: String(value).trim(),
+      rules: addedRules.value.map(cloneAddedRule),
+    }
+    namingRuleSets.value = [...namingRuleSets.value, nextSet]
+    selectedRuleSetID.value = nextSet.id
+    nextRuleSetID.value += 1
+    ElMessage.success(`规则集“${nextSet.name}”已创建`)
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '创建规则集失败')
+    }
+  }
+}
+
+async function deleteSelectedRuleSet() {
+  const currentSet = selectedRuleSet.value
+  if (!currentSet) return
+
+  try {
+    await ElMessageBox.confirm(`确认删除规则集“${currentSet.name}”？`, '删除规则集', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+    })
+
+    namingRuleSets.value = namingRuleSets.value.filter((item) => item.id !== currentSet.id)
+    selectedRuleSetID.value = namingRuleSets.value[0]?.id ?? null
+    ElMessage.success('规则集已删除')
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(error instanceof Error ? error.message : '删除规则集失败')
+    }
+  }
+}
+
+function applySelectedRuleSet() {
+  const currentSet = selectedRuleSet.value
+  if (!currentSet) {
+    ElMessage.warning('请先选择要应用的规则集')
+    return
+  }
+
+  addedRules.value = currentSet.rules.map((rule) => ({
+    ...cloneAddedRule(rule),
+    id: nextAddedRuleID.value++,
+  }))
+  ruleSetDialogVisible.value = false
+  ruleDialogVisible.value = true
+  ElMessage.success(`已应用规则集“${currentSet.name}”`)
+}
+
+function moveRuleSetItem(index: number, direction: -1 | 1) {
+  const currentSet = selectedRuleSet.value
+  if (!currentSet) return
+
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= currentSet.rules.length) {
+    return
+  }
+
+  const items = [...currentSet.rules]
   const [item] = items.splice(index, 1)
   items.splice(targetIndex, 0, item)
-  ruleSetRules.value = items
+  currentSet.rules = items
 }
 </script>
 
@@ -1120,6 +1268,43 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   white-space: nowrap;
 }
 
+.line-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.line-delete-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line-delete-button:not(.is-disabled):hover,
+.line-delete-button:not(.is-disabled):focus-visible {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(254, 242, 242, 0.9);
+  transform: translateY(-1px);
+}
+
+.file-item__delete {
+  flex-shrink: 0;
+}
+
 .control-rail {
   display: flex;
   flex-direction: column;
@@ -1142,10 +1327,39 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   margin-left: 0;
 }
 
+.rail-button {
+  width: 54px;
+  height: 54px;
+  min-height: 54px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rail-button .line-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2;
+}
+
+.rail-button:not(.is-disabled):hover,
+.rail-button:not(.is-disabled):focus-visible,
+.rail-button.is-active {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .rail-button--filter:not(.is-disabled):hover {
   color: #1f9d8b;
   border-color: #9be7d7;
   background: #effcf8;
+}
+
+.rail-button--set:not(.is-disabled):hover {
+  color: #2f6fd6;
+  border-color: #b7d8ff;
+  background: #edf7ff;
 }
 
 .rail-button--rule:not(.is-disabled):hover {
@@ -1170,20 +1384,20 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 54px;
-  height: 54px;
+  width: 62px;
+  height: 62px;
   color: #1e9bff;
-  border-radius: 20px;
-  background: rgba(30, 155, 255, 0.11);
-  border: 1px solid rgba(30, 155, 255, 0.18);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(30, 155, 255, 0.16), rgba(30, 155, 255, 0.08));
+  border: 1px solid transparent;
 }
 
 .rail-arrow svg {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.9;
+  stroke-width: 2.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -1292,7 +1506,7 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .rule-config-panel__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 18px;
@@ -1304,19 +1518,13 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   font-weight: 800;
 }
 
-.rule-config-panel__desc {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.rule-set-button,
-.metadata-button {
+.metadata-button,
+.create-rule-set-button {
   font-weight: 700;
 }
 
-.rule-set-button .line-icon,
-.metadata-button .line-icon {
+.metadata-button .line-icon,
+.create-rule-set-button .line-icon {
   margin-right: 6px;
 }
 
@@ -1350,6 +1558,10 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   color: var(--text-primary);
   font-size: 13px;
   flex-wrap: wrap;
+}
+
+.insert-config__checks {
+  margin-top: 10px;
 }
 
 .insert-config__hint {
@@ -1443,7 +1655,6 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 .rule-placeholder-panel__desc,
 .rule-set-dialog__hint,
 .rule-set-item__desc,
-.added-rules-panel__desc,
 .added-rule-item__desc {
   color: var(--text-secondary);
   font-size: 12px;
@@ -1459,10 +1670,16 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .added-rules-panel__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.added-rules-panel__title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .added-rules-panel__title {
@@ -1493,7 +1710,7 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .added-rule-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: flex-start;
   padding: 10px;
@@ -1521,13 +1738,77 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   font-weight: 800;
 }
 
+.added-rule-item__delete {
+  align-self: center;
+}
+
 .rule-set-dialog {
   padding: 16px;
 }
 
-.rule-set-dialog__toolbar {
+.rule-set-manager {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 420px;
+}
+
+.rule-set-manager__list,
+.rule-set-manager__detail {
+  min-width: 0;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.rule-set-manager__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.rule-set-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.rule-set-card:hover,
+.rule-set-card.is-active {
+  color: #2f6fd6;
+  border-color: rgba(64, 158, 255, 0.26);
+  background: rgba(64, 158, 255, 0.08);
+}
+
+.rule-set-card__name {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rule-set-card__count {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.rule-set-manager__detail {
+  padding: 14px;
+}
+
+.rule-set-editor__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   margin-bottom: 10px;
 }

@@ -75,6 +75,20 @@
               </template>
             </el-button>
           </el-tooltip>
+          <el-tooltip content="打包" placement="top" :show-after="500">
+            <el-button class="toolbar-action toolbar-action--pack" :disabled="!canPackSelectedFolders || packingFolders" :loading="packingFolders" circle aria-label="打包" @click="packSelectedFolders()">
+              <template v-if="!packingFolders">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="toolbar-action__icon toolbar-action__icon--pack">
+                  <path d="M4.2 6.7a2 2 0 0 1 2-2h4.15l1.65 1.8h5.8a2 2 0 0 1 2 2v8.8a2 2 0 0 1-2 2H6.2a2 2 0 0 1-2-2Z" />
+                  <path d="M8 10.2h8" />
+                  <path d="M8 13.2h8" />
+                  <path d="M9.15 16.1h5.7" />
+                  <path d="M17.35 11.15h1.4" />
+                  <path d="M17.35 14.15h1.4" />
+                </svg>
+              </template>
+            </el-button>
+          </el-tooltip>
           <el-tooltip content="收集" placement="top" :show-after="500">
             <el-button class="toolbar-action toolbar-action--collect" :disabled="!canCollectSelectedFolders || collecting" :loading="collecting" circle aria-label="收集" @click="collectSelectedFolders()">
               <template v-if="!collecting">
@@ -420,6 +434,7 @@ import {
   extractArchives,
   fetchBrowseRoots,
   moveItems,
+  packFoldersAsCBZ,
   packItemsAsCBZ,
   renameItem,
   uploadFiles,
@@ -456,6 +471,7 @@ const directoryPickerVisible = ref(false)
 const pickerMode = ref<PickerMode>('browse')
 const loading = ref(false)
 const extracting = ref(false)
+const packingFolders = ref(false)
 const collecting = ref(false)
 const errorMessage = ref('')
 const roots = ref<BrowseRoot[]>([])
@@ -502,6 +518,7 @@ const selectedCount = computed(() => selectedRows.value.length)
 const currentPathDisplay = computed(() => directoryPath.value || '未选择')
 const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => item.path)))
 const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
+const canPackSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
 const sortedRootsByDepth = computed(() => [...roots.value].sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length))
@@ -1205,6 +1222,43 @@ async function extractSelectedArchives(entry?: FileManagerEntry) {
   }
 }
 
+async function packSelectedFolders(entry?: FileManagerEntry) {
+  const items = getSelection(entry)
+  if (items.length === 0) {
+    ElMessage.warning('请先选择文件夹')
+    return
+  }
+
+  const invalidItem = items.find((item) => !item.is_dir)
+  if (invalidItem) {
+    ElMessage.warning('打包功能仅支持文件夹')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`确认将 ${items.length} 个文件夹分别打包为同名 CBZ 吗？仅会写入图片，并会合并其中的 zip/cbz 图片内容。`, '打包确认', {
+      type: 'warning',
+      confirmButtonText: '开始打包',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+
+  packingFolders.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await packFoldersAsCBZ(items.map((item) => item.path))
+    ElMessage.success(`已生成 ${response.data?.total ?? items.length} 个 CBZ`)
+    await openCurrentPath()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '打包失败'
+  } finally {
+    packingFolders.value = false
+  }
+}
+
 async function collectSelectedFolders(entry?: FileManagerEntry) {
   const items = getSelection(entry)
   if (items.length === 0) {
@@ -1417,6 +1471,13 @@ onBeforeUnmount(() => {
   background: #fff8dc;
 }
 
+.toolbar-action--pack:not(.is-disabled):hover,
+.toolbar-action--pack:not(.is-disabled):focus-visible {
+  color: #d97706;
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
 .toolbar-action--collect:not(.is-disabled):hover,
 .toolbar-action--collect:not(.is-disabled):focus-visible {
   color: #7c52c8;
@@ -1462,6 +1523,7 @@ onBeforeUnmount(() => {
 .toolbar-action__icon--browse,
 .toolbar-action__icon--move,
 .toolbar-action__icon--extract,
+.toolbar-action__icon--pack,
 .toolbar-action__icon--recycle,
 .dropdown-menu-icon,
 .context-menu__item-icon--copy,

@@ -17,6 +17,18 @@ var supportedArchiveExtensions = map[string]struct{}{
 	".cbz": {},
 }
 
+var supportedImageExtensions = map[string]struct{}{
+	".jpg":  {},
+	".jpeg": {},
+	".png":  {},
+	".gif":  {},
+	".webp": {},
+	".bmp":  {},
+	".avif": {},
+	".tif":  {},
+	".tiff": {},
+}
+
 func (s *Service) CreateDirectory(parentPath, name string) (string, error) {
 	parentPath, err := s.resolveAllowedPath(parentPath)
 	if err != nil {
@@ -253,6 +265,37 @@ func (s *Service) DeleteItems(paths []string) error {
 	}
 
 	return nil
+}
+
+func (s *Service) PackFoldersAsCBZ(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("paths are required")
+	}
+
+	outputPaths := make([]string, 0, len(paths))
+	for _, itemPath := range paths {
+		rootPath, err := s.resolveAllowedPath(itemPath)
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := os.Stat(rootPath)
+		if err != nil {
+			return nil, fmt.Errorf("stat folder: %w", err)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("pack folders requires directory paths: %s", rootPath)
+		}
+
+		archivePath := uniqueDestinationPath(filepath.Dir(rootPath), filepath.Base(rootPath)+".cbz")
+		createdPath, err := packFolderImagesAsCBZ(rootPath, archivePath)
+		if err != nil {
+			return nil, err
+		}
+		outputPaths = append(outputPaths, createdPath)
+	}
+
+	return outputPaths, nil
 }
 
 func (s *Service) PackItemsAsCBZ(paths []string, outputDir, archiveName string, nestSourceFolder bool) (string, error) {
@@ -614,6 +657,156 @@ func copyPathContents(sourcePath, targetPath string) error {
 	}
 
 	return os.Chmod(targetPath, info.Mode())
+}
+
+func packFolderImagesAsCBZ(rootPath, archivePath string) (string, error) {
+	tempPath := archivePath + ".tmp"
+	_ = os.Remove(tempPath)
+
+	archiveFile, err := os.Create(tempPath)
+	if err != nil {
+		return "", fmt.Errorf("create cbz file: %w", err)
+	}
+	defer func() {
+		_ = archiveFile.Close()
+	}()
+
+	zipWriter := zip.NewWriter(archiveFile)
+	usedNames := make(map[string]struct{})
+	addedCount := 0
+
+	err = filepath.Walk(rootPath, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		if isSupportedArchiveFile(path) {
+			count, err := addArchiveImagesToZip(zipWriter, path, rootPath, usedNames)
+			if err != nil {
+				return err
+			}
+			addedCount += count
+			return nil
+		}
+
+		if !isImageFile(path) {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(rootPath, path)
+		if err != nil {
+			return err
+		}
+		archiveEntryPath := uniqueZipEntryName(filepath.ToSlash(relPath), usedNames)
+		if err := addFileToZip(zipWriter, path, archiveEntryPath); err != nil {
+			return err
+		}
+		addedCount++
+		return nil
+	})
+	if err != nil {
+		_ = zipWriter.Close()
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("pack folder images: %w", err)
+	}
+
+	if addedCount == 0 {
+		_ = zipWriter.Close()
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("folder contains no supported image files")
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("finalize cbz file: %w", err)
+	}
+
+	if _, err := os.Stat(tempPath); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("verify cbz file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, archivePath); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("publish cbz file: %w", err)
+	}
+
+	return archivePath, nil
+}
+
+func addArchiveImagesToZip(zipWriter *zip.Writer, archivePath, rootPath string, usedNames map[string]struct{}) (int, error) {
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return 0, fmt.Errorf("open nested archive: %w", err)
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	relArchivePath, err := filepath.Rel(rootPath, archivePath)
+	if err != nil {
+		return 0, err
+	}
+	archiveStem := strings.TrimSuffix(filepath.ToSlash(relArchivePath), filepath.Ext(relArchivePath))
+	addedCount := 0
+
+	for _, file := range reader.File {
+		if file.FileInfo().IsDir() || !isImageFile(file.Name) {
+			continue
+		}
+
+		sourceFile, err := file.Open()
+		if err != nil {
+			return addedCount, fmt.Errorf("open nested archive entry: %w", err)
+		}
+
+		header := file.FileHeader
+		header.Name = uniqueZipEntryName(filepath.ToSlash(filepath.Join(archiveStem, file.Name)), usedNames)
+		header.Method = zip.Deflate
+		writer, err := zipWriter.CreateHeader(&header)
+		if err != nil {
+			_ = sourceFile.Close()
+			return addedCount, err
+		}
+		if _, err := io.Copy(writer, sourceFile); err != nil {
+			_ = sourceFile.Close()
+			return addedCount, err
+		}
+		_ = sourceFile.Close()
+		addedCount++
+	}
+
+	return addedCount, nil
+}
+
+func isImageFile(path string) bool {
+	_, ok := supportedImageExtensions[strings.ToLower(filepath.Ext(path))]
+	return ok
+}
+
+func uniqueZipEntryName(name string, usedNames map[string]struct{}) string {
+	name = strings.TrimLeft(filepath.ToSlash(filepath.Clean(name)), "/")
+	if name == "." || name == "" {
+		name = fmt.Sprintf("image-%d", time.Now().UnixNano())
+	}
+
+	if _, exists := usedNames[name]; !exists {
+		usedNames[name] = struct{}{}
+		return name
+	}
+
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	for index := 1; ; index++ {
+		candidate := fmt.Sprintf("%s-%d%s", stem, index, ext)
+		if _, exists := usedNames[candidate]; !exists {
+			usedNames[candidate] = struct{}{}
+			return candidate
+		}
+	}
 }
 
 func addPathToZip(zipWriter *zip.Writer, sourcePath string, nestSourceFolder bool) error {

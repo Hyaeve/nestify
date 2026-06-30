@@ -87,9 +87,14 @@
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
-              <el-tooltip content="整理" placement="top">
-                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
-                  <el-icon><Operation /></el-icon>
+              <el-tooltip content="执行" placement="top">
+                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
+                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6.5 5.5v13" />
+                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
+                    <path d="M5 19.5h14" />
+                    <path d="m16 17 3 2.5-3 2.5" />
+                  </svg>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
@@ -396,9 +401,14 @@
                   <el-icon><Edit /></el-icon>
                 </el-button>
               </el-tooltip>
-              <el-tooltip content="净化" placement="top">
-                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
-                  <el-icon><Operation /></el-icon>
+              <el-tooltip content="执行" placement="top">
+                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
+                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6.5 5.5v13" />
+                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
+                    <path d="M5 19.5h14" />
+                    <path d="m16 17 3 2.5-3 2.5" />
+                  </svg>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
@@ -509,8 +519,13 @@
               </el-tooltip>
               <template v-if="scope.row.link_mode === 'strm'">
                 <el-dropdown trigger="click" @command="(command: string) => handleStrmSyncCommand(scope.row.id, command)">
-                  <el-button link class="rule-action rule-action--success" aria-label="Strm 同步">
-                    <el-icon><MoreFilled /></el-icon>
+                  <el-button link class="rule-action rule-action--success" aria-label="执行 Strm 同步">
+                    <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M6.5 5.5v13" />
+                      <path d="m10 8.25 6.75 3.75L10 15.75Z" />
+                      <path d="M5 19.5h14" />
+                      <path d="m16 17 3 2.5-3 2.5" />
+                    </svg>
                   </el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
@@ -521,8 +536,13 @@
                 </el-dropdown>
               </template>
               <el-tooltip v-else content="执行" placement="top">
-                <el-button link class="rule-action rule-action--success" @click="prepareExecution(scope.row.id)">
-                  <el-icon><Operation /></el-icon>
+                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
+                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6.5 5.5v13" />
+                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
+                    <path d="M5 19.5h14" />
+                    <path d="m16 17 3 2.5-3 2.5" />
+                  </svg>
                 </el-button>
               </el-tooltip>
               <el-tooltip content="删除" placement="top">
@@ -912,14 +932,14 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit, MoreFilled, Operation } from '@element-plus/icons-vue'
+import { Delete, Edit } from '@element-plus/icons-vue'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
-import { prepareRuleExecution } from '../api/executions'
+import { fetchRun, prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
@@ -2492,12 +2512,38 @@ async function submitUpdateLinkRule() {
   }
 }
 
+const ruleExecutionHistoryWaitMs = 450
+const ruleExecutionHistoryMaxAttempts = 12
+
+function waitForRuleExecutionHistory() {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ruleExecutionHistoryWaitMs)
+  })
+}
+
+async function waitUntilRuleExecutionSettled(runID?: string) {
+  if (!runID) {
+    await waitForRuleExecutionHistory()
+    return
+  }
+
+  for (let attempt = 0; attempt < ruleExecutionHistoryMaxAttempts; attempt += 1) {
+    const response = await fetchRun(runID)
+    const status = response.data?.status
+    if (status && status !== 'pending' && status !== 'running') {
+      return
+    }
+    await waitForRuleExecutionHistory()
+  }
+}
+
 async function prepareExecution(ruleID: number, options: Record<string, boolean> = {}) {
   loading.value = true
   errorMessage.value = ''
   try {
-    await prepareRuleExecution(ruleID, 'once', options)
+    const response = await prepareRuleExecution(ruleID, 'once', options)
     ElMessage.success('规则执行已启动')
+    await waitUntilRuleExecutionSettled(response.data?.run.id)
     await loadArchiveRules()
     await loadPurifyRules()
     await loadLinkRules()
@@ -2739,6 +2785,7 @@ onMounted(() => {
 .rule-action--success { color: var(--el-color-success); }
 .rule-action--danger { color: var(--el-color-danger); }
 .rule-action:hover { transform: translateY(-1px); }
+.rule-action__execute-icon { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .rule-actions :deep(.el-button + .el-button) { margin-left: 0; }
 .custom-mode-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 62px; padding: 4px 12px; border-radius: 8px; border: 1px solid currentColor; font-size: 14px; line-height: 1.2; background: var(--bg-elevated); }
 .custom-mode-tag--package { color: #d58a2f; background: rgba(213, 138, 47, 0.08); }

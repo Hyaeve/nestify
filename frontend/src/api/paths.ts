@@ -118,6 +118,12 @@ export function packItemsAsCBZ(paths: string[], outputDir?: string, archiveName?
   })
 }
 
+export function packFoldersAsCBZ(paths: string[]) {
+  return postJSON<FileMutationResult>('/api/v1/files/pack-folders-cbz', {
+    paths,
+  })
+}
+
 export function extractArchives(paths: string[], outputDir?: string) {
   return postJSON<FileMutationResult>('/api/v1/files/extract', {
     paths,

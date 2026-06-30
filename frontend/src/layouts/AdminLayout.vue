@@ -35,12 +35,14 @@
           <el-menu-item index="/naming-workshop">
             <el-icon class="nav-icon nav-icon--naming">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5.2 5.2h8.8l4.8 4.8v8.8H5.2V5.2Z" />
-                <path d="M13.75 5.35v4.9h4.9" />
-                <path d="M8.2 14.15h4.9" />
-                <path d="M8.2 17.05h7.6" />
-                <path d="M15.4 12.95 17 11.35l1.6 1.6" />
-                <path d="M17 11.35v4.8" />
+                <path class="nav-icon__badge" d="M4.5 6.4h8.9l2.1 2.1v9.1a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2Z" />
+                <path class="nav-icon__badge-fold" d="M13.35 6.55v2.25h2.25" />
+                <path class="nav-icon__letter" d="M7.25 16.2V10.9l4.25 5.3v-5.3" />
+                <path class="nav-icon__hammer" d="M15.35 5.1 18.9 8.65" />
+                <path class="nav-icon__hammer" d="M17.25 4.2 19.8 6.75" />
+                <path class="nav-icon__hammer" d="M16.2 6.15 14.25 8.1" />
+                <path class="nav-icon__spark" d="M18.55 13.05v4.4" />
+                <path class="nav-icon__spark" d="M16.35 15.25h4.4" />
               </svg>
             </el-icon>
             <span>命名工坊</span>
@@ -653,10 +655,40 @@ async function handleLogout() {
 }
 
 .nav-icon--naming svg {
-  width: 26px;
-  height: 26px;
-  stroke-width: 1.75;
-  opacity: 0.82;
+  width: 28px;
+  height: 28px;
+  opacity: 0.88;
+}
+
+.nav-icon--naming .nav-icon__badge,
+.nav-icon--naming .nav-icon__badge-fold,
+.nav-icon--naming .nav-icon__letter,
+.nav-icon--naming .nav-icon__hammer,
+.nav-icon--naming .nav-icon__spark {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-icon--naming .nav-icon__badge {
+  stroke-width: 1.55;
+}
+
+.nav-icon--naming .nav-icon__badge-fold {
+  stroke-width: 1.35;
+}
+
+.nav-icon--naming .nav-icon__letter {
+  stroke-width: 1.65;
+}
+
+.nav-icon--naming .nav-icon__hammer {
+  stroke-width: 1.8;
+}
+
+.nav-icon--naming .nav-icon__spark {
+  stroke-width: 1.55;
 }
 
 :deep(.el-menu-item.is-active) {
