@@ -23,8 +23,6 @@
         </el-input>
       </div>
 
-      <div class="picker-hint">采用折叠目录树逐级展开；若因权限或挂载限制无法展开，仍可手动输入路径继续选择。</div>
-
       <div class="picker-actions">
         <el-button size="small" :disabled="!parentPath" @click="goParent">上级目录</el-button>
         <el-button size="small" :disabled="!currentPath" @click="reloadCurrent">刷新</el-button>
@@ -323,11 +321,6 @@ async function confirmSelection() {
   color: #606266;
   font-size: 14px;
   min-width: 88px;
-}
-
-.picker-hint {
-  color: #909399;
-  font-size: 13px;
 }
 
 .picker-tree {

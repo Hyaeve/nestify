@@ -136,7 +136,8 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 	}
 
 	go func() {
-		baseline, _ := s.directoryFingerprint(rule.CompatibilityMode, rule.SourceDir)
+		sourceDirs := normalizeExecuteSourceDirs(rule.SourceDir, rule.SourceDirs)
+		baseline, _ := s.directoryFingerprintMany(rule.CompatibilityMode, sourceDirs)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -145,7 +146,7 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				current, err := s.directoryFingerprint(rule.CompatibilityMode, rule.SourceDir)
+				current, err := s.directoryFingerprintMany(rule.CompatibilityMode, sourceDirs)
 				if err != nil {
 					continue
 				}
@@ -168,6 +169,7 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		TriggerMode:       triggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
+		SourceDirs:        rule.SourceDirs,
 		TargetDir:         rule.TargetDir,
 		Options:           ParseBoolOptionsJSON(rule.OptionsJSON),
 		OptionValues:      ParseIntOptionsJSON(rule.OptionValuesJSON),
@@ -180,6 +182,21 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		TransformRules:    ParseTransformRulesJSON(rule.TransformRulesJSON),
 		TransformFilters:  ParseStringListJSON(rule.TransformFiltersJSON),
 	})
+}
+
+func (s *Service) directoryFingerprintMany(mode string, roots []string) (string, error) {
+	if len(roots) == 0 {
+		return "", nil
+	}
+	items := make([]string, 0, len(roots))
+	for _, root := range roots {
+		fingerprint, err := s.directoryFingerprint(mode, root)
+		if err != nil {
+			return "", err
+		}
+		items = append(items, fmt.Sprintf("%s\n%s", root, fingerprint))
+	}
+	return strings.Join(items, "\n---\n"), nil
 }
 
 func (s *Service) directoryFingerprint(mode, root string) (string, error) {

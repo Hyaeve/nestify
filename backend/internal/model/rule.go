@@ -15,6 +15,7 @@ type Rule struct {
 	LinkMode             string    `json:"link_mode"`
 	RunMode              string    `json:"run_mode"`
 	SourceDir            string    `json:"source_dir"`
+	SourceDirs           []string  `json:"source_dirs,omitempty"`
 	TargetDir            string    `json:"target_dir"`
 	WatchDebounceMS      int       `json:"watch_debounce_ms"`
 	CronExpression       string    `json:"cron_expression"`
@@ -53,6 +54,7 @@ type CreateRuleInput struct {
 	LinkMode          string          `json:"link_mode"`
 	RunMode           string          `json:"run_mode"`
 	SourceDir         string          `json:"source_dir"`
+	SourceDirs        []string        `json:"source_dirs"`
 	TargetDir         string          `json:"target_dir"`
 	WatchDebounceMS   int             `json:"watch_debounce_ms"`
 	CronExpression    string          `json:"cron_expression"`
@@ -80,6 +82,7 @@ type UpdateRuleInput struct {
 	LinkMode          string          `json:"link_mode"`
 	RunMode           string          `json:"run_mode"`
 	SourceDir         string          `json:"source_dir"`
+	SourceDirs        []string        `json:"source_dirs"`
 	TargetDir         string          `json:"target_dir"`
 	WatchDebounceMS   int             `json:"watch_debounce_ms"`
 	CronExpression    string          `json:"cron_expression"`

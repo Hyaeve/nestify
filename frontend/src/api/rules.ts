@@ -18,6 +18,7 @@ export interface RuleItem {
   link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
+  source_dirs?: string[]
   target_dir: string
   watch_debounce_ms: number
   cron_expression: string
@@ -64,6 +65,7 @@ export interface CreateRulePayload {
   link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
+  source_dirs?: string[]
   target_dir?: string
   watch_debounce_ms?: number
   cron_expression?: string

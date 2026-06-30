@@ -9,6 +9,7 @@ type ExecuteRuleRequest struct {
 	TriggerMode       string
 	CompatibilityMode string
 	SourceDir         string
+	SourceDirs        []string
 	TargetDir         string
 	Options           map[string]bool
 	OptionValues      map[string]int

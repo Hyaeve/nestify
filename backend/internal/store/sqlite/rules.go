@@ -158,7 +158,7 @@ func (s *Store) CreateRule(input model.CreateRuleInput) (*model.Rule, error) {
 		ruleType,
 		linkMode,
 		runMode,
-		strings.TrimSpace(input.SourceDir),
+		normalizeRuleSourceDir(input.SourceDir, input.SourceDirs),
 		strings.TrimSpace(input.TargetDir),
 		defaultInt(input.WatchDebounceMS, 2000),
 		strings.TrimSpace(input.CronExpression),
@@ -228,7 +228,7 @@ func (s *Store) UpdateRule(id int64, input model.UpdateRuleInput) (*model.Rule, 
 		defaultString(strings.TrimSpace(input.RuleType), deriveRuleType(strings.TrimSpace(input.ArchiveMode))),
 		strings.TrimSpace(input.LinkMode),
 		strings.TrimSpace(input.RunMode),
-		strings.TrimSpace(input.SourceDir),
+		normalizeRuleSourceDir(input.SourceDir, input.SourceDirs),
 		strings.TrimSpace(input.TargetDir),
 		defaultInt(input.WatchDebounceMS, 2000),
 		strings.TrimSpace(input.CronExpression),
@@ -548,6 +548,7 @@ func scanRule(s scanner) (model.Rule, error) {
 		return model.Rule{}, err
 	}
 
+	rule.SourceDirs = parseRuleSourceDirs(rule.SourceDir)
 	rule.Enabled = intToBool(enabled)
 	rule.MonitorEnabled = intToBool(monitorEnabled)
 	if strings.TrimSpace(rule.CompatibilityMode) == "" {
@@ -561,4 +562,55 @@ func scanRule(s scanner) (model.Rule, error) {
 	rule.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 
 	return rule, nil
+}
+
+func normalizeRuleSourceDir(sourceDir string, sourceDirs []string) string {
+	items := normalizeSourceDirs(sourceDir, sourceDirs)
+	if len(items) == 0 {
+		return ""
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	encoded, err := json.Marshal(items)
+	if err != nil {
+		return items[0]
+	}
+	return string(encoded)
+}
+
+func normalizeSourceDirs(sourceDir string, sourceDirs []string) []string {
+	seen := make(map[string]struct{}, len(sourceDirs)+1)
+	items := make([]string, 0, len(sourceDirs)+1)
+	appendItem := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		items = append(items, trimmed)
+	}
+
+	for _, item := range sourceDirs {
+		appendItem(item)
+	}
+	appendItem(sourceDir)
+	return items
+}
+
+func parseRuleSourceDirs(sourceDir string) []string {
+	trimmed := strings.TrimSpace(sourceDir)
+	if trimmed == "" {
+		return []string{}
+	}
+	if strings.HasPrefix(trimmed, "[") {
+		var parsed []string
+		if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
+			return normalizeSourceDirs("", parsed)
+		}
+	}
+	return []string{trimmed}
 }

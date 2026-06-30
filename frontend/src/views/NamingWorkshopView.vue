@@ -797,13 +797,7 @@ async function toggleSourceFolder(item: SourceItem) {
 
   item.loadingChildren = true
   try {
-    const response = await browseDirectories(item.path)
-    item.children = (response.data?.entries ?? [])
-      .filter((entry) => !entry.is_dir)
-      .map((entry) => ({
-        ...createSourceItemFromMountedEntry(entry),
-        selected: true,
-      }))
+    item.children = await collectFolderFiles(item.path)
     item.childrenLoaded = true
     clearNamingResult()
   } catch (error) {
@@ -812,6 +806,42 @@ async function toggleSourceFolder(item: SourceItem) {
   } finally {
     item.loadingChildren = false
   }
+}
+
+async function collectFolderFiles(path: string, visited = new Set<string>()): Promise<SourceItem[]> {
+  if (visited.has(path)) {
+    return []
+  }
+  visited.add(path)
+
+  const response = await browseDirectories(path)
+  const entries = response.data?.entries ?? []
+  const files = filterDraft.includeFiles
+    ? entries
+      .filter((entry) => !entry.is_dir)
+      .map((entry) => ({
+        ...createSourceItemFromMountedEntry(entry),
+        selected: true,
+      }))
+    : []
+
+  if (!filterDraft.includeSubdirectories) {
+    return files
+  }
+
+  const nestedFileGroups = await Promise.all(
+    entries
+      .filter((entry) => entry.is_dir)
+      .map(async (entry) => {
+        try {
+          return await collectFolderFiles(entry.path, visited)
+        } catch {
+          return []
+        }
+      }),
+  )
+
+  return [...files, ...nestedFileGroups.flat()]
 }
 
 function sortedFolderChildren(item: SourceItem) {
@@ -827,7 +857,7 @@ function selectedFolderChildCount(item: SourceItem) {
 }
 
 function clearNamingResult() {
-  clearNamingResult()
+  resultItems.value = []
 }
 
 function appendSourceItems(nextItems: SourceItem[]) {

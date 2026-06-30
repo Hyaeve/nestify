@@ -79,6 +79,11 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 		return nil, fmt.Errorf("unsupported archive mode: %s", archiveMode)
 	}
 
+	req.SourceDirs = normalizeExecuteSourceDirs(req.SourceDir, req.SourceDirs)
+	if req.SourceDir == "" && len(req.SourceDirs) > 0 {
+		req.SourceDir = req.SourceDirs[0]
+	}
+
 	triggerMode := strings.TrimSpace(req.TriggerMode)
 	if triggerMode == "" {
 		triggerMode = model.TriggerModeOnce
@@ -90,7 +95,11 @@ func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, er
 	}
 	run := s.newRun(triggerMode, archiveMode, strings.TrimSpace(req.LinkMode), &ruleID, req.RuleName)
 	s.appendLog(run.ID, "info", fmt.Sprintf("规则“%s”已进入执行队列（模式：%s）", req.RuleName, archiveMode))
-	s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", req.SourceDir, req.TargetDir))
+	if len(req.SourceDirs) > 1 && (archiveMode == "cleanup" || archiveMode == "transform") {
+		s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", strings.Join(req.SourceDirs, "；"), req.TargetDir))
+	} else {
+		s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", req.SourceDir, req.TargetDir))
+	}
 	s.runExecution(run.ID, req)
 
 	return s.cloneRun(run), nil
@@ -237,7 +246,7 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 			return
 		}
 
-		stats, execErr := s.executeRule(runID, req)
+		stats, execErr := s.executeRuleWithSourceDirs(runID, req)
 		if execErr != nil && stats.FailureCount == 0 {
 			stats.FailureCount = 1
 		}
@@ -278,6 +287,63 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 			return
 		}
 	}()
+}
+
+func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	sourceDirs := normalizeExecuteSourceDirs(req.SourceDir, req.SourceDirs)
+	if len(sourceDirs) <= 1 || (strings.TrimSpace(req.ArchiveMode) != "cleanup" && strings.TrimSpace(req.ArchiveMode) != "transform") {
+		if len(sourceDirs) == 1 {
+			req.SourceDir = sourceDirs[0]
+		}
+		return s.executeRule(runID, req)
+	}
+
+	aggregated := executionStats{}
+	var lastErr error
+	for index, sourceDir := range sourceDirs {
+		currentReq := req
+		currentReq.SourceDir = sourceDir
+		currentReq.SourceDirs = []string{sourceDir}
+		s.appendLog(runID, "info", fmt.Sprintf("开始处理第 %d/%d 个监控目录：%s", index+1, len(sourceDirs), sourceDir))
+		stats, err := s.executeRule(runID, currentReq)
+		aggregated.ProcessedFiles += stats.ProcessedFiles
+		aggregated.SuccessCount += stats.SuccessCount
+		aggregated.SkipCount += stats.SkipCount
+		aggregated.FailureCount += stats.FailureCount
+		aggregated.PackedVolumes += stats.PackedVolumes
+		aggregated.MovedFiles += stats.MovedFiles
+		aggregated.CleanupRemovedFiles += stats.CleanupRemovedFiles
+		aggregated.CleanupRemovedDirs += stats.CleanupRemovedDirs
+		aggregated.SizeBytes += stats.SizeBytes
+		aggregated.HistoryEvents += stats.HistoryEvents
+		if err != nil {
+			lastErr = err
+			s.appendLog(runID, "error", fmt.Sprintf("监控目录 %s 执行失败：%v", sourceDir, err))
+		}
+	}
+	aggregated.Summary = fmt.Sprintf("多监控目录执行完成：%d 个目录，成功 %d，跳过 %d，失败 %d", len(sourceDirs), aggregated.SuccessCount, aggregated.SkipCount, aggregated.FailureCount)
+	return aggregated, lastErr
+}
+
+func normalizeExecuteSourceDirs(sourceDir string, sourceDirs []string) []string {
+	seen := make(map[string]struct{}, len(sourceDirs)+1)
+	items := make([]string, 0, len(sourceDirs)+1)
+	appendItem := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		items = append(items, trimmed)
+	}
+	for _, item := range sourceDirs {
+		appendItem(item)
+	}
+	appendItem(sourceDir)
+	return items
 }
 
 func (s *Service) finishRun(runID, status, stage, logMsg string) {

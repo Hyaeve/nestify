@@ -350,7 +350,13 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="source_dir" label="监控目录" min-width="420" show-overflow-tooltip />
+        <el-table-column label="监控目录" min-width="420">
+          <template #default="scope">
+            <div class="source-dir-tags">
+              <el-tag v-for="dir in getRuleSourceDirs(scope.row)" :key="dir" class="source-dir-tags__item" type="info" effect="plain">{{ dir }}</el-tag>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="Cron" min-width="180">
           <template #default="scope">
             <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
@@ -716,7 +722,15 @@
             </div>
           </el-collapse-transition>
         <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
-        <el-form-item label="监控目录"><el-input v-model="createPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="监控目录">
+          <div class="source-dir-editor">
+            <div v-if="createPurifyForm.source_dirs.length" class="source-dir-editor__list">
+              <el-tag v-for="dir in createPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeCreatePurifySourceDir(dir)">{{ dir }}</el-tag>
+            </div>
+            <el-empty v-else class="source-dir-editor__empty" description="暂未选择监控目录" :image-size="56" />
+            <el-button type="primary" plain @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button>
+          </div>
+        </el-form-item>
         <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配清理</div></div>
@@ -790,7 +804,15 @@
             </div>
           </el-collapse-transition>
         <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
-        <el-form-item label="监控目录"><el-input v-model="editPurifyForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="监控目录">
+          <div class="source-dir-editor">
+            <div v-if="editPurifyForm.source_dirs.length" class="source-dir-editor__list">
+              <el-tag v-for="dir in editPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeEditPurifySourceDir(dir)">{{ dir }}</el-tag>
+            </div>
+            <el-empty v-else class="source-dir-editor__empty" description="暂未选择监控目录" :image-size="56" />
+            <el-button type="primary" plain @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button>
+          </div>
+        </el-form-item>
         <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配清理</div></div>
@@ -1222,6 +1244,43 @@ function normalizeRuleType(rule: RuleItem): RuleListType {
   return 'archive'
 }
 
+function normalizeSourceDirs(sourceDir?: string, sourceDirs: string[] = []) {
+  const seen = new Set<string>()
+  const items: string[] = []
+  const append = (value?: string) => {
+    const trimmed = (value || '').trim()
+    if (!trimmed || seen.has(trimmed)) return
+    seen.add(trimmed)
+    items.push(trimmed)
+  }
+
+  sourceDirs.forEach(append)
+  append(sourceDir)
+  return items
+}
+
+function getRuleSourceDirs(rule: RuleItem) {
+  return normalizeSourceDirs(rule.source_dir, rule.source_dirs)
+}
+
+function addPurifySourceDir(target: 'create' | 'edit', path: string) {
+  const trimmed = path.trim()
+  if (!trimmed) return
+  const form = target === 'create' ? createPurifyForm : editPurifyForm
+  form.source_dirs = normalizeSourceDirs(trimmed, form.source_dirs)
+  form.source_dir = form.source_dirs[0] || ''
+}
+
+function removeCreatePurifySourceDir(path: string) {
+  createPurifyForm.source_dirs = createPurifyForm.source_dirs.filter((item) => item !== path)
+  createPurifyForm.source_dir = createPurifyForm.source_dirs[0] || ''
+}
+
+function removeEditPurifySourceDir(path: string) {
+  editPurifyForm.source_dirs = editPurifyForm.source_dirs.filter((item) => item !== path)
+  editPurifyForm.source_dir = editPurifyForm.source_dirs[0] || ''
+}
+
 function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePayload> = {}): UpdateRulePayload {
   const ruleType = normalizeRuleType(rule)
   const scheduleEnabled = rule.run_mode === 'cron' || Boolean(rule.cron_expression)
@@ -1240,7 +1299,8 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     rule_type: ruleType,
     link_mode: linkMode,
     run_mode: resolveRunMode(rule.monitor_enabled, scheduleEnabled),
-    source_dir: rule.source_dir,
+    source_dir: getRuleSourceDirs(rule)[0] || rule.source_dir,
+    source_dirs: getRuleSourceDirs(rule),
     target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
@@ -1396,6 +1456,7 @@ const createPurifyForm = reactive({
   archive_mode: 'cleanup' as PurifyArchiveMode,
   compatibility_mode: 'local' as CompatibilityMode,
   source_dir: '',
+  source_dirs: [] as string[],
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
@@ -1415,6 +1476,7 @@ const editPurifyForm = reactive({
   archive_mode: 'cleanup' as PurifyArchiveMode,
   compatibility_mode: 'local' as CompatibilityMode,
   source_dir: '',
+  source_dirs: [] as string[],
   cron_expression: '',
   watch_debounce_ms: 2000,
   run_on_start: true,
@@ -1509,6 +1571,7 @@ function resetCreatePurifyForm() {
   createPurifyForm.archive_mode = 'cleanup'
   createPurifyForm.compatibility_mode = 'local'
   createPurifyForm.source_dir = ''
+  createPurifyForm.source_dirs = []
   createPurifyForm.cron_expression = ''
   createPurifyForm.watch_debounce_ms = 2000
   createPurifyForm.run_on_start = true
@@ -1527,6 +1590,7 @@ function resetEditPurifyForm() {
   editPurifyForm.archive_mode = 'cleanup'
   editPurifyForm.compatibility_mode = 'local'
   editPurifyForm.source_dir = ''
+  editPurifyForm.source_dirs = []
   editPurifyForm.cron_expression = ''
   editPurifyForm.watch_debounce_ms = 2000
   editPurifyForm.run_on_start = true
@@ -1734,9 +1798,9 @@ function resolveInitialDirectory(form: Exclude<DirectoryPickerTarget, null>) {
     case 'edit.target_dir':
       return editForm.target_dir
     case 'createPurify.source_dir':
-      return createPurifyForm.source_dir
+      return createPurifyForm.source_dirs[createPurifyForm.source_dirs.length - 1] || createPurifyForm.source_dir
     case 'editPurify.source_dir':
-      return editPurifyForm.source_dir
+      return editPurifyForm.source_dirs[editPurifyForm.source_dirs.length - 1] || editPurifyForm.source_dir
     case 'createLink.source_dir':
       return createLinkForm.source_dir
     case 'createLink.target_dir':
@@ -1770,10 +1834,10 @@ function applyDirectorySelection(path: string) {
       editForm.target_dir = path
       break
     case 'createPurify.source_dir':
-      createPurifyForm.source_dir = path
+      addPurifySourceDir('create', path)
       break
     case 'editPurify.source_dir':
-      editPurifyForm.source_dir = path
+      addPurifySourceDir('edit', path)
       break
     case 'createLink.source_dir':
       createLinkForm.source_dir = path
@@ -2332,7 +2396,8 @@ async function openEditPurifyDialog(id: number) {
     editPurifyForm.monitor_enabled = rule.monitor_enabled
     editPurifyForm.schedule_enabled = rule.run_mode === 'cron'
     editPurifyForm.compatibility_mode = rule.compatibility_mode || 'local'
-    editPurifyForm.source_dir = rule.source_dir
+    editPurifyForm.source_dirs = getRuleSourceDirs(rule)
+    editPurifyForm.source_dir = editPurifyForm.source_dirs[0] || rule.source_dir
     editPurifyForm.cron_expression = rule.cron_expression
     editPurifyForm.watch_debounce_ms = rule.watch_debounce_ms
     editPurifyForm.run_on_start = rule.run_on_start
@@ -2351,6 +2416,12 @@ async function openEditPurifyDialog(id: number) {
 }
 
 async function submitCreatePurifyRule() {
+  const sourceDirs = normalizeSourceDirs(createPurifyForm.source_dir, createPurifyForm.source_dirs)
+  if (sourceDirs.length === 0) {
+    errorMessage.value = '请至少选择一个监控目录'
+    return
+  }
+
   creating.value = true
   errorMessage.value = ''
   try {
@@ -2362,7 +2433,8 @@ async function submitCreatePurifyRule() {
       compatibility_mode: createPurifyForm.compatibility_mode,
       archive_mode: createPurifyForm.archive_mode,
       run_mode: resolveRunMode(createPurifyForm.monitor_enabled, createPurifyForm.schedule_enabled),
-      source_dir: createPurifyForm.source_dir,
+      source_dir: sourceDirs[0],
+      source_dirs: sourceDirs,
       target_dir: '',
       watch_debounce_ms: createPurifyForm.watch_debounce_ms,
       cron_expression: createPurifyForm.schedule_enabled ? createPurifyForm.cron_expression : '',
@@ -2390,6 +2462,12 @@ async function submitUpdatePurifyRule() {
     return
   }
 
+  const sourceDirs = normalizeSourceDirs(editPurifyForm.source_dir, editPurifyForm.source_dirs)
+  if (sourceDirs.length === 0) {
+    errorMessage.value = '请至少选择一个监控目录'
+    return
+  }
+
   editing.value = true
   errorMessage.value = ''
   try {
@@ -2401,7 +2479,8 @@ async function submitUpdatePurifyRule() {
       compatibility_mode: editPurifyForm.compatibility_mode,
       archive_mode: editPurifyForm.archive_mode,
       run_mode: resolveRunMode(editPurifyForm.monitor_enabled, editPurifyForm.schedule_enabled),
-      source_dir: editPurifyForm.source_dir,
+      source_dir: sourceDirs[0],
+      source_dirs: sourceDirs,
       target_dir: '',
       watch_debounce_ms: editPurifyForm.watch_debounce_ms,
       cron_expression: editPurifyForm.schedule_enabled ? editPurifyForm.cron_expression : '',
@@ -2906,6 +2985,14 @@ onMounted(() => {
 .mode-option-tooltip__content { max-width: 18em; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
 :global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.source-dir-tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.source-dir-tags__item { max-width: 100%; }
+.source-dir-tags__item :deep(.el-tag__content) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
+.source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }
+.source-dir-editor__tag { max-width: 100%; }
+.source-dir-editor__tag :deep(.el-tag__content) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-dir-editor__empty { width: 100%; padding: 8px 0; }
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: #2f8f9d; background: var(--el-bg-color); }

@@ -740,6 +740,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		TriggerMode:       input.TriggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
+		SourceDirs:        rule.SourceDirs,
 		TargetDir:         rule.TargetDir,
 		Options:           options,
 		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
@@ -770,6 +771,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		TriggerMode:       input.TriggerMode,
 		CompatibilityMode: rule.CompatibilityMode,
 		SourceDir:         rule.SourceDir,
+		SourceDirs:        rule.SourceDirs,
 		TargetDir:         rule.TargetDir,
 		Options:           options,
 		OptionValues:      executor.ParseIntOptionsJSON(rule.OptionValuesJSON),
@@ -1758,18 +1760,18 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
-func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMode, runMode, linkMode string, options map[string]bool, optionValues map[string]int, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
+func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, compatibilityMode, archiveMode, runMode, linkMode string, options map[string]bool, optionValues map[string]int, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
-	if strings.TrimSpace(sourceDir) == "" {
+	if len(normalizeInputSourceDirs(sourceDir, sourceDirs)) == 0 {
 		return errors.New("source_dir is required")
 	}
 	archiveMode = strings.TrimSpace(archiveMode)
@@ -1849,6 +1851,27 @@ func validateRuleFields(name, sourceDir, targetDir, compatibilityMode, archiveMo
 	}
 
 	return nil
+}
+
+func normalizeInputSourceDirs(sourceDir string, sourceDirs []string) []string {
+	seen := make(map[string]struct{}, len(sourceDirs)+1)
+	items := make([]string, 0, len(sourceDirs)+1)
+	appendItem := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		items = append(items, trimmed)
+	}
+	for _, item := range sourceDirs {
+		appendItem(item)
+	}
+	appendItem(sourceDir)
+	return items
 }
 
 func normalizeRuleFilters(filters []string) []string {
