@@ -1235,12 +1235,31 @@ async function packSelectedFolders(entry?: FileManagerEntry) {
     return
   }
 
+  const removeSources = ref(false)
+
   try {
-    await ElMessageBox.confirm(`确认将 ${items.length} 个文件夹分别打包为同名 CBZ 吗？仅会写入图片，并会合并其中的 zip/cbz 图片内容。`, '打包确认', {
-      type: 'warning',
-      confirmButtonText: '开始打包',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      h('div', { class: 'pack-confirm' }, [
+        h('div', { class: 'pack-confirm__text' }, `确认将 ${items.length} 个文件夹分别打包为同名 CBZ 吗？仅会写入图片，并会合并其中的 zip/cbz 图片内容。`),
+        h('label', { class: 'pack-confirm__checkbox' }, [
+          h('input', {
+            type: 'checkbox',
+            checked: removeSources.value,
+            onChange: (event: Event) => {
+              removeSources.value = (event.target as HTMLInputElement).checked
+            },
+          }),
+          h('span', '是否删除源文件'),
+        ]),
+      ]),
+      '打包确认',
+      {
+        type: 'warning',
+        confirmButtonText: '开始打包',
+        cancelButtonText: '取消',
+        distinguishCancelAndClose: true,
+      },
+    )
   } catch {
     return
   }
@@ -1249,7 +1268,7 @@ async function packSelectedFolders(entry?: FileManagerEntry) {
   errorMessage.value = ''
 
   try {
-    const response = await packFoldersAsCBZ(items.map((item) => item.path))
+    const response = await packFoldersAsCBZ(items.map((item) => item.path), removeSources.value)
     ElMessage.success(`已生成 ${response.data?.total ?? items.length} 个 CBZ`)
     await openCurrentPath()
   } catch (error) {
@@ -1753,16 +1772,19 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
+:deep(.pack-confirm),
 :deep(.collect-confirm) {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
+:deep(.pack-confirm__text),
 :deep(.collect-confirm__text) {
   line-height: 1.7;
 }
 
+:deep(.pack-confirm__checkbox),
 :deep(.collect-confirm__checkbox) {
   display: inline-flex;
   align-items: center;

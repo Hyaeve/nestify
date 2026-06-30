@@ -176,6 +176,7 @@ type fileMutationRequest struct {
 	ArchiveName      string   `json:"archive_name"`
 	NestSourceFolder *bool    `json:"nest_source_folder,omitempty"`
 	RemoveSubfolders bool     `json:"remove_subfolders"`
+	RemoveSources    bool     `json:"remove_sources"`
 }
 
 type updateAdminAccountRequest struct {
@@ -588,7 +589,7 @@ func (a *apiHandler) handlePackFoldersCBZ(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	outputPaths, err := a.pathBrowse.PackFoldersAsCBZ(input.Paths)
+	outputPaths, err := a.pathBrowse.PackFoldersAsCBZ(input.Paths, input.RemoveSources)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "PACK_FOLDERS_CBZ_FAILED", Message: err.Error()})
 		return

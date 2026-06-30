@@ -267,7 +267,7 @@ func (s *Service) DeleteItems(paths []string) error {
 	return nil
 }
 
-func (s *Service) PackFoldersAsCBZ(paths []string) ([]string, error) {
+func (s *Service) PackFoldersAsCBZ(paths []string, removeSources bool) ([]string, error) {
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("paths are required")
 	}
@@ -293,6 +293,12 @@ func (s *Service) PackFoldersAsCBZ(paths []string) ([]string, error) {
 			return nil, err
 		}
 		outputPaths = append(outputPaths, createdPath)
+
+		if removeSources {
+			if err := os.RemoveAll(rootPath); err != nil {
+				return nil, fmt.Errorf("remove source folder after pack: %w", err)
+			}
+		}
 	}
 
 	return outputPaths, nil
