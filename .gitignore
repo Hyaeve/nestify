@@ -15,10 +15,10 @@ data/
 .env.*
 !.env.example
 *.log
+*.exe
 
 # Editor and OS metadata
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-
