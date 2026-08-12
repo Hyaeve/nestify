@@ -430,6 +430,28 @@
             </el-form>
           </div>
 
+          <div v-else-if="activeRuleCategory === 'replace'" class="insert-config">
+            <el-form label-position="top">
+              <el-form-item label="匹配字段"><el-input v-model="replaceRuleDraft.match" placeholder="请输入原名称中要匹配的字段" /></el-form-item>
+              <el-form-item label="替换为"><el-input v-model="replaceRuleDraft.replacement" placeholder="请输入替换后的字段" /></el-form-item>
+            </el-form>
+          </div>
+
+          <div v-else-if="activeRuleCategory === 'rewrite'" class="insert-config">
+            <el-form label-position="top">
+              <el-form-item label="重写名称"><el-input v-model="rewriteRuleDraft.name" placeholder="例如：文件" /></el-form-item>
+              <div class="pad-config__hint">预览时将按当前选中顺序生成“重写名称 1、重写名称 2 …”以区分项目。</div>
+            </el-form>
+          </div>
+
+          <div v-else-if="activeRuleCategory === 'regex'" class="insert-config">
+            <el-form label-position="top">
+              <el-form-item label="正则表达式"><el-input v-model="regexRuleDraft.pattern" placeholder="例如：\\[\\d+\\]" /></el-form-item>
+              <el-form-item label="替换为"><el-input v-model="regexRuleDraft.replacement" placeholder="留空表示删除匹配内容" /></el-form-item>
+              <el-checkbox v-model="regexRuleDraft.global">替换全部匹配</el-checkbox>
+            </el-form>
+          </div>
+
           <div v-else class="rule-placeholder-panel">
             <svg viewBox="0 0 24 24" aria-hidden="true" class="rule-placeholder-panel__icon">
               <path d="M5.2 5.2h13.6v13.6H5.2V5.2Z" />
@@ -562,7 +584,7 @@ type SourceItemKind = 'file' | 'folder'
 type SortBy = 'name' | 'type' | 'modifiedAt'
 type SortOrder = 'asc' | 'desc'
 type ResultMode = 'preview' | 'renamed'
-type RuleCategoryKey = 'insert' | 'delete' | 'replace' | 'rewrite' | 'pad' | 'extension' | 'remove' | 'case' | 'regex'
+type RuleCategoryKey = 'insert' | 'delete' | 'replace' | 'rewrite' | 'pad' | 'regex'
 
 interface SourceItem {
   name: string
@@ -583,7 +605,7 @@ interface AddedNamingRule {
   category: RuleCategoryKey
   label: string
   description: string
-  config?: PadRuleConfig
+  config?: PadRuleConfig | ReplaceRuleConfig | RewriteRuleConfig | RegexRuleConfig
 }
 
 interface PadRuleConfig {
@@ -593,6 +615,9 @@ interface PadRuleConfig {
   smart: boolean
   ignoreExtension: boolean
 }
+interface ReplaceRuleConfig { match: string; replacement: string }
+interface RewriteRuleConfig { name: string }
+interface RegexRuleConfig { pattern: string; replacement: string; global: boolean }
 
 interface NamingRuleSet {
   id: number
@@ -657,9 +682,6 @@ const ruleCategories: Array<{ key: RuleCategoryKey; label: string }> = [
   { key: 'replace', label: '替换' },
   { key: 'rewrite', label: '重写' },
   { key: 'pad', label: '填充' },
-  { key: 'extension', label: '扩展名' },
-  { key: 'remove', label: '去除' },
-  { key: 'case', label: '大小写' },
   { key: 'regex', label: '正则' },
 ]
 
@@ -700,6 +722,9 @@ const padRuleDraft = reactive<PadRuleConfig>({
   smart: false,
   ignoreExtension: true,
 })
+const replaceRuleDraft = reactive<ReplaceRuleConfig>({ match: '', replacement: '' })
+const rewriteRuleDraft = reactive<RewriteRuleConfig>({ name: '' })
+const regexRuleDraft = reactive<RegexRuleConfig>({ pattern: '', replacement: '', global: true })
 
 const namingRuleSets = ref<NamingRuleSet[]>([])
 const selectedRuleSetID = ref<number | null>(null)
@@ -1018,13 +1043,16 @@ function saveRuleDraft() {
     ElMessage.warning('请输入要填充的字段')
     return
   }
+  if (activeRuleCategory.value === 'replace' && !replaceRuleDraft.match) return ElMessage.warning('请输入匹配字段')
+  if (activeRuleCategory.value === 'rewrite' && !rewriteRuleDraft.name) return ElMessage.warning('请输入重写名称')
+  if (activeRuleCategory.value === 'regex' && !regexRuleDraft.pattern) return ElMessage.warning('请输入正则表达式')
 
   addedRules.value.push({
     id: nextAddedRuleID.value,
     category: activeRuleCategory.value,
     label: activeRuleCategoryLabel.value,
     description: buildActiveRuleDescription(),
-    config: activeRuleCategory.value === 'pad' ? { ...padRuleDraft } : undefined,
+    config: activeRuleCategory.value === 'pad' ? { ...padRuleDraft } : activeRuleCategory.value === 'replace' ? { ...replaceRuleDraft } : activeRuleCategory.value === 'rewrite' ? { ...rewriteRuleDraft } : activeRuleCategory.value === 'regex' ? { ...regexRuleDraft } : undefined,
   })
   nextAddedRuleID.value += 1
   ElMessage.success(`已添加第 ${addedRules.value.length} 条命名规则`)
@@ -1055,6 +1083,10 @@ function buildActiveRuleDescription() {
     return `在文件或文件夹名称第 ${padRuleDraft.index} 位${padRuleDraft.position === 'before' ? '之前' : '之后'}填充“${padRuleDraft.content || '未填写'}”，${padRuleDraft.smart ? '智能避免重复填充' : '允许重复填充'}，${padRuleDraft.ignoreExtension ? '文件名忽略扩展名' : '文件名包含扩展名'}`
   }
 
+  if (activeRuleCategory.value === 'replace') return `将“${replaceRuleDraft.match}”替换为“${replaceRuleDraft.replacement}”`
+  if (activeRuleCategory.value === 'rewrite') return `重写为“${rewriteRuleDraft.name}”，按选中顺序追加序号`
+  if (activeRuleCategory.value === 'regex') return `正则替换 /${regexRuleDraft.pattern}/ 为“${regexRuleDraft.replacement}”${regexRuleDraft.global ? '（全部匹配）' : '（首个匹配）'}`
+
   return `${activeRuleCategoryLabel.value}规则栏目已添加，具体配置待后续接入`
 }
 
@@ -1069,9 +1101,17 @@ function cloneAddedRule(rule: AddedNamingRule): AddedNamingRule {
 }
 
 function applyAddedRules(item: SourceItem) {
+  const itemIndex = effectiveSourceItems.value.findIndex((entry) => entry.path === item.path) + 1
   return addedRules.value.reduce((name, rule) => {
-    if (rule.category !== 'pad' || !rule.config) return name
-    return applyPadRule(name, item.kind, rule.config)
+    if (!rule.config) return name
+    if (rule.category === 'pad') return applyPadRule(name, item.kind, rule.config as PadRuleConfig)
+    if (rule.category === 'replace') return name.split((rule.config as ReplaceRuleConfig).match).join((rule.config as ReplaceRuleConfig).replacement)
+    if (rule.category === 'rewrite') return `${(rule.config as RewriteRuleConfig).name} ${itemIndex}`
+    if (rule.category === 'regex') {
+      const cfg = rule.config as RegexRuleConfig
+      try { return name.replace(new RegExp(cfg.pattern, cfg.global ? 'g' : ''), cfg.replacement) } catch { return name }
+    }
+    return name
   }, item.name)
 }
 
