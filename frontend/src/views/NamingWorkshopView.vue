@@ -423,7 +423,7 @@
               <el-form-item label="">
                 <div class="insert-config__checks insert-config__checks--below">
                   <el-checkbox v-model="padRuleDraft.smart">智能填充</el-checkbox>
-                  <el-checkbox v-model="padRuleDraft.ignoreExtension">文件名忽略扩展名</el-checkbox>
+                  <el-checkbox v-model="padRuleDraft.ignoreExtension">忽略扩展名</el-checkbox>
                 </div>
                 <div class="pad-config__hint">智能填充开启后，若目标位置已有相同字段，则保持原名称，不重复填充。</div>
               </el-form-item>
@@ -434,13 +434,14 @@
             <el-form label-position="top">
               <el-form-item label="匹配字段"><el-input v-model="replaceRuleDraft.match" placeholder="请输入原名称中要匹配的字段" /></el-form-item>
               <el-form-item label="替换为"><el-input v-model="replaceRuleDraft.replacement" placeholder="请输入替换后的字段" /></el-form-item>
+              <el-checkbox v-model="replaceRuleDraft.ignoreExtension">忽略扩展名</el-checkbox>
             </el-form>
           </div>
 
           <div v-else-if="activeRuleCategory === 'rewrite'" class="insert-config">
             <el-form label-position="top">
               <el-form-item label="重写名称"><el-input v-model="rewriteRuleDraft.name" placeholder="例如：文件" /></el-form-item>
-              <div class="pad-config__hint">预览时将按当前选中顺序生成“重写名称 1、重写名称 2 …”以区分项目。</div>
+              <div class="pad-config__hint">预览时将按当前选中顺序生成“重写名称 1、重写名称 2 …”以区分项目，文件扩展名将强制保留。</div>
             </el-form>
           </div>
 
@@ -448,7 +449,10 @@
             <el-form label-position="top">
               <el-form-item label="正则表达式"><el-input v-model="regexRuleDraft.pattern" placeholder="例如：\\[\\d+\\]" /></el-form-item>
               <el-form-item label="替换为"><el-input v-model="regexRuleDraft.replacement" placeholder="留空表示删除匹配内容" /></el-form-item>
-              <el-checkbox v-model="regexRuleDraft.global">替换全部匹配</el-checkbox>
+              <div class="insert-config__checks">
+                <el-checkbox v-model="regexRuleDraft.global">替换全部匹配</el-checkbox>
+                <el-checkbox v-model="regexRuleDraft.ignoreExtension">忽略扩展名</el-checkbox>
+              </div>
             </el-form>
           </div>
 
@@ -615,9 +619,9 @@ interface PadRuleConfig {
   smart: boolean
   ignoreExtension: boolean
 }
-interface ReplaceRuleConfig { match: string; replacement: string }
+interface ReplaceRuleConfig { match: string; replacement: string; ignoreExtension: boolean }
 interface RewriteRuleConfig { name: string }
-interface RegexRuleConfig { pattern: string; replacement: string; global: boolean }
+interface RegexRuleConfig { pattern: string; replacement: string; global: boolean; ignoreExtension: boolean }
 
 interface NamingRuleSet {
   id: number
@@ -722,9 +726,9 @@ const padRuleDraft = reactive<PadRuleConfig>({
   smart: false,
   ignoreExtension: true,
 })
-const replaceRuleDraft = reactive<ReplaceRuleConfig>({ match: '', replacement: '' })
+const replaceRuleDraft = reactive<ReplaceRuleConfig>({ match: '', replacement: '', ignoreExtension: true })
 const rewriteRuleDraft = reactive<RewriteRuleConfig>({ name: '' })
-const regexRuleDraft = reactive<RegexRuleConfig>({ pattern: '', replacement: '', global: true })
+const regexRuleDraft = reactive<RegexRuleConfig>({ pattern: '', replacement: '', global: true, ignoreExtension: true })
 
 const namingRuleSets = ref<NamingRuleSet[]>([])
 const selectedRuleSetID = ref<number | null>(null)
@@ -1080,12 +1084,12 @@ function buildActiveRuleDescription() {
   }
 
   if (activeRuleCategory.value === 'pad') {
-    return `在文件或文件夹名称第 ${padRuleDraft.index} 位${padRuleDraft.position === 'before' ? '之前' : '之后'}填充“${padRuleDraft.content || '未填写'}”，${padRuleDraft.smart ? '智能避免重复填充' : '允许重复填充'}，${padRuleDraft.ignoreExtension ? '文件名忽略扩展名' : '文件名包含扩展名'}`
+    return `在文件或文件夹名称第 ${padRuleDraft.index} 位${padRuleDraft.position === 'before' ? '之前' : '之后'}填充“${padRuleDraft.content || '未填写'}”，${padRuleDraft.smart ? '智能避免重复填充' : '允许重复填充'}，${padRuleDraft.ignoreExtension ? '忽略扩展名' : '包含扩展名'}`
   }
 
-  if (activeRuleCategory.value === 'replace') return `将“${replaceRuleDraft.match}”替换为“${replaceRuleDraft.replacement}”`
-  if (activeRuleCategory.value === 'rewrite') return `重写为“${rewriteRuleDraft.name}”，按选中顺序追加序号`
-  if (activeRuleCategory.value === 'regex') return `正则替换 /${regexRuleDraft.pattern}/ 为“${regexRuleDraft.replacement}”${regexRuleDraft.global ? '（全部匹配）' : '（首个匹配）'}`
+  if (activeRuleCategory.value === 'replace') return `将“${replaceRuleDraft.match}”替换为“${replaceRuleDraft.replacement}”，${replaceRuleDraft.ignoreExtension ? '忽略扩展名' : '包含扩展名'}`
+  if (activeRuleCategory.value === 'rewrite') return `重写为“${rewriteRuleDraft.name}”，按选中顺序追加序号并保留原扩展名`
+  if (activeRuleCategory.value === 'regex') return `正则替换 /${regexRuleDraft.pattern}/ 为“${regexRuleDraft.replacement}”${regexRuleDraft.global ? '（全部匹配）' : '（首个匹配）'}，${regexRuleDraft.ignoreExtension ? '忽略扩展名' : '包含扩展名'}`
 
   return `${activeRuleCategoryLabel.value}规则栏目已添加，具体配置待后续接入`
 }
@@ -1105,23 +1109,46 @@ function applyAddedRules(item: SourceItem) {
   return addedRules.value.reduce((name, rule) => {
     if (!rule.config) return name
     if (rule.category === 'pad') return applyPadRule(name, item.kind, rule.config as PadRuleConfig)
-    if (rule.category === 'replace') return name.split((rule.config as ReplaceRuleConfig).match).join((rule.config as ReplaceRuleConfig).replacement)
-    if (rule.category === 'rewrite') return `${(rule.config as RewriteRuleConfig).name} ${itemIndex}`
+    if (rule.category === 'replace') {
+      const cfg = rule.config as ReplaceRuleConfig
+      return applyToNamePart(name, item.kind, cfg.ignoreExtension, (value) => value.split(cfg.match).join(cfg.replacement))
+    }
+    if (rule.category === 'rewrite') {
+      const { extension } = splitNameExtension(name, item.kind)
+      return `${(rule.config as RewriteRuleConfig).name} ${itemIndex}${extension}`
+    }
     if (rule.category === 'regex') {
       const cfg = rule.config as RegexRuleConfig
-      try { return name.replace(new RegExp(cfg.pattern, cfg.global ? 'g' : ''), cfg.replacement) } catch { return name }
+      try {
+        const expression = new RegExp(cfg.pattern, cfg.global ? 'g' : '')
+        return applyToNamePart(name, item.kind, cfg.ignoreExtension, (value) => value.replace(expression, cfg.replacement))
+      } catch {
+        return name
+      }
     }
     return name
   }, item.name)
 }
 
+function splitNameExtension(name: string, kind: SourceItemKind) {
+  const extensionIndex = kind === 'file' ? name.lastIndexOf('.') : -1
+  const hasExtension = extensionIndex > 0
+  return {
+    baseName: hasExtension ? name.slice(0, extensionIndex) : name,
+    extension: hasExtension ? name.slice(extensionIndex) : '',
+  }
+}
+
+function applyToNamePart(name: string, kind: SourceItemKind, ignoreExtension: boolean, transform: (value: string) => string) {
+  if (!ignoreExtension) return transform(name)
+  const { baseName, extension } = splitNameExtension(name, kind)
+  return `${transform(baseName)}${extension}`
+}
+
 function applyPadRule(name: string, kind: SourceItemKind, config: PadRuleConfig) {
   if (!config.content) return name
 
-  const extensionIndex = kind === 'file' && config.ignoreExtension ? name.lastIndexOf('.') : -1
-  const hasExtension = extensionIndex > 0
-  const baseName = hasExtension ? name.slice(0, extensionIndex) : name
-  const extension = hasExtension ? name.slice(extensionIndex) : ''
+  const { baseName, extension } = config.ignoreExtension ? splitNameExtension(name, kind) : { baseName: name, extension: '' }
   const characters = Array.from(baseName)
   const contentCharacters = Array.from(config.content)
   const characterIndex = Math.min(Math.max(config.index - 1, 0), characters.length)
