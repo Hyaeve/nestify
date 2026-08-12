@@ -1,0 +1,101 @@
+app:
+  name: Nestify
+  timezone: Asia/Shanghai
+  log_level: info
+
+schedule:
+  run_mode: watch
+  watch:
+    debounce_ms: 2000
+    run_on_start: true
+  cron:
+    expression: "0 */6 * * *"
+
+filters:
+  default:
+    enabled: false
+    whitelist: []
+    blacklist: []
+    allow_no_extension: true
+    on_reject: skip
+  package:
+    inherit_default_filters: true
+    whitelist: []
+    blacklist: []
+  collect:
+    inherit_default_filters: true
+    whitelist: []
+    blacklist: []
+  manual:
+    inherit_default_filters: true
+    whitelist: []
+    blacklist: []
+    on_reject: fail-current-item
+
+manual:
+  output_to_parent: true
+  reject_non_image_files: true
+  reject_nested_dirs: true
+  delete_source_after_success: false
+  sort_strategy: natural
+  conflict_policy: suffix
+
+tasks:
+  - name: Manga Package Rule
+    enabled: true
+    source_dir: /library/manga
+    target_dir: /archive/manga
+    archive_mode: package
+    options:
+      ignore_hidden_files: true
+      ignore_file_names:
+        - Thumbs.db
+        - desktop.ini
+        - .DS_Store
+      collect_root_files: true
+      conflict_policy: suffix
+      suffix_style: numeric
+      stop_on_first_error: false
+      dry_run: false
+      use_staging_cbz: true
+    package_options:
+      recursive_scan: false
+      package_volumes_to_cbz: true
+      allow_mixed_content: true
+      move_non_image_files_in_package_mode: true
+      skip_volume_if_nested_dirs: true
+      sort_strategy: natural
+      cbz_name_from_dir: true
+      delete_source_after_package: true
+      direct_move_root_files: true
+
+  - name: Manga Collect Rule
+    enabled: false
+    source_dir: /library/manga-flat
+    target_dir: /archive/manga-flat
+    archive_mode: collect
+    options:
+      ignore_hidden_files: true
+      ignore_file_names:
+        - Thumbs.db
+        - desktop.ini
+        - .DS_Store
+      collect_root_files: true
+      conflict_policy: suffix
+      suffix_style: numeric
+      stop_on_first_error: false
+      dry_run: false
+      use_staging_cbz: true
+    collect_options:
+      recursive_scan: true
+      follow_subdirs: true
+      flatten_structure: true
+      preserve_relative_structure: false
+      collect_nested_files: true
+      filter_by_extension: false
+      collect_all_file_types: true
+      include_unknown_files: true
+      delete_empty_source_dirs: true
+      delete_series_dir_when_empty: false
+      cleanup_partially_processed_dirs: false
+

@@ -1,0 +1,1973 @@
+package executor
+
+import (
+	"archive/zip"
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"unicode"
+)
+
+var archivePartNumberPattern = regexp.MustCompile(`^0*[1-9]\d*$`)
+
+const packageTrashRoot = "data/recycle"
+
+type executionStats struct {
+	ProcessedFiles      int
+	SuccessCount        int
+	SkipCount           int
+	FailureCount        int
+	PackedVolumes       int
+	MovedFiles          int
+	CleanupRemovedFiles int
+	CleanupRemovedDirs  int
+	SizeBytes           int64
+	HistoryEvents       int
+	Summary             string
+}
+
+type packageStageResult struct {
+	imageFiles   []os.DirEntry
+	coverFiles   []os.DirEntry
+	matchedFiles []os.DirEntry
+	hasSubdirs   bool
+	fileCount    int
+}
+
+func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	if strings.TrimSpace(req.ArchiveMode) == "cleanup" {
+		return s.executeCleanupRule(runID, req)
+	}
+	if strings.TrimSpace(req.ArchiveMode) == "transform" {
+		return s.executeTransformRule(runID, req)
+	}
+	if strings.TrimSpace(req.ArchiveMode) == "link" {
+		return s.executeLinkRule(runID, req)
+	}
+
+	stats := executionStats{}
+
+	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
+	targetDir := filepath.Clean(strings.TrimSpace(req.TargetDir))
+	if sourceDir == "" || sourceDir == "." {
+		return stats, fmt.Errorf("source dir is required")
+	}
+	if targetDir == "" || targetDir == "." {
+		return stats, fmt.Errorf("target dir is required")
+	}
+
+	info, err := statWithMode(req.CompatibilityMode, sourceDir)
+	if err != nil {
+		return stats, fmt.Errorf("stat source dir: %w", err)
+	}
+	if !info.IsDir() {
+		return stats, fmt.Errorf("source dir must be a directory")
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return stats, fmt.Errorf("create target dir: %w", err)
+	}
+
+	entries, err := readDirWithMode(req.CompatibilityMode, sourceDir)
+	if err != nil {
+		return stats, fmt.Errorf("read source dir: %w", err)
+	}
+	entries = limitEntriesForMode(req.CompatibilityMode, entries)
+	if len(entries) == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "源目录为空"
+		return stats, nil
+	}
+
+	sortEntriesNaturally(entries)
+	matchers := buildFileNameMatchers(req.Filters)
+	matchArchiveEnabled := req.ArchiveMode == "package" && req.PackageOptions["match_archive"]
+	matchArchiveParentRenameEnabled := req.ArchiveMode == "package" && req.PackageOptions["match_archive_parent_rename"]
+	directMatchers := buildArchiveDirectMatchers(req.MatchFilters)
+	singleFileNestingEnabled := req.ArchiveMode == "package" && req.PackageOptions["single_file_nesting"]
+	nestMatchers := buildArchiveDirectMatchers(req.NestFilters)
+	packageNestedFolders := req.ArchiveMode == "package"
+	hierarchicalArchive := req.ArchiveMode == "package" && req.PackageOptions["hierarchical_archive"]
+	flatArchive := req.PackageOptions["flat_archive"]
+	collectRecursiveEnabled := req.ArchiveMode != "collect" || req.CollectOptions["recursive_collect"]
+	collectDeduplicateEnabled := req.ArchiveMode == "collect"
+	collectRemoveSourceEnabled := req.ArchiveMode != "collect" || req.CollectOptions["cleanup_source_after_archive"]
+	topLevelImageFiles := make([]os.DirEntry, 0, len(entries))
+	topLevelCoverFiles := make([]os.DirEntry, 0, len(entries))
+	topLevelMatchedFiles := make([]os.DirEntry, 0, len(entries))
+	cleanupSourceAfterArchive := false
+	if req.ArchiveMode == "package" {
+		cleanupSourceAfterArchive = req.PackageOptions["cleanup_source_after_archive"]
+	} else if req.ArchiveMode == "collect" {
+		cleanupSourceAfterArchive = collectRemoveSourceEnabled
+	}
+	err = processEntriesForMode(req.CompatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(sourceDir, entry.Name())
+		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, sourceDir, entryPath, true, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, sourceDir, entryPath, false, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if matchArchiveEnabled && !entry.IsDir() && matchesArchiveDirectly(sourceDir, entryPath, directMatchers) {
+			matchedTargetDir := targetDir
+			if req.ArchiveMode == "package" && isImageFile(entry.Name()) {
+				topLevelMatchedFiles = append(topLevelMatchedFiles, entry)
+				return nil
+			}
+			if err := s.moveMatchedArchiveFile(runID, sourceDir, entryPath, matchedTargetDir, req.ArchiveMode, matchArchiveParentRenameEnabled, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("move matched file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("move matched file %s failed: %v", entryPath, err))
+			}
+			return nil
+		}
+		if singleFileNestingEnabled && !entry.IsDir() && matchesArchiveDirectly(sourceDir, entryPath, nestMatchers) {
+			if err := s.moveLooseFileToOwnDir(runID, entryPath, targetDir, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("nest matched file %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("nest matched file %s failed: %v", entryPath, err))
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			targetSeriesDir := filepath.Join(targetDir, entry.Name())
+			if req.ArchiveMode == "package" && (flatArchive || hierarchicalArchive) {
+				targetSeriesDir = targetDir
+			}
+			if err := s.processSeriesDir(runID, sourceDir, entryPath, targetDir, targetSeriesDir, req.ArchiveMode, req.CompatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, &stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process series %s failed: %v", entryPath, err), &stats)
+				s.appendLog(runID, "error", fmt.Sprintf("process series %s failed: %v", entryPath, err))
+			}
+			return nil
+		}
+
+		if req.ArchiveMode == "package" {
+			if isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
+				topLevelCoverFiles = append(topLevelCoverFiles, entry)
+				return nil
+			}
+			if isImageFile(entry.Name()) {
+				topLevelImageFiles = append(topLevelImageFiles, entry)
+				return nil
+			}
+		}
+
+		if req.ArchiveMode == "package" {
+			stats.SkipCount++
+			s.persistRunHistory(runID, fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath), &stats)
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath))
+			return nil
+		}
+
+		if err := s.moveLooseFile(runID, entryPath, targetDir, req.ArchiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move file %s failed: %v", entryPath, err), &stats)
+			s.appendLog(runID, "error", fmt.Sprintf("move file %s failed: %v", entryPath, err))
+		}
+		return nil
+	})
+	if err != nil {
+		return stats, err
+	}
+
+	if req.ArchiveMode == "package" && len(topLevelImageFiles) > 0 {
+		archiveTargetDir := targetDir
+		if !flatArchive && !hierarchicalArchive {
+			archiveTargetDir = filepath.Join(targetDir, filepath.Base(sourceDir))
+		}
+		archivePath, packErr := createPackageCBZFromFiles(sourceDir, sourceDir, topLevelImageFiles, archiveTargetDir, matchArchiveParentRenameEnabled, false)
+		if packErr != nil {
+			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr), &stats)
+			s.appendLog(runID, "error", fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr))
+		} else {
+			if cleanupSourceAfterArchive {
+				if removeErr := removePackedSourceFiles(sourceDir, topLevelImageFiles); removeErr != nil {
+					return stats, fmt.Errorf("remove packed root source files: %w", removeErr)
+				}
+			}
+			if err := s.moveCoverFiles(runID, sourceDir, topLevelCoverFiles, archiveTargetDir, &stats); err != nil {
+				return stats, err
+			}
+			if err := s.moveMatchedArchiveEntries(runID, sourceDir, sourceDir, topLevelMatchedFiles, targetDir, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, &stats); err != nil {
+				return stats, err
+			}
+			stats.ProcessedFiles += len(topLevelImageFiles)
+			stats.SuccessCount++
+			stats.PackedVolumes++
+			stats.SizeBytes += fileSizeOrZero(archivePath)
+			s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath), &stats)
+			s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath))
+		}
+	}
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "未发现可归档项目"
+	} else {
+		stats.Summary = fmt.Sprintf("归档完成：打包 %d 卷、移动 %d 个文件、跳过 %d 项、失败 %d 项", stats.PackedVolumes, stats.MovedFiles, stats.SkipCount, stats.FailureCount)
+	}
+
+	if stats.FailureCount > 0 {
+		return stats, fmt.Errorf("archive finished with %d failures", stats.FailureCount)
+	}
+
+	return stats, nil
+}
+
+func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	stats := executionStats{}
+
+	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
+	targetDir := filepath.Clean(strings.TrimSpace(req.TargetDir))
+	if sourceDir == "" || sourceDir == "." {
+		return stats, fmt.Errorf("source dir is required")
+	}
+	if targetDir == "" || targetDir == "." {
+		return stats, fmt.Errorf("target dir is required")
+	}
+
+	info, err := statWithMode(req.CompatibilityMode, sourceDir)
+	if err != nil {
+		return stats, fmt.Errorf("stat source dir: %w", err)
+	}
+	if !info.IsDir() {
+		return stats, fmt.Errorf("source dir must be a directory")
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return stats, fmt.Errorf("create target dir: %w", err)
+	}
+
+	if strings.EqualFold(strings.TrimSpace(req.LinkMode), "strm") {
+		return s.executeStrmRule(runID, req, sourceDir, targetDir, &stats)
+	}
+
+	matchers := buildFileNameMatchers(req.Filters)
+	if err := s.linkDirectory(runID, sourceDir, sourceDir, targetDir, req.LinkMode, req.CompatibilityMode, matchers, &stats); err != nil {
+		return stats, err
+	}
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "未发现可建立链路的文件"
+	} else {
+		modeLabel := "软链"
+		if strings.EqualFold(strings.TrimSpace(req.LinkMode), "hard") {
+			modeLabel = "硬链"
+		}
+		stats.Summary = fmt.Sprintf("链路完成：%s -> %s；创建 %d 个%s，跳过 %d 项，失败 %d 项", sourceDir, targetDir, stats.SuccessCount, modeLabel, stats.SkipCount, stats.FailureCount)
+	}
+
+	if stats.FailureCount > 0 {
+		return stats, fmt.Errorf("link execution finished with %d failures", stats.FailureCount)
+	}
+
+	return stats, nil
+}
+
+func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMode, compatibilityMode string, matchers []fileNameMatcher, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		return fmt.Errorf("read link directory %s: %w", currentPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+
+	sortEntriesNaturally(entries)
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		sourcePath := filepath.Join(currentPath, entry.Name())
+		relPath, relErr := filepath.Rel(rootPath, sourcePath)
+		if relErr != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("resolve relative path for %s failed: %v", sourcePath, relErr))
+			return nil
+		}
+		if relPath == "." {
+			return nil
+		}
+
+		targetPath := filepath.Join(targetRoot, relPath)
+		if entry.IsDir() {
+			if matchesFileName(entry.Name(), true, matchers) {
+				stats.SkipCount++
+				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted directory %s", sourcePath))
+				return nil
+			}
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				stats.FailureCount++
+				s.appendLog(runID, "error", fmt.Sprintf("create link target directory %s failed: %v", targetPath, err))
+				return nil
+			}
+			if err := s.linkDirectory(runID, rootPath, sourcePath, targetRoot, linkMode, compatibilityMode, matchers, stats); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		if matchesFileName(entry.Name(), entry.IsDir(), matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted file %s", sourcePath))
+			return nil
+		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create link parent directory %s failed: %v", filepath.Dir(targetPath), err))
+			return nil
+		}
+
+		if _, err := os.Lstat(targetPath); err == nil {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing link target %s", targetPath))
+			return nil
+		} else if !os.IsNotExist(err) {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("inspect link target %s failed: %v", targetPath, err))
+			return nil
+		}
+
+		if err := createFileLink(sourcePath, targetPath, linkMode); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create link %s -> %s failed: %v", targetPath, sourcePath, err))
+			return nil
+		}
+
+		stats.ProcessedFiles++
+		stats.SuccessCount++
+		s.appendLog(runID, "info", fmt.Sprintf("created link %s -> %s", targetPath, sourcePath))
+		return nil
+	})
+}
+
+func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
+	extensions := normalizeStrmExtensions(req.Filters)
+	if len(extensions) == 0 {
+		return *stats, fmt.Errorf("strm extensions are required")
+	}
+	matchers := buildFileNameMatchers(req.Whitelist)
+
+	if req.Options["strm_full_sync"] {
+		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
+			return *stats, err
+		}
+	}
+
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, stats); err != nil {
+		return *stats, err
+	}
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+		stats.SkipCount = 1
+		stats.Summary = "未发现可生成 Strm 的文件"
+	} else {
+		syncLabel := "增量同步"
+		if req.Options["strm_full_sync"] {
+			syncLabel = "全量同步"
+		}
+		stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+	}
+
+	if stats.FailureCount > 0 {
+		return *stats, fmt.Errorf("strm execution finished with %d failures", stats.FailureCount)
+	}
+
+	return *stats, nil
+}
+
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+
+	sortEntriesNaturally(entries)
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		sourcePath := filepath.Join(currentPath, entry.Name())
+		if entry.IsDir() {
+			if matchesFileName(entry.Name(), true, matchers) {
+				stats.SkipCount++
+				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
+				return nil
+			}
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, stats)
+		}
+
+		if matchesFileName(entry.Name(), false, matchers) {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm file %s", sourcePath))
+			return nil
+		}
+
+		if !matchesStrmExtension(entry.Name(), extensions) {
+			stats.SkipCount++
+			return nil
+		}
+
+		targetPath, relErr := strmTargetPath(rootPath, sourcePath, targetRoot)
+		if relErr != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("resolve strm target for %s failed: %v", sourcePath, relErr))
+			return nil
+		}
+
+		if _, err := os.Lstat(targetPath); err == nil {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing strm target %s", targetPath))
+			return nil
+		} else if !os.IsNotExist(err) {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("inspect strm target %s failed: %v", targetPath, err))
+			return nil
+		}
+
+		if err := writeStrmFile(sourcePath, targetPath); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("create strm %s -> %s failed: %v", targetPath, sourcePath, err))
+			return nil
+		}
+
+		stats.ProcessedFiles++
+		stats.SuccessCount++
+		s.appendLog(runID, "info", fmt.Sprintf("created strm %s -> %s", targetPath, sourcePath))
+		return nil
+	})
+}
+
+func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode string, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, currentPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read strm target directory %s: %w", currentPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+
+	sortEntriesNaturally(entries)
+	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(currentPath, entry.Name())
+		if entry.IsDir() {
+			return s.removeExistingStrmFiles(runID, entryPath, compatibilityMode, stats)
+		}
+		if !strings.EqualFold(filepath.Ext(entry.Name()), ".strm") {
+			return nil
+		}
+		fileOperationWithMode(compatibilityMode)
+		if err := os.Remove(entryPath); err != nil {
+			stats.FailureCount++
+			s.appendLog(runID, "error", fmt.Sprintf("remove existing strm %s failed: %v", entryPath, err))
+			return nil
+		}
+		stats.SkipCount++
+		s.appendLog(runID, "info", fmt.Sprintf("removed existing strm %s", entryPath))
+		return nil
+	})
+}
+
+func normalizeStrmExtensions(filters []string) map[string]struct{} {
+	extensions := make(map[string]struct{})
+	for _, filter := range filters {
+		trimmed := strings.TrimSpace(filter)
+		trimmed = strings.Trim(trimmed, `"'`)
+		trimmed = strings.TrimPrefix(trimmed, "*")
+		if trimmed == "" {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, ".") {
+			trimmed = "." + trimmed
+		}
+		extensions[strings.ToLower(trimmed)] = struct{}{}
+	}
+	return extensions
+}
+
+func matchesStrmExtension(name string, extensions map[string]struct{}) bool {
+	_, ok := extensions[strings.ToLower(filepath.Ext(name))]
+	return ok
+}
+
+func strmTargetPath(rootPath, sourcePath, targetRoot string) (string, error) {
+	relPath, err := filepath.Rel(rootPath, sourcePath)
+	if err != nil {
+		return "", err
+	}
+	if relPath == "." {
+		return "", fmt.Errorf("invalid source path")
+	}
+	ext := filepath.Ext(relPath)
+	if ext == "" {
+		return filepath.Join(targetRoot, relPath+".strm"), nil
+	}
+	return filepath.Join(targetRoot, strings.TrimSuffix(relPath, ext)+".strm"), nil
+}
+
+func writeStrmFile(sourcePath, targetPath string) error {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create strm parent: %w", err)
+	}
+	if err := os.WriteFile(targetPath, []byte(sourcePath+"\n"), 0o644); err != nil {
+		return fmt.Errorf("write strm file: %w", err)
+	}
+	return nil
+}
+
+func createFileLink(sourcePath, targetPath, linkMode string) error {
+	if strings.EqualFold(strings.TrimSpace(linkMode), "hard") {
+		if err := os.Link(sourcePath, targetPath); err != nil {
+			return fmt.Errorf("create hard link: %w", err)
+		}
+		return nil
+	}
+
+	if err := os.Symlink(sourcePath, targetPath); err != nil {
+		return fmt.Errorf("create soft link: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootDir, targetSeriesDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive, hierarchicalArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, seriesPath)
+	if err != nil {
+		return fmt.Errorf("read series dir: %w", err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+	if len(entries) == 0 {
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped empty series %s", seriesPath), stats)
+		_ = os.Remove(seriesPath)
+		return nil
+	}
+
+	sortEntriesNaturally(entries)
+	if archiveMode == "package" {
+		stageResult, err := s.scanAndStagePackageEntries(runID, rootSourceDir, seriesPath, compatibilityMode, matchers, matchArchiveEnabled, directMatchers, stats)
+		if err != nil {
+			return err
+		}
+		packageTargetDir := targetSeriesDir
+		if hierarchicalArchive {
+			packageTargetDir = hierarchicalPackageTargetDir(rootSourceDir, seriesPath, targetRootDir)
+		}
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, seriesPath, packageTargetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, false, stats); err != nil {
+			return err
+		}
+		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
+			return nil
+		}
+	}
+
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(seriesPath, entry.Name())
+		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, false, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			if archiveMode == "collect" && !collectRecursiveEnabled {
+				stats.SkipCount++
+				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
+				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
+				return nil
+			}
+			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetRootDir, targetSeriesDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process volume %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("process volume %s failed: %v", entryPath, err))
+			}
+			return nil
+		}
+
+		if archiveMode == "package" && (isImageFile(entry.Name()) || (matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers)) || isCoverImageFile(entry.Name())) {
+			return nil
+		}
+
+		if archiveMode == "package" {
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: package mode only moves matched custom archive targets", entryPath))
+			return nil
+		}
+
+		if err := s.moveLooseFile(runID, entryPath, targetSeriesDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats); err != nil {
+			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move series file %s failed: %v", entryPath, err), stats)
+			s.appendLog(runID, "error", fmt.Sprintf("move series file %s failed: %v", entryPath, err))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootDir, targetDir, archiveMode, compatibilityMode string, packageNestedFolders, flatArchive, hierarchicalArchive bool, cleanupSourceAfterArchive bool, collectRecursiveEnabled bool, collectDeduplicateEnabled bool, matchers []fileNameMatcher, matchArchiveEnabled bool, matchArchiveParentRenameEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) error {
+	entries, err := readDirWithMode(compatibilityMode, volumePath)
+	if err != nil {
+		return fmt.Errorf("read volume dir: %w", err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+	if len(entries) == 0 {
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("已跳过空分卷目录 %s", volumePath), stats)
+		_ = os.Remove(volumePath)
+		return nil
+	}
+
+	sortEntriesNaturally(entries)
+	var packageStage *packageStageResult
+	if archiveMode == "package" {
+		stageResult, err := s.scanAndStagePackageEntries(runID, rootSourceDir, volumePath, compatibilityMode, matchers, matchArchiveEnabled, directMatchers, stats)
+		if err != nil {
+			return err
+		}
+		packageStage = &stageResult
+		packageTargetDir := targetDir
+		if hierarchicalArchive {
+			packageTargetDir = hierarchicalPackageTargetDir(rootSourceDir, volumePath, targetRootDir)
+		}
+		if err := s.finalizePackageDirectory(runID, rootSourceDir, volumePath, packageTargetDir, stageResult, matchArchiveParentRenameEnabled, cleanupSourceAfterArchive, shouldUsePlainParentCBZName(rootSourceDir, volumePath), stats); err != nil {
+			return err
+		}
+		if !stageResult.hasSubdirs && stageResult.fileCount == 0 && (len(stageResult.coverFiles) > 0 || len(stageResult.matchedFiles) > 0) {
+			return nil
+		}
+	}
+
+	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs && !packageNestedFolders {
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s", volumePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", volumePath))
+		return nil
+	}
+
+	nextTargetDir := targetDir
+	fileTargetDir := targetDir
+	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs {
+		if flatArchive || hierarchicalArchive {
+			nextTargetDir = targetDir
+			fileTargetDir = targetDir
+		} else {
+			nextTargetDir = filepath.Join(targetDir, filepath.Base(volumePath))
+			fileTargetDir = nextTargetDir
+		}
+	}
+
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(volumePath, entry.Name())
+		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if !entry.IsDir() && matchesFileName(entry.Name(), false, matchers) {
+			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, false, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
+			} else {
+				stats.SkipCount++
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			if archiveMode == "collect" && !collectRecursiveEnabled {
+				stats.SkipCount++
+				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
+				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
+				return nil
+			}
+			if err := s.processVolumeDir(runID, rootSourceDir, entryPath, targetRootDir, nextTargetDir, archiveMode, compatibilityMode, packageNestedFolders, flatArchive, hierarchicalArchive, cleanupSourceAfterArchive, collectRecursiveEnabled, collectDeduplicateEnabled, matchers, matchArchiveEnabled, matchArchiveParentRenameEnabled, directMatchers, stats); err != nil {
+				stats.FailureCount++
+				s.persistRunHistory(runID, fmt.Sprintf("process nested directory %s failed: %v", entryPath, err), stats)
+				s.appendLog(runID, "error", fmt.Sprintf("process nested directory %s failed: %v", entryPath, err))
+			}
+			return nil
+		}
+
+		if archiveMode == "package" && (isImageFile(entry.Name()) || (matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers)) || isCoverImageFile(entry.Name())) {
+			return nil
+		}
+
+		if archiveMode == "package" {
+			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in place %s: package mode only moves matched custom archive targets", entryPath))
+			return nil
+		}
+
+		if err := s.moveLooseFile(runID, entryPath, fileTargetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats); err != nil {
+			stats.FailureCount++
+			s.persistRunHistory(runID, fmt.Sprintf("move nested file %s failed: %v", entryPath, err), stats)
+			s.appendLog(runID, "error", fmt.Sprintf("move nested file %s failed: %v", entryPath, err))
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("create target dir: %w", err)
+	}
+
+	targetPath, actionSummary, err := resolveCollectTargetPath(sourcePath, targetDir, archiveMode, collectDeduplicateEnabled)
+	if err != nil {
+		return err
+	}
+	if actionSummary == "skip-same-file" {
+		stats.ProcessedFiles++
+		stats.SkipCount++
+		s.persistRunHistory(runID, fmt.Sprintf("skipped duplicate file %s", sourcePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("skipped duplicate file %s: same file already exists", sourcePath))
+		if cleanupSourceAfterArchive {
+			if err := os.Remove(sourcePath); err != nil {
+				return fmt.Errorf("remove duplicate source file: %w", err)
+			}
+		}
+		return nil
+	}
+	if cleanupSourceAfterArchive {
+		err = moveFile(sourcePath, targetPath)
+	} else {
+		err = copyFile(sourcePath, targetPath)
+	}
+	if err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	stats.SuccessCount++
+	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
+	verb := "copied"
+	if cleanupSourceAfterArchive {
+		verb = "moved"
+	}
+	message := fmt.Sprintf("%s文件 %s -> %s", mapArchiveActionVerb(verb), sourcePath, targetPath)
+	if actionSummary == "renamed-re" {
+		message += "（因存在同名异内容文件，已自动追加 -re/-reN 后缀）"
+	}
+	s.persistRunHistory(runID, message, stats)
+	s.appendLog(runID, "info", message)
+	return nil
+}
+
+func (s *Service) moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, archiveMode string, parentRenameEnabled bool, collectDeduplicateEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+	if !parentRenameEnabled {
+		if archiveMode == "package" {
+			if sameCleanPath(filepath.Clean(strings.TrimSpace(rootSourceDir)), filepath.Dir(filepath.Clean(strings.TrimSpace(sourcePath)))) {
+				return s.moveFileToOwnDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
+			}
+			return s.moveFileToTargetDir(runID, sourcePath, targetDir, cleanupSourceAfterArchive, "匹配归档文件", stats)
+		}
+		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
+	}
+
+	parentName := archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath)
+	if parentName == "" {
+		return s.moveLooseFile(runID, sourcePath, targetDir, archiveMode, collectDeduplicateEnabled, cleanupSourceAfterArchive, stats)
+	}
+
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("create target dir: %w", err)
+	}
+
+	ext := filepath.Ext(sourcePath)
+	targetPath, err := resolveParentRenamedPartPath(targetDir, parentName, filepath.Dir(sourcePath), ext, hasSiblingMatchedFiles(rootSourceDir, sourcePath))
+	if err != nil {
+		return err
+	}
+
+	if cleanupSourceAfterArchive {
+		err = moveFile(sourcePath, targetPath)
+	} else {
+		err = copyFile(sourcePath, targetPath)
+	}
+	if err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	stats.SuccessCount++
+	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
+	verb := "copied"
+	if cleanupSourceAfterArchive {
+		verb = "moved"
+	}
+	message := fmt.Sprintf("%s匹配归档文件 %s -> %s", mapArchiveActionVerb(verb), sourcePath, targetPath)
+	s.persistRunHistory(runID, message, stats)
+	s.appendLog(runID, "info", message)
+	return nil
+}
+
+func (s *Service) moveFileToTargetDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return fmt.Errorf("create target dir: %w", err)
+	}
+
+	targetPath := uniqueArchiveDestinationPath(targetDir, filepath.Base(sourcePath))
+	var err error
+	if cleanupSourceAfterArchive {
+		err = moveFile(sourcePath, targetPath)
+	} else {
+		err = copyFile(sourcePath, targetPath)
+	}
+	if err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	stats.SuccessCount++
+	stats.MovedFiles++
+	stats.SizeBytes += fileSizeOrZero(targetPath)
+	verb := "copied"
+	if cleanupSourceAfterArchive {
+		verb = "moved"
+	}
+	message := fmt.Sprintf("%s%s %s -> %s", mapArchiveActionVerb(verb), itemLabel, sourcePath, targetPath)
+	s.persistRunHistory(runID, message, stats)
+	s.appendLog(runID, "info", message)
+	return nil
+}
+
+func (s *Service) moveFileToOwnDir(runID, sourcePath, targetDir string, cleanupSourceAfterArchive bool, itemLabel string, stats *executionStats) error {
+	baseName := strings.TrimSpace(filepath.Base(sourcePath))
+	if baseName == "" {
+		return fmt.Errorf("source file name is empty")
+	}
+
+	fileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = baseName
+	}
+
+	return s.moveFileToTargetDir(runID, sourcePath, filepath.Join(targetDir, fileName), cleanupSourceAfterArchive, itemLabel, stats)
+}
+
+func mapArchiveActionVerb(verb string) string {
+	switch strings.TrimSpace(strings.ToLower(verb)) {
+	case "moved":
+		return "已移动"
+	case "copied":
+		return "已复制"
+	default:
+		return strings.TrimSpace(verb)
+	}
+}
+
+func (s *Service) moveLooseFileToOwnDir(runID, sourcePath, targetDir string, stats *executionStats) error {
+	return s.moveFileToOwnDir(runID, sourcePath, targetDir, true, "归巢文件", stats)
+}
+
+func (s *Service) trashFilteredArchiveItem(runID, rootSourceDir, sourcePath string, isDir bool, stats *executionStats) error {
+	trashedPath, err := moveFilteredArchiveItemToTrash(rootSourceDir, sourcePath)
+	if err != nil {
+		return err
+	}
+
+	stats.ProcessedFiles++
+	if isDir {
+		stats.CleanupRemovedDirs++
+	} else {
+		stats.CleanupRemovedFiles++
+	}
+	stats.SizeBytes += fileSizeOrZero(trashedPath)
+	itemType := "file"
+	if isDir {
+		itemType = "directory"
+	}
+	s.persistRunHistory(runID, fmt.Sprintf("trashed filtered archive %s %s -> %s (original path: %s)", itemType, sourcePath, trashedPath, sourcePath), stats)
+	s.appendLog(runID, "info", fmt.Sprintf("trashed filtered archive %s %s -> %s (original path: %s)", itemType, sourcePath, trashedPath, sourcePath))
+	return nil
+}
+
+func (s *Service) scanAndStagePackageEntries(runID, rootSourceDir, dirPath, compatibilityMode string, matchers []fileNameMatcher, matchArchiveEnabled bool, directMatchers []fileNameMatcher, stats *executionStats) (packageStageResult, error) {
+	result := packageStageResult{}
+	entries, err := readDirWithMode(compatibilityMode, dirPath)
+	if err != nil {
+		return result, fmt.Errorf("read package directory %s: %w", dirPath, err)
+	}
+	entries = limitEntriesForMode(compatibilityMode, entries)
+	sortEntriesNaturally(entries)
+	result.imageFiles = make([]os.DirEntry, 0, len(entries))
+	result.coverFiles = make([]os.DirEntry, 0, len(entries))
+	result.matchedFiles = make([]os.DirEntry, 0, len(entries))
+
+	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		entryPath := filepath.Join(dirPath, entry.Name())
+		if entry.IsDir() {
+			if matchesFileName(entry.Name(), true, matchers) {
+				return nil
+			}
+			result.hasSubdirs = true
+			return nil
+		}
+		result.fileCount++
+		if matchArchiveEnabled && matchesArchiveDirectly(rootSourceDir, entryPath, directMatchers) {
+			result.matchedFiles = append(result.matchedFiles, entry)
+			return nil
+		}
+		if isCoverImageFile(entry.Name()) && !isImageFile(entry.Name()) {
+			result.coverFiles = append(result.coverFiles, entry)
+			return nil
+		}
+		if isImageFile(entry.Name()) {
+			result.imageFiles = append(result.imageFiles, entry)
+		}
+		return nil
+	})
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, targetDir string, stage packageStageResult, parentRenameEnabled bool, cleanupSourceAfterArchive bool, preferPlainParentName bool, stats *executionStats) error {
+	if len(stage.matchedFiles) > 0 {
+		matchedTargetDir := matchedArchiveTargetDir(rootSourceDir, dirPath, targetDir)
+		if err := s.moveMatchedArchiveEntries(runID, rootSourceDir, dirPath, stage.matchedFiles, matchedTargetDir, parentRenameEnabled, cleanupSourceAfterArchive, stats); err != nil {
+			return err
+		}
+	}
+
+	coverTargetDir := targetDir
+	if !sameCleanPath(rootSourceDir, dirPath) {
+		coverTargetDir = filepath.Join(targetDir, filepath.Base(dirPath))
+	}
+	if len(stage.coverFiles) > 0 {
+		if err := s.moveCoverFiles(runID, dirPath, stage.coverFiles, coverTargetDir, stats); err != nil {
+			return err
+		}
+	}
+
+	if len(stage.imageFiles) == 0 {
+		return nil
+	}
+
+	archivePath, err := createPackageCBZFromFiles(rootSourceDir, dirPath, stage.imageFiles, targetDir, parentRenameEnabled, preferPlainParentName)
+	if err != nil {
+		return err
+	}
+	if cleanupSourceAfterArchive {
+		if err := removePackedSourceFiles(dirPath, stage.imageFiles); err != nil {
+			return fmt.Errorf("remove packed source files: %w", err)
+		}
+	}
+	stats.ProcessedFiles += len(stage.imageFiles)
+	stats.SuccessCount++
+	stats.PackedVolumes++
+	stats.SizeBytes += fileSizeOrZero(archivePath)
+	if sameCleanPath(rootSourceDir, dirPath) {
+		s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath))
+	} else if filepath.Base(dirPath) == filepath.Base(rootSourceDir) {
+		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", dirPath, archivePath))
+	} else {
+		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath), stats)
+		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath))
+	}
+
+	return nil
+}
+
+func moveFilteredArchiveItemToTrash(rootSourceDir, sourcePath string) (string, error) {
+	cleanRootSourceDir := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	if cleanRootSourceDir == "" || cleanRootSourceDir == "." {
+		return "", fmt.Errorf("invalid filtered archive root source path")
+	}
+
+	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSourcePath == "" || cleanSourcePath == "." {
+		return "", fmt.Errorf("invalid filtered archive source path")
+	}
+	if sameCleanPath(cleanRootSourceDir, cleanSourcePath) {
+		return "", fmt.Errorf("filtered archive source path cannot equal root source path")
+	}
+
+	relPath, err := filepath.Rel(filepath.Dir(cleanRootSourceDir), cleanSourcePath)
+	if err != nil {
+		return "", fmt.Errorf("resolve filtered archive relative path: %w", err)
+	}
+	cleanRelPath := filepath.Clean(relPath)
+	if cleanRelPath == "." || cleanRelPath == "" {
+		return "", fmt.Errorf("invalid filtered archive relative path")
+	}
+	rootBaseName := filepath.Base(cleanRootSourceDir)
+	if !sameCleanPath(cleanRelPath, rootBaseName) && !strings.HasPrefix(strings.ToLower(cleanRelPath), strings.ToLower(rootBaseName)+string(filepath.Separator)) {
+		return "", fmt.Errorf("filtered archive source path is outside root source path")
+	}
+
+	trashDir := packageTrashRoot
+	if err := os.MkdirAll(trashDir, 0o755); err != nil {
+		return "", fmt.Errorf("create package trash dir: %w", err)
+	}
+
+	targetPath := filepath.Join(trashDir, cleanRelPath)
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return "", fmt.Errorf("create filtered archive trash parent dir: %w", err)
+	}
+	targetPath = uniqueArchiveDestinationPath(filepath.Dir(targetPath), filepath.Base(targetPath))
+	if err := moveFile(cleanSourcePath, targetPath); err != nil {
+		return "", fmt.Errorf("move filtered archive item to trash: %w", err)
+	}
+
+	return targetPath, nil
+}
+
+func fileSizeOrZero(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return 0
+	}
+	return info.Size()
+}
+
+func (s *Service) moveCoverFiles(runID, basePath string, files []os.DirEntry, targetDir string, stats *executionStats) error {
+	for _, entry := range files {
+		sourcePath := filepath.Join(basePath, entry.Name())
+		if err := s.moveLooseFile(runID, sourcePath, targetDir, "package", false, true, stats); err != nil {
+			return fmt.Errorf("move cover file %s: %w", sourcePath, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) moveMatchedArchiveEntries(runID, rootSourceDir, basePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool, cleanupSourceAfterArchive bool, stats *executionStats) error {
+	for _, entry := range files {
+		sourcePath := filepath.Join(basePath, entry.Name())
+		if err := s.moveMatchedArchiveFile(runID, rootSourceDir, sourcePath, targetDir, "package", parentRenameEnabled, false, cleanupSourceAfterArchive, stats); err != nil {
+			return fmt.Errorf("move matched archive file %s: %w", sourcePath, err)
+		}
+	}
+
+	return nil
+}
+
+func hierarchicalPackageTargetDir(rootSourceDir, dirPath, targetRootDir string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	cleanTarget := filepath.Clean(strings.TrimSpace(targetRootDir))
+	if cleanRoot == "" || cleanRoot == "." || cleanDir == "" || cleanDir == "." || cleanTarget == "" || cleanTarget == "." || sameCleanPath(cleanRoot, cleanDir) {
+		return cleanTarget
+	}
+
+	relPath, err := filepath.Rel(cleanRoot, cleanDir)
+	if err != nil {
+		return cleanTarget
+	}
+	relPath = filepath.Clean(relPath)
+	if relPath == "" || relPath == "." || strings.HasPrefix(relPath, "..") {
+		return cleanTarget
+	}
+
+	parentRelPath := filepath.Dir(relPath)
+	if parentRelPath == "" || parentRelPath == "." {
+		return cleanTarget
+	}
+
+	return filepath.Join(cleanTarget, parentRelPath)
+}
+
+func matchedArchiveTargetDir(rootSourceDir, dirPath, targetDir string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanDir := filepath.Clean(strings.TrimSpace(dirPath))
+	if cleanRoot == "" || cleanRoot == "." || cleanDir == "" || cleanDir == "." || sameCleanPath(cleanRoot, cleanDir) {
+		return targetDir
+	}
+
+	relDir, err := filepath.Rel(cleanRoot, cleanDir)
+	if err != nil {
+		return targetDir
+	}
+	segments := splitArchivePathSegments(relDir)
+	if len(segments) == 0 {
+		return targetDir
+	}
+
+	firstLevelDir := strings.TrimSpace(segments[0])
+	if firstLevelDir == "" || firstLevelDir == "." || firstLevelDir == ".." {
+		return targetDir
+	}
+	if filepath.Base(targetDir) == firstLevelDir {
+		return targetDir
+	}
+
+	return filepath.Join(targetDir, firstLevelDir)
+}
+
+func archiveParentRenameBaseName(rootSourceDir, sourcePath string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanSourcePath := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSourcePath == "" || cleanSourcePath == "." {
+		return ""
+	}
+
+	parentDir := filepath.Dir(cleanSourcePath)
+	if cleanRoot == "" || cleanRoot == "." {
+		parentName := strings.TrimSpace(filepath.Base(parentDir))
+		if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+			return ""
+		}
+		return parentName
+	}
+
+	if sameCleanPath(cleanRoot, parentDir) {
+		return ""
+	}
+
+	relDir, err := filepath.Rel(cleanRoot, parentDir)
+	if err == nil {
+		segments := splitArchivePathSegments(relDir)
+		if len(segments) > 0 {
+			candidate := strings.TrimSpace(segments[0])
+			if candidate != "" && candidate != "." && candidate != ".." {
+				return candidate
+			}
+		}
+	}
+
+	parentName := strings.TrimSpace(filepath.Base(parentDir))
+	if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+		return ""
+	}
+	return parentName
+}
+
+func resolveParentRenamedPartPath(targetDir, parentName, sourceDir, ext string, forcePartSuffix bool) (string, error) {
+	trimmedParent := strings.TrimSpace(parentName)
+	if trimmedParent == "" {
+		return filepath.Join(targetDir, filepath.Base(strings.TrimSpace(sourceDir))+ext), nil
+	}
+
+	if !forcePartSuffix && !parentRenamePartNameExists(targetDir, trimmedParent) {
+		plainPath := filepath.Join(targetDir, trimmedParent+ext)
+		if _, err := os.Stat(plainPath); os.IsNotExist(err) {
+			return plainPath, nil
+		}
+	}
+
+	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(sourceDir)
+	partNumber, err := allocateParentRenamePartNumber(targetDir, trimmedParent, preferredPartNumber, usePreferredPartNumber)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(targetDir, fmt.Sprintf("%s-part%d%s", trimmedParent, partNumber, ext)), nil
+}
+
+func hasSiblingMatchedFiles(rootSourceDir, sourcePath string) bool {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanRoot == "" || cleanRoot == "." || cleanSource == "" || cleanSource == "." {
+		return false
+	}
+
+	baseParent := archiveParentRenameBaseNameForSource(cleanRoot, cleanSource)
+	if baseParent == "" {
+		return false
+	}
+
+	var found bool
+	filepath.WalkDir(cleanRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found || d == nil || d.IsDir() {
+			return nil
+		}
+		if sameCleanPath(path, cleanSource) {
+			return nil
+		}
+		if archiveParentRenameBaseNameForSource(cleanRoot, path) != baseParent {
+			return nil
+		}
+		found = true
+		return nil
+	})
+
+	return found
+}
+
+func archiveParentRenameBaseNameForSource(rootSourceDir, sourcePath string) string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSource == "" || cleanSource == "." {
+		return ""
+	}
+
+	parentDir := filepath.Dir(cleanSource)
+	if cleanRoot == "" || cleanRoot == "." {
+		parentName := strings.TrimSpace(filepath.Base(parentDir))
+		if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+			return ""
+		}
+		return parentName
+	}
+
+	if sameCleanPath(parentDir, cleanRoot) {
+		return ""
+	}
+
+	relDir, err := filepath.Rel(cleanRoot, parentDir)
+	if err == nil {
+		segments := splitArchivePathSegments(relDir)
+		if len(segments) > 0 {
+			candidate := strings.TrimSpace(segments[0])
+			if candidate != "" && candidate != "." && candidate != ".." {
+				return candidate
+			}
+		}
+	}
+
+	parentName := strings.TrimSpace(filepath.Base(parentDir))
+	if parentName == "" || parentName == "." || parentName == ".." || parentName == string(filepath.Separator) {
+		return ""
+	}
+	return parentName
+}
+
+func createPackageCBZFromFiles(rootSourceDir, volumePath string, files []os.DirEntry, targetDir string, parentRenameEnabled bool, preferPlainParentName bool) (string, error) {
+	archiveName := filepath.Base(volumePath) + ".cbz"
+	if parentRenameEnabled {
+		if parentName := archiveParentRenameBaseName(rootSourceDir, volumePath); parentName != "" {
+			archiveName = buildParentRenamedCBZName(targetDir, parentName, filepath.Base(volumePath), preferPlainParentName)
+		}
+	}
+	return createCBZFromFiles(volumePath, files, targetDir, archiveName)
+}
+
+func buildParentRenamedCBZName(targetDir, parentName, volumeName string, preferPlainParentName bool) string {
+	trimmedParent := strings.TrimSpace(parentName)
+	if trimmedParent == "" {
+		return filepath.Base(strings.TrimSpace(volumeName)) + ".cbz"
+	}
+
+	if preferPlainParentName {
+		plainName := trimmedParent + ".cbz"
+		if !parentRenamePartNameExists(targetDir, trimmedParent) {
+			if _, err := os.Stat(filepath.Join(targetDir, plainName)); os.IsNotExist(err) {
+				return plainName
+			}
+		}
+	}
+
+	preferredPartNumber, usePreferredPartNumber := preferredArchivePartNumber(volumeName)
+	partNumber, err := allocateParentRenamePartNumber(targetDir, trimmedParent, preferredPartNumber, usePreferredPartNumber)
+	if err != nil {
+		return fmt.Sprintf("%s-part1.cbz", trimmedParent)
+	}
+
+	return fmt.Sprintf("%s-part%d.cbz", trimmedParent, partNumber)
+}
+
+func shouldUsePlainParentCBZName(rootSourceDir, volumePath string) bool {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootSourceDir))
+	cleanVolume := filepath.Clean(strings.TrimSpace(volumePath))
+	if cleanRoot == "" || cleanRoot == "." || cleanVolume == "" || cleanVolume == "." {
+		return false
+	}
+
+	parentDir := filepath.Dir(cleanVolume)
+	if sameCleanPath(parentDir, cleanRoot) {
+		return false
+	}
+
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return false
+	}
+
+	visibleSubdirs := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		visibleSubdirs++
+		if visibleSubdirs > 1 {
+			return false
+		}
+	}
+
+	return visibleSubdirs == 1
+}
+
+func parentRenamePartNameExists(targetDir, parentName string) bool {
+	used, err := collectParentRenameUsedPartNumbers(targetDir, parentName)
+	if err != nil {
+		return true
+	}
+	return len(used) > 0
+}
+
+func preferredArchivePartNumber(path string) (int, bool) {
+	baseName := filepath.Base(strings.TrimSpace(path))
+	partNumber := extractArchivePartNumber(baseName)
+	if partNumber <= 0 {
+		return 0, false
+	}
+
+	parentDir := filepath.Dir(strings.TrimSpace(path))
+	if parentDir == "" || parentDir == "." || parentDir == string(filepath.Separator) {
+		return 0, false
+	}
+
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return 0, false
+	}
+
+	numericNames := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name())
+		if archivePartNumberPattern.MatchString(name) {
+			numericNames = append(numericNames, name)
+		}
+	}
+
+	if !isStrictSequentialNumericNames(numericNames) {
+		return 0, false
+	}
+
+	return partNumber, true
+}
+
+func isStrictSequentialNumericNames(names []string) bool {
+	if len(names) == 0 {
+		return false
+	}
+
+	width := len(names[0])
+	numbers := make([]int, 0, len(names))
+	seen := make(map[int]struct{}, len(names))
+	for _, name := range names {
+		if len(name) != width || !archivePartNumberPattern.MatchString(name) {
+			return false
+		}
+		value, err := strconv.Atoi(name)
+		if err != nil || value <= 0 {
+			return false
+		}
+		if _, exists := seen[value]; exists {
+			return false
+		}
+		seen[value] = struct{}{}
+		numbers = append(numbers, value)
+	}
+
+	sort.Ints(numbers)
+	for index, value := range numbers {
+		if value != index+1 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func allocateParentRenamePartNumber(targetDir, parentName string, preferredPartNumber int, allowPreferred bool) (int, error) {
+	used, err := collectParentRenameUsedPartNumbers(targetDir, parentName)
+	if err != nil {
+		return 0, err
+	}
+
+	if allowPreferred && preferredPartNumber > 0 {
+		if _, exists := used[preferredPartNumber]; !exists {
+			return preferredPartNumber, nil
+		}
+	}
+
+	for index := 1; ; index++ {
+		if _, exists := used[index]; !exists {
+			return index, nil
+		}
+	}
+}
+
+func collectParentRenameUsedPartNumbers(targetDir, parentName string) (map[int]struct{}, error) {
+	entries, err := os.ReadDir(targetDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[int]struct{}{}, nil
+		}
+		return nil, fmt.Errorf("read target dir: %w", err)
+	}
+
+	used := make(map[int]struct{})
+	trimmedParent := strings.TrimSpace(parentName)
+	prefix := strings.ToLower(trimmedParent + "-part")
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name())
+		lowerName := strings.ToLower(name)
+		if !strings.HasPrefix(lowerName, prefix) {
+			continue
+		}
+
+		suffix := name[len(trimmedParent+"-part"):]
+		suffix = strings.TrimSuffix(suffix, filepath.Ext(suffix))
+		if !archivePartNumberPattern.MatchString(suffix) {
+			continue
+		}
+
+		partNumber, err := strconv.Atoi(suffix)
+		if err != nil || partNumber <= 0 {
+			continue
+		}
+		used[partNumber] = struct{}{}
+	}
+
+	return used, nil
+}
+
+func extractArchivePartNumber(name string) int {
+	baseName := filepath.Base(strings.TrimSpace(name))
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		return 0
+	}
+
+	stem := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	if !archivePartNumberPattern.MatchString(stem) {
+		return 0
+	}
+
+	value, err := strconv.Atoi(stem)
+	if err == nil && value > 0 {
+		return value
+	}
+
+	return 0
+}
+
+func buildArchiveDirectMatchers(filters []string) []fileNameMatcher {
+	return buildFileNameMatchers(filters)
+}
+
+func matchesArchiveDirectly(rootPath, sourcePath string, matchers []fileNameMatcher) bool {
+	rawName := strings.TrimSpace(filepath.Base(sourcePath))
+	if rawName == "" {
+		return false
+	}
+
+	ext := strings.ToLower(filepath.Ext(rawName))
+	extWithoutDot := strings.TrimPrefix(ext, ".")
+	stem := strings.TrimSuffix(rawName, filepath.Ext(rawName))
+	lowerStem := strings.ToLower(stem)
+	directoryCandidates := archiveMatchDirectoryCandidates(rootPath, sourcePath)
+	lowerDirectoryCandidates := make([]string, 0, len(directoryCandidates))
+	for _, candidate := range directoryCandidates {
+		lowerDirectoryCandidates = append(lowerDirectoryCandidates, strings.ToLower(candidate))
+	}
+
+	for _, matcher := range matchers {
+		regexCandidates := make([]string, 0, len(directoryCandidates)+3)
+		literalCandidates := make([]string, 0, len(lowerDirectoryCandidates)+3)
+		switch matcher.target {
+		case ruleMatcherDirectoryName:
+			regexCandidates = append(regexCandidates, directoryCandidates...)
+			literalCandidates = append(literalCandidates, lowerDirectoryCandidates...)
+		case ruleMatcherExtension:
+			regexCandidates = append(regexCandidates, ext, extWithoutDot)
+			literalCandidates = append(literalCandidates, ext, extWithoutDot)
+		case ruleMatcherGlobal:
+			regexCandidates = append(regexCandidates, stem, ext, extWithoutDot)
+			regexCandidates = append(regexCandidates, directoryCandidates...)
+			literalCandidates = append(literalCandidates, lowerStem, ext, extWithoutDot)
+			literalCandidates = append(literalCandidates, lowerDirectoryCandidates...)
+		default:
+			regexCandidates = append(regexCandidates, stem)
+			literalCandidates = append(literalCandidates, lowerStem)
+		}
+
+		if matcher.regex != nil {
+			for _, candidate := range regexCandidates {
+				if matcher.regex.MatchString(candidate) {
+					return true
+				}
+			}
+			continue
+		}
+		if matcher.literal == "" {
+			continue
+		}
+		if matcher.target == ruleMatcherExtension {
+			for _, literalCandidate := range literalCandidates {
+				if literalCandidate == matcher.literal {
+					return true
+				}
+			}
+			continue
+		}
+		for _, literalCandidate := range literalCandidates {
+			if strings.Contains(literalCandidate, matcher.literal) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func archiveMatchDirectoryCandidates(rootPath, sourcePath string) []string {
+	cleanRoot := filepath.Clean(strings.TrimSpace(rootPath))
+	cleanSource := filepath.Clean(strings.TrimSpace(sourcePath))
+	if cleanSource == "" || cleanSource == "." {
+		return nil
+	}
+
+	parentDir := filepath.Dir(cleanSource)
+	if cleanRoot == "" || cleanRoot == "." {
+		baseName := strings.TrimSpace(filepath.Base(parentDir))
+		if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+			return nil
+		}
+		return []string{baseName}
+	}
+	if sameCleanPath(cleanRoot, parentDir) {
+		return nil
+	}
+
+	relDir, err := filepath.Rel(cleanRoot, parentDir)
+	if err != nil {
+		baseName := strings.TrimSpace(filepath.Base(parentDir))
+		if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+			return nil
+		}
+		return []string{baseName}
+	}
+
+	return splitArchivePathSegments(relDir)
+}
+
+func splitArchivePathSegments(path string) []string {
+	cleanPath := filepath.Clean(strings.TrimSpace(path))
+	if cleanPath == "" || cleanPath == "." {
+		return nil
+	}
+
+	parts := strings.Split(filepath.ToSlash(cleanPath), "/")
+	items := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" || trimmed == "." {
+			continue
+		}
+		items = append(items, trimmed)
+	}
+	return items
+}
+
+func removePackedSourceFiles(basePath string, files []os.DirEntry) error {
+	for _, entry := range files {
+		if err := os.Remove(filepath.Join(basePath, entry.Name())); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createCBZFromFiles(volumePath string, files []os.DirEntry, targetDir, archiveName string) (string, error) {
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return "", fmt.Errorf("create cbz output dir: %w", err)
+	}
+
+	archivePath := uniqueArchiveDestinationPath(targetDir, archiveName)
+	tempPath := archivePath + ".tmp"
+	_ = os.Remove(tempPath)
+	archiveFile, err := os.Create(tempPath)
+	if err != nil {
+		return "", fmt.Errorf("create cbz file: %w", err)
+	}
+
+	zipWriter := zip.NewWriter(archiveFile)
+	for _, entry := range files {
+		sourcePath := filepath.Join(volumePath, entry.Name())
+		if err := addFileToArchive(zipWriter, sourcePath, entry.Name()); err != nil {
+			_ = zipWriter.Close()
+			_ = archiveFile.Close()
+			_ = os.Remove(tempPath)
+			return "", err
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		_ = archiveFile.Close()
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("finalize cbz file: %w", err)
+	}
+	if err := archiveFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return "", fmt.Errorf("close cbz file: %w", err)
+	}
+	if err := verifyAndPublishCBZ(tempPath, archivePath); err != nil {
+		return "", err
+	}
+
+	return archivePath, nil
+}
+
+func verifyAndPublishCBZ(tempPath, archivePath string) error {
+	reader, err := zip.OpenReader(tempPath)
+	if err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("verify cbz file: %w", err)
+	}
+	_ = reader.Close()
+
+	if err := os.Rename(tempPath, archivePath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("publish cbz file: %w", err)
+	}
+
+	return nil
+}
+
+func addFileToArchive(zipWriter *zip.Writer, sourcePath, archivePath string) error {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("stat archive source: %w", err)
+	}
+
+	header, err := zip.FileInfoHeader(info)
+	if err != nil {
+		return fmt.Errorf("create archive header: %w", err)
+	}
+	header.Name = filepath.ToSlash(archivePath)
+	header.Method = zip.Deflate
+
+	writer, err := zipWriter.CreateHeader(header)
+	if err != nil {
+		return fmt.Errorf("create archive entry: %w", err)
+	}
+
+	file, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open archive source: %w", err)
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	if _, err := io.Copy(writer, file); err != nil {
+		return fmt.Errorf("write archive entry: %w", err)
+	}
+
+	return nil
+}
+
+func moveFile(sourcePath, targetPath string) error {
+	if err := os.Rename(sourcePath, targetPath); err == nil {
+		return nil
+	}
+
+	if err := copyFile(sourcePath, targetPath); err != nil {
+		return fmt.Errorf("move file: %w", err)
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		return fmt.Errorf("remove source file after move: %w", err)
+	}
+	return nil
+}
+
+func copyFile(sourcePath, targetPath string) error {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return fmt.Errorf("stat source file: %w", err)
+	}
+
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("open source file: %w", err)
+	}
+	defer func() {
+		_ = sourceFile.Close()
+	}()
+
+	targetFile, err := os.Create(targetPath)
+	if err != nil {
+		return fmt.Errorf("create target file: %w", err)
+	}
+	defer func() {
+		_ = targetFile.Close()
+	}()
+
+	if _, err := io.Copy(targetFile, sourceFile); err != nil {
+		return fmt.Errorf("copy file contents: %w", err)
+	}
+
+	return os.Chmod(targetPath, info.Mode())
+}
+
+func removeDirIfEmpty(path string) error {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return nil
+	}
+	return os.Remove(path)
+}
+
+func uniqueArchiveDestinationPath(dir, name string) string {
+	baseName := filepath.Base(strings.TrimSpace(name))
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		baseName = "item"
+	}
+
+	targetPath := filepath.Join(dir, baseName)
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		return targetPath
+	}
+
+	ext := filepath.Ext(baseName)
+	stem := strings.TrimSuffix(baseName, ext)
+	for index := 1; ; index++ {
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-%d%s", stem, index, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
+func resolveCollectTargetPath(sourcePath, targetDir, archiveMode string, collectDeduplicateEnabled bool) (string, string, error) {
+	baseName := filepath.Base(strings.TrimSpace(sourcePath))
+	if (archiveMode != "collect" && archiveMode != "package") || !collectDeduplicateEnabled {
+		return uniqueArchiveDestinationPath(targetDir, baseName), "", nil
+	}
+
+	targetPath := filepath.Join(targetDir, baseName)
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		return targetPath, "", nil
+	} else if err != nil {
+		return "", "", fmt.Errorf("stat target file: %w", err)
+	}
+
+	sameFile, err := filesAreEquivalent(sourcePath, targetPath)
+	if err != nil {
+		return "", "", err
+	}
+	if sameFile {
+		return targetPath, "skip-same-file", nil
+	}
+
+	return uniqueArchiveReSuffixPath(targetDir, baseName), "renamed-re", nil
+}
+
+func uniqueArchiveReSuffixPath(dir, name string) string {
+	baseName := filepath.Base(strings.TrimSpace(name))
+	if baseName == "" || baseName == "." || baseName == string(filepath.Separator) {
+		baseName = "item"
+	}
+
+	ext := filepath.Ext(baseName)
+	stem := strings.TrimSuffix(baseName, ext)
+	firstCandidate := filepath.Join(dir, fmt.Sprintf("%s-re%s", stem, ext))
+	if _, err := os.Stat(firstCandidate); os.IsNotExist(err) {
+		return firstCandidate
+	}
+
+	used := map[int]struct{}{0: {}}
+	entries, err := os.ReadDir(dir)
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			entryName := entry.Name()
+			entryExt := filepath.Ext(entryName)
+			entryStem := strings.TrimSuffix(entryName, entryExt)
+			if entryStem == stem+"-re" {
+				used[0] = struct{}{}
+				continue
+			}
+			if strings.HasPrefix(entryStem, stem+"-re") {
+				suffix := strings.TrimPrefix(entryStem, stem+"-re")
+				value, convErr := strconv.Atoi(suffix)
+				if convErr == nil && value > 0 {
+					used[value] = struct{}{}
+				}
+			}
+		}
+	}
+
+	for index := 1; ; index++ {
+		if _, exists := used[index]; exists {
+			continue
+		}
+		candidate := filepath.Join(dir, fmt.Sprintf("%s-re%d%s", stem, index, ext))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+	}
+}
+
+func filesAreEquivalent(sourcePath, targetPath string) (bool, error) {
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return false, fmt.Errorf("stat source file: %w", err)
+	}
+	targetInfo, err := os.Stat(targetPath)
+	if err != nil {
+		return false, fmt.Errorf("stat target file: %w", err)
+	}
+	if sourceInfo.Size() != targetInfo.Size() {
+		return false, nil
+	}
+
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return false, fmt.Errorf("open source file: %w", err)
+	}
+	defer func() { _ = sourceFile.Close() }()
+
+	targetFile, err := os.Open(targetPath)
+	if err != nil {
+		return false, fmt.Errorf("open target file: %w", err)
+	}
+	defer func() { _ = targetFile.Close() }()
+
+	sourceBuffer := make([]byte, 64*1024)
+	targetBuffer := make([]byte, 64*1024)
+	for {
+		sourceN, sourceErr := sourceFile.Read(sourceBuffer)
+		targetN, targetErr := targetFile.Read(targetBuffer)
+		if sourceN != targetN || !bytes.Equal(sourceBuffer[:sourceN], targetBuffer[:targetN]) {
+			return false, nil
+		}
+		if sourceErr == io.EOF && targetErr == io.EOF {
+			return true, nil
+		}
+		if sourceErr != nil && sourceErr != io.EOF {
+			return false, fmt.Errorf("read source file: %w", sourceErr)
+		}
+		if targetErr != nil && targetErr != io.EOF {
+			return false, fmt.Errorf("read target file: %w", targetErr)
+		}
+	}
+}
+
+func sortEntriesNaturally(entries []os.DirEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir() != entries[j].IsDir() {
+			return entries[i].IsDir()
+		}
+		return naturalLess(entries[i].Name(), entries[j].Name())
+	})
+}
+
+func naturalLess(a, b string) bool {
+	at := tokenizeNatural(a)
+	bt := tokenizeNatural(b)
+	for i := 0; i < len(at) && i < len(bt); i++ {
+		if at[i] == bt[i] {
+			continue
+		}
+
+		an, aErr := strconv.Atoi(at[i])
+		bn, bErr := strconv.Atoi(bt[i])
+		if aErr == nil && bErr == nil {
+			return an < bn
+		}
+
+		return strings.ToLower(at[i]) < strings.ToLower(bt[i])
+	}
+
+	return len(at) < len(bt)
+}
+
+func tokenizeNatural(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{""}
+	}
+
+	tokens := make([]string, 0)
+	var current strings.Builder
+	var isDigitGroup bool
+	for index, r := range value {
+		currentDigit := unicode.IsDigit(r)
+		if index == 0 {
+			isDigitGroup = currentDigit
+			current.WriteRune(r)
+			continue
+		}
+
+		if currentDigit != isDigitGroup {
+			tokens = append(tokens, current.String())
+			current.Reset()
+			isDigitGroup = currentDigit
+		}
+		current.WriteRune(r)
+	}
+	tokens = append(tokens, current.String())
+	return tokens
+}
+
+func isImageFile(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".tif", ".tiff":
+		return true
+	default:
+		return false
+	}
+}
+
+func isCoverImageFile(name string) bool {
+	if !isImageFile(name) {
+		return false
+	}
+
+	lowerBaseName := strings.ToLower(filepath.Base(name))
+	lowerExt := strings.ToLower(filepath.Ext(name))
+	baseName := strings.TrimSuffix(lowerBaseName, lowerExt)
+	return strings.Contains(baseName, "cover")
+}

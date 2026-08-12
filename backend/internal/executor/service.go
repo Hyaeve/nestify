@@ -1,0 +1,550 @@
+package executor
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/robfig/cron/v3"
+
+	"nestify/backend/internal/model"
+	"nestify/backend/internal/store/sqlite"
+)
+
+type Service struct {
+	mu      sync.RWMutex
+	store   *sqlite.Store
+	runs    map[string]*model.RunInstance
+	logs    map[string][]model.RunLogEntry
+	history []model.RunHistoryItem
+
+	automationMu     sync.Mutex
+	automationCtx    context.Context
+	automationCancel context.CancelFunc
+	cronRunner       *cron.Cron
+	watchCancels     map[int64]context.CancelFunc
+	activeRules      map[int64]struct{}
+}
+
+func NewService(store *sqlite.Store) *Service {
+	return &Service{
+		store:        store,
+		runs:         make(map[string]*model.RunInstance),
+		logs:         make(map[string][]model.RunLogEntry),
+		history:      make([]model.RunHistoryItem, 0),
+		watchCancels: make(map[int64]context.CancelFunc),
+		activeRules:  make(map[int64]struct{}),
+	}
+}
+
+func (s *Service) ListHistory() []model.RunHistoryItem {
+	if s.store != nil {
+		items, err := s.store.ListRunHistory()
+		if err == nil {
+			return items
+		}
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]model.RunHistoryItem, len(s.history))
+	copy(items, s.history)
+	return items
+}
+
+func (s *Service) ClearHistory() error {
+	if s.store != nil {
+		if err := s.store.ClearRunHistory(); err != nil {
+			return err
+		}
+	}
+
+	s.mu.Lock()
+	s.history = make([]model.RunHistoryItem, 0)
+	s.mu.Unlock()
+
+	return nil
+}
+
+func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
+	archiveMode := strings.TrimSpace(req.ArchiveMode)
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "transform" && archiveMode != "link" {
+		return nil, fmt.Errorf("unsupported archive mode: %s", archiveMode)
+	}
+
+	req.SourceDirs = normalizeExecuteSourceDirs(req.SourceDir, req.SourceDirs)
+	if req.SourceDir == "" && len(req.SourceDirs) > 0 {
+		req.SourceDir = req.SourceDirs[0]
+	}
+
+	triggerMode := strings.TrimSpace(req.TriggerMode)
+	if triggerMode == "" {
+		triggerMode = model.TriggerModeOnce
+	}
+
+	ruleID := req.RuleID
+	if ruleID > 0 && !s.markRuleActive(ruleID) {
+		return nil, fmt.Errorf("rule is already running")
+	}
+	run := s.newRun(triggerMode, archiveMode, strings.TrimSpace(req.LinkMode), &ruleID, req.RuleName)
+	s.appendLog(run.ID, "info", fmt.Sprintf("规则“%s”已进入执行队列（模式：%s）", req.RuleName, archiveMode))
+	if len(req.SourceDirs) > 1 && (archiveMode == "cleanup" || archiveMode == "transform") {
+		s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", strings.Join(req.SourceDirs, "；"), req.TargetDir))
+	} else {
+		s.appendLog(run.ID, "info", fmt.Sprintf("源路径：%s；目标路径：%s", req.SourceDir, req.TargetDir))
+	}
+	s.runExecution(run.ID, req)
+
+	return s.cloneRun(run), nil
+}
+
+func (s *Service) RecordManualExtractRun(sourcePaths []string, outputDir string, extractedPaths []string) {
+	cleanSources := make([]string, 0, len(sourcePaths))
+	for _, path := range sourcePaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed != "" {
+			cleanSources = append(cleanSources, trimmed)
+		}
+	}
+
+	run := s.newRun(model.TriggerModeManual, "extract", "", nil, "manual-extract")
+	now := time.Now().UTC()
+
+	s.mu.Lock()
+	if currentRun, ok := s.runs[run.ID]; ok {
+		currentRun.Status = model.RunStatusSucceeded
+		currentRun.Stage = model.RunStageFinalizing
+		currentRun.ProcessedFiles = len(cleanSources)
+		currentRun.SuccessCount = len(extractedPaths)
+		currentRun.SkipCount = 0
+		currentRun.FailureCount = 0
+		currentRun.UpdatedAt = now
+		currentRun.FinishedAt = &now
+	}
+	s.mu.Unlock()
+
+	if len(cleanSources) > 0 {
+		s.appendLog(run.ID, "info", fmt.Sprintf("手动解压任务已提交，共 %d 个压缩包", len(cleanSources)))
+		for _, path := range cleanSources {
+			s.appendLog(run.ID, "info", fmt.Sprintf("源压缩包：%s", path))
+		}
+	}
+	if strings.TrimSpace(outputDir) != "" {
+		s.appendLog(run.ID, "info", fmt.Sprintf("解压输出目录：%s", outputDir))
+	}
+	for _, path := range extractedPaths {
+		s.appendLog(run.ID, "info", fmt.Sprintf("已解压到：%s", path))
+	}
+
+	s.persistRunHistory(run.ID, fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)), &executionStats{
+		ProcessedFiles: len(cleanSources),
+		SuccessCount:   len(extractedPaths),
+		Summary:        fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)),
+	})
+}
+
+func (s *Service) GetRun(runID string) (*model.RunInstance, bool) {
+	s.mu.RLock()
+	run, ok := s.runs[runID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+
+	return s.cloneRun(run), true
+}
+
+func (s *Service) ListRuns() []*model.RunInstance {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	items := make([]*model.RunInstance, 0, len(s.runs))
+	for _, run := range s.runs {
+		items = append(items, s.cloneRun(run))
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	return items
+}
+
+func (s *Service) ListRunLogs(runID string) []model.RunLogEntry {
+	s.mu.RLock()
+	entries := s.logs[runID]
+	s.mu.RUnlock()
+
+	cloned := make([]model.RunLogEntry, len(entries))
+	copy(cloned, entries)
+	return cloned
+}
+
+func (s *Service) newRun(triggerMode, archiveMode, linkMode string, ruleID *int64, ruleName string) *model.RunInstance {
+	now := time.Now().UTC()
+	run := &model.RunInstance{
+		ID:          mustRandomID(),
+		RuleID:      ruleID,
+		RuleName:    ruleName,
+		TriggerMode: triggerMode,
+		ArchiveMode: archiveMode,
+		LinkMode:    linkMode,
+		Status:      model.RunStatusPending,
+		Stage:       model.RunStageQueued,
+		StartedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	s.mu.Lock()
+	s.runs[run.ID] = run
+	s.mu.Unlock()
+
+	return run
+}
+
+func (s *Service) appendLog(runID, level, message string) {
+	now := time.Now().UTC()
+	entry := model.RunLogEntry{
+		ID:        mustRandomID(),
+		RunID:     runID,
+		Level:     level,
+		Message:   message,
+		CreatedAt: now,
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if run, ok := s.runs[runID]; ok {
+		run.UpdatedAt = now
+	}
+	s.logs[runID] = append(s.logs[runID], entry)
+}
+
+func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
+	go func() {
+		defer s.unmarkRuleActive(req.RuleID)
+
+		s.mu.Lock()
+		if run, ok := s.runs[runID]; ok {
+			run.Status = model.RunStatusRunning
+			run.Stage = model.RunStageDispatch
+			run.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
+
+		s.appendLog(runID, "info", "dispatching execution")
+		prepared, err := PrepareMode(req)
+		if err != nil {
+			s.finishRun(runID, model.RunStatusFailed, model.RunStageFinalizing, fmt.Sprintf("执行失败：%v", err))
+			s.persistRunHistory(runID, fmt.Sprintf("执行失败：%v", err), nil)
+			return
+		}
+
+		stats, execErr := s.executeRuleWithSourceDirs(runID, req)
+		if execErr != nil && stats.FailureCount == 0 {
+			stats.FailureCount = 1
+		}
+
+		finalStatus := model.RunStatusSucceeded
+		if stats.FailureCount > 0 || execErr != nil {
+			finalStatus = model.RunStatusFailed
+		}
+
+		s.mu.Lock()
+		if run, ok := s.runs[runID]; ok {
+			run.Stage = model.RunStageFinalizing
+			run.ProcessedFiles = stats.ProcessedFiles
+			run.SuccessCount = stats.SuccessCount
+			run.SkipCount = stats.SkipCount
+			run.FailureCount = stats.FailureCount
+			run.Status = finalStatus
+			run.FinishedAt = ptrTime(time.Now().UTC())
+			run.UpdatedAt = time.Now().UTC()
+		}
+		s.mu.Unlock()
+
+		if execErr != nil {
+			s.appendLog(runID, "error", execErr.Error())
+		} else {
+			s.appendLog(runID, "info", prepared.Summary)
+			s.appendLog(runID, "info", stats.Summary)
+			s.appendLog(runID, "info", "执行完成")
+		}
+
+		if req.RuleID > 0 && s.store != nil {
+			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		}
+		if stats.HistoryEvents == 0 {
+			s.persistRunHistory(runID, stats.Summary, &stats)
+		}
+		if execErr != nil {
+			return
+		}
+	}()
+}
+
+func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest) (executionStats, error) {
+	sourceDirs := normalizeExecuteSourceDirs(req.SourceDir, req.SourceDirs)
+	if len(sourceDirs) <= 1 || (strings.TrimSpace(req.ArchiveMode) != "cleanup" && strings.TrimSpace(req.ArchiveMode) != "transform") {
+		if len(sourceDirs) == 1 {
+			req.SourceDir = sourceDirs[0]
+		}
+		return s.executeRule(runID, req)
+	}
+
+	aggregated := executionStats{}
+	var lastErr error
+	for index, sourceDir := range sourceDirs {
+		currentReq := req
+		currentReq.SourceDir = sourceDir
+		currentReq.SourceDirs = []string{sourceDir}
+		s.appendLog(runID, "info", fmt.Sprintf("开始处理第 %d/%d 个监控目录：%s", index+1, len(sourceDirs), sourceDir))
+		stats, err := s.executeRule(runID, currentReq)
+		aggregated.ProcessedFiles += stats.ProcessedFiles
+		aggregated.SuccessCount += stats.SuccessCount
+		aggregated.SkipCount += stats.SkipCount
+		aggregated.FailureCount += stats.FailureCount
+		aggregated.PackedVolumes += stats.PackedVolumes
+		aggregated.MovedFiles += stats.MovedFiles
+		aggregated.CleanupRemovedFiles += stats.CleanupRemovedFiles
+		aggregated.CleanupRemovedDirs += stats.CleanupRemovedDirs
+		aggregated.SizeBytes += stats.SizeBytes
+		aggregated.HistoryEvents += stats.HistoryEvents
+		if err != nil {
+			lastErr = err
+			s.appendLog(runID, "error", fmt.Sprintf("监控目录 %s 执行失败：%v", sourceDir, err))
+		}
+	}
+	aggregated.Summary = fmt.Sprintf("多监控目录执行完成：%d 个目录，成功 %d，跳过 %d，失败 %d", len(sourceDirs), aggregated.SuccessCount, aggregated.SkipCount, aggregated.FailureCount)
+	return aggregated, lastErr
+}
+
+func normalizeExecuteSourceDirs(sourceDir string, sourceDirs []string) []string {
+	seen := make(map[string]struct{}, len(sourceDirs)+1)
+	items := make([]string, 0, len(sourceDirs)+1)
+	appendItem := func(value string) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return
+		}
+		if _, ok := seen[trimmed]; ok {
+			return
+		}
+		seen[trimmed] = struct{}{}
+		items = append(items, trimmed)
+	}
+	for _, item := range sourceDirs {
+		appendItem(item)
+	}
+	appendItem(sourceDir)
+	return items
+}
+
+func (s *Service) finishRun(runID, status, stage, logMsg string) {
+	s.mu.Lock()
+	if run, ok := s.runs[runID]; ok {
+		run.Status = status
+		run.Stage = stage
+		run.UpdatedAt = time.Now().UTC()
+		run.FinishedAt = ptrTime(time.Now().UTC())
+	}
+	s.mu.Unlock()
+	s.appendLog(runID, "error", logMsg)
+}
+
+func ptrTime(t time.Time) *time.Time { return &t }
+
+func ParseBoolOptionsJSON(raw string) map[string]bool {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "{}" {
+		return map[string]bool{}
+	}
+
+	parsed := make(map[string]bool)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return map[string]bool{}
+	}
+
+	return parsed
+}
+
+func ParseIntOptionsJSON(raw string) map[string]int {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "{}" {
+		return map[string]int{}
+	}
+
+	parsed := make(map[string]int)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return map[string]int{}
+	}
+
+	return parsed
+}
+
+func ParseStringListJSON(raw string) []string {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "[]" || value == "{}" {
+		return []string{}
+	}
+
+	parsed := make([]string, 0)
+	if err := json.Unmarshal([]byte(value), &parsed); err != nil {
+		return []string{}
+	}
+
+	items := make([]string, 0, len(parsed))
+	for _, item := range parsed {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		items = append(items, trimmed)
+	}
+
+	return items
+}
+
+func ParseTransformRulesJSON(raw string) []string {
+	return ParseStringListJSON(raw)
+}
+
+func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {
+	item := s.recordHistory(runID, summary, stats)
+	if stats != nil {
+		stats.ProcessedFiles = item.ProcessedFiles
+		stats.SuccessCount = item.SuccessCount
+		stats.SkipCount = item.SkipCount
+		stats.FailureCount = item.FailureCount
+		stats.SizeBytes = item.SizeBytes
+		stats.HistoryEvents++
+	}
+	if item == nil || s.store == nil {
+		return
+	}
+	_ = s.store.UpsertRunHistory(*item)
+}
+
+func (s *Service) recordHistory(runID, summary string, stats *executionStats) *model.RunHistoryItem {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	run, ok := s.runs[runID]
+	if !ok || run == nil {
+		return nil
+	}
+
+	status := mapRunStatus(run)
+	processedFiles := run.ProcessedFiles
+	successCount := run.SuccessCount
+	skipCount := run.SkipCount
+	failureCount := run.FailureCount
+	var sizeBytes int64
+	if stats != nil {
+		status = mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		processedFiles = stats.ProcessedFiles
+		successCount = stats.SuccessCount
+		skipCount = stats.SkipCount
+		failureCount = stats.FailureCount
+		sizeBytes = stats.SizeBytes
+	}
+
+	item := model.RunHistoryItem{
+		ID:             mustRandomID(),
+		RuleID:         run.RuleID,
+		RuleName:       run.RuleName,
+		TriggerMode:    run.TriggerMode,
+		ArchiveMode:    run.ArchiveMode,
+		LinkMode:       run.LinkMode,
+		Status:         status,
+		ProcessedFiles: processedFiles,
+		SuccessCount:   successCount,
+		SkipCount:      skipCount,
+		FailureCount:   failureCount,
+		SizeBytes:      sizeBytes,
+		Summary:        summary,
+		StartedAt:      run.StartedAt,
+		UpdatedAt:      run.UpdatedAt,
+		FinishedAt:     run.FinishedAt,
+	}
+
+	s.history = append([]model.RunHistoryItem{item}, s.history...)
+	return &item
+}
+
+func mapRunStatus(run *model.RunInstance) string {
+	if run == nil {
+		return "failed"
+	}
+	if run.FailureCount > 0 || run.Status == model.RunStatusFailed {
+		return "failed"
+	}
+	if run.SkipCount > 0 {
+		return "skip"
+	}
+	if run.SuccessCount > 0 || run.Status == model.RunStatusSucceeded {
+		return "success"
+	}
+	return "skip"
+}
+
+func mapRunStatusByCounts(successCount, skipCount, failureCount int) string {
+	if failureCount > 0 {
+		return "failed"
+	}
+	if skipCount > 0 && successCount == 0 {
+		return "skip"
+	}
+	if successCount > 0 {
+		return "success"
+	}
+	return "skip"
+}
+
+func (s *Service) markRuleActive(ruleID int64) bool {
+	if ruleID <= 0 {
+		return true
+	}
+
+	s.automationMu.Lock()
+	defer s.automationMu.Unlock()
+	if _, exists := s.activeRules[ruleID]; exists {
+		return false
+	}
+	s.activeRules[ruleID] = struct{}{}
+	return true
+}
+
+func (s *Service) unmarkRuleActive(ruleID int64) {
+	if ruleID <= 0 {
+		return
+	}
+
+	s.automationMu.Lock()
+	delete(s.activeRules, ruleID)
+	s.automationMu.Unlock()
+}
+
+func (s *Service) cloneRun(run *model.RunInstance) *model.RunInstance {
+	if run == nil {
+		return nil
+	}
+
+	cloned := *run
+	return &cloned
+}
+
+func mustRandomID() string {
+	buf := make([]byte, 12)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("run-%d", time.Now().UnixNano())
+	}
+
+	return hex.EncodeToString(buf)
+}
