@@ -13,8 +13,8 @@ export interface RuleItem {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
-  rule_type?: 'archive' | 'cleanup' | 'link'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link' | 'naming'
+  rule_type?: 'archive' | 'cleanup' | 'link' | 'naming'
   link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string
@@ -51,7 +51,7 @@ export interface RulesListPayload {
 export interface FetchRulesParams {
   page?: number
   page_size?: number
-  rule_type?: 'archive' | 'cleanup' | 'link'
+  rule_type?: 'archive' | 'cleanup' | 'link' | 'naming'
 }
 
 export interface CreateRulePayload {
@@ -60,8 +60,8 @@ export interface CreateRulePayload {
   enabled: boolean
   monitor_enabled: boolean
   compatibility_mode: 'local' | 'compatibility'
-  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link'
-  rule_type?: 'archive' | 'cleanup' | 'link'
+  archive_mode: 'package' | 'collect' | 'cleanup' | 'transform' | 'link' | 'naming'
+  rule_type?: 'archive' | 'cleanup' | 'link' | 'naming'
   link_mode?: 'soft' | 'hard' | 'strm'
   run_mode: 'watch' | 'cron' | 'once'
   source_dir: string

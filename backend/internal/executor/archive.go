@@ -50,6 +50,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	if strings.TrimSpace(req.ArchiveMode) == "link" {
 		return s.executeLinkRule(runID, req)
 	}
+	if strings.TrimSpace(req.ArchiveMode) == "naming" {
+		return s.executeNamingRule(runID, req)
+	}
 
 	stats := executionStats{}
 

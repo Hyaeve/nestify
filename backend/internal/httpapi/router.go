@@ -1775,7 +1775,7 @@ func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, 
 		return errors.New("source_dir is required")
 	}
 	archiveMode = strings.TrimSpace(archiveMode)
-	if archiveMode != "cleanup" && archiveMode != "transform" && strings.TrimSpace(targetDir) == "" {
+	if archiveMode != "cleanup" && archiveMode != "transform" && archiveMode != "naming" && strings.TrimSpace(targetDir) == "" {
 		return errors.New("target_dir is required")
 	}
 
@@ -1787,8 +1787,8 @@ func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, 
 		return errors.New("compatibility_mode must be local or compatibility")
 	}
 
-	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" && archiveMode != "transform" {
-		return errors.New("archive_mode must be package, collect, cleanup, transform, or link")
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "link" && archiveMode != "transform" && archiveMode != "naming" {
+		return errors.New("archive_mode must be package, collect, cleanup, transform, link, or naming")
 	}
 	if archiveMode == "link" {
 		linkMode = strings.TrimSpace(linkMode)

@@ -75,7 +75,7 @@ func (s *Service) ClearHistory() error {
 
 func (s *Service) PrepareRuleRun(req ExecuteRuleRequest) (*model.RunInstance, error) {
 	archiveMode := strings.TrimSpace(req.ArchiveMode)
-	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "transform" && archiveMode != "link" {
+	if archiveMode != "package" && archiveMode != "collect" && archiveMode != "cleanup" && archiveMode != "transform" && archiveMode != "link" && archiveMode != "naming" {
 		return nil, fmt.Errorf("unsupported archive mode: %s", archiveMode)
 	}
 
@@ -291,7 +291,7 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 
 func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	sourceDirs := normalizeExecuteSourceDirs(req.SourceDir, req.SourceDirs)
-	if len(sourceDirs) <= 1 || (strings.TrimSpace(req.ArchiveMode) != "cleanup" && strings.TrimSpace(req.ArchiveMode) != "transform") {
+	if len(sourceDirs) <= 1 || (strings.TrimSpace(req.ArchiveMode) != "cleanup" && strings.TrimSpace(req.ArchiveMode) != "transform" && strings.TrimSpace(req.ArchiveMode) != "naming") {
 		if len(sourceDirs) == 1 {
 			req.SourceDir = sourceDirs[0]
 		}

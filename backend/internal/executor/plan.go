@@ -77,6 +77,8 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 			TargetDir:   req.TargetDir,
 			Summary:     joinPreparedSummary(fmt.Sprintf("%s模式链路规则已准备", modeLabel), targetDirSummary),
 		}, nil
+	case "naming":
+		return &PreparedMode{ArchiveMode: req.ArchiveMode, RuleType: req.RuleType, SourceDir: req.SourceDir, Summary: fmt.Sprintf("命名规则已准备，共 %d 条规则", len(req.TransformRules))}, nil
 	default:
 		return nil, fmt.Errorf("unsupported archive mode: %s", req.ArchiveMode)
 	}

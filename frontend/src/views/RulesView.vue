@@ -4,6 +4,7 @@
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="switchTab('rules')">归档规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="switchTab('purify')">净化规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'link' }" @click="switchTab('link')">链路规则</button>
+      <button type="button" class="rules-tabs__item rules-tabs__item--naming" :class="{ 'is-active': activeTab === 'naming' }" @click="switchTab('naming')">命名规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
@@ -170,6 +171,7 @@
                 <el-option label="归档规则" value="archive" />
                 <el-option label="净化规则" value="cleanup" />
                 <el-option label="链路规则" value="link" />
+                <el-option label="命名规则" value="naming" />
               </el-select>
             </span>
           </div>
@@ -576,6 +578,37 @@
 
       <el-empty v-else description="暂无链路规则，可添加软链或硬链规则" />
     </el-card>
+
+    <el-card v-show="activeTab === 'naming'" class="page-card rules-card naming-rules-card">
+      <template #header><div class="rules-card__header"><div class="rules-card__title">命名规则</div><el-button class="naming-add-button" round @click="openCreateNamingDialog">+ 添加规则</el-button></div></template>
+      <div class="rules-table-scroll">
+        <el-table v-if="namingRules.length" v-loading="namingLoading" :data="namingRules" row-key="id" class="rules-table naming-rules-table" table-layout="fixed">
+          <el-table-column prop="name" label="规则名称" width="210" />
+          <el-table-column label="模式" width="110"><template #default><span class="custom-mode-tag custom-mode-tag--naming">命名</span></template></el-table-column>
+          <el-table-column prop="source_dir" label="监控路径" min-width="360" show-overflow-tooltip />
+          <el-table-column label="规则 / 规则集" min-width="240"><template #default="scope">{{ namingRuleSetName(scope.row) }}</template></el-table-column>
+          <el-table-column prop="cron_expression" label="计划表达式" width="180"><template #default="scope">{{ scope.row.cron_expression || '仅手动 / 监控' }}</template></el-table-column>
+          <el-table-column label="状态" width="100" align="center"><template #default="scope"><el-switch :model-value="scope.row.enabled" inline-prompt active-text="启用" inactive-text="停用" :loading="isRuleStatusUpdating(scope.row.id)" @change="toggleRuleEnabled(scope.row)" /></template></el-table-column>
+          <el-table-column label="操作" width="156" fixed="right" align="center"><template #default="scope"><div class="rule-actions rule-actions--nowrap">
+            <el-tooltip content="执行" placement="top"><el-button link class="rule-action rule-action--naming" aria-label="执行命名" @click="prepareExecution(scope.row.id)"><svg class="rule-action__execute-icon rule-action__execute-icon--naming" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11.5v4" /><path d="M8 7.5h11v12H8z" /><path d="M11 13.5h5.5" /><path d="m14.5 10.5 3 3-3 3" /></svg></el-button></el-tooltip>
+            <el-tooltip content="删除" placement="top"><el-button link class="rule-action rule-action--danger" aria-label="删除" @click="removeRule(scope.row.id, 'naming')"><el-icon><Delete /></el-icon></el-button></el-tooltip>
+          </div></template></el-table-column>
+        </el-table>
+      </div>
+      <el-empty v-if="!namingLoading && namingRules.length === 0" description="暂无命名规则，可选择命名工坊规则或规则集" />
+    </el-card>
+
+    <el-dialog v-model="createNamingDialogVisible" title="新增命名规则" width="640px">
+      <el-form label-position="top">
+        <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
+        <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="计划执行"><el-switch v-model="createNamingForm.schedule_enabled" /></el-form-item></el-col></el-row>
+        <el-form-item v-if="createNamingForm.schedule_enabled" label="计划表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="例如：0 8 * * *" /></el-form-item>
+        <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">创建</el-button></template>
+    </el-dialog>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
       <el-form label-position="top">
@@ -994,9 +1027,10 @@ type HistoryTreeRow = RunHistoryItem & {
   source?: RunHistoryItem
   children?: HistoryTreeRow[]
 }
-type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | null
-type TabKey = 'rules' | 'purify' | 'link' | 'history'
-type RuleListType = 'archive' | 'cleanup' | 'link'
+type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | 'createNaming.source_dir' | null
+type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'history'
+type RuleListType = 'archive' | 'cleanup' | 'link' | 'naming'
+type StoredNamingRuleSet = { id: number; name: string; rules: Array<Record<string, unknown>> }
 type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
 type PurifyOptionValues = Record<CleanupOptionValueKey, number>
 
@@ -1239,6 +1273,7 @@ function historyStatusText(status: string) {
 }
 
 function normalizeRuleType(rule: RuleItem): RuleListType {
+	if (rule.rule_type === 'naming' || rule.archive_mode === 'naming') return 'naming'
   if (rule.rule_type === 'cleanup' || rule.archive_mode === 'cleanup') return 'cleanup'
   if (rule.rule_type === 'link' || rule.archive_mode === 'link') return 'link'
   return 'archive'
@@ -1294,14 +1329,14 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     description: rule.description ?? '',
     enabled: rule.enabled,
     monitor_enabled: rule.monitor_enabled,
-    compatibility_mode: ruleType === 'link' ? 'local' : (rule.compatibility_mode || 'local'),
+    compatibility_mode: ruleType === 'link' || ruleType === 'naming' ? 'local' : (rule.compatibility_mode || 'local'),
     archive_mode: rule.archive_mode,
     rule_type: ruleType,
     link_mode: linkMode,
     run_mode: resolveRunMode(rule.monitor_enabled, scheduleEnabled),
     source_dir: getRuleSourceDirs(rule)[0] || rule.source_dir,
     source_dirs: getRuleSourceDirs(rule),
-    target_dir: ruleType === 'cleanup' ? '' : rule.target_dir,
+    target_dir: ruleType === 'cleanup' || ruleType === 'naming' ? '' : rule.target_dir,
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
@@ -1316,7 +1351,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     whitelist: parseFiltersText(parseFiltersJSON(rule.whitelist_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
     nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
-    transform_rules: ruleType === 'cleanup' && rule.archive_mode === 'transform' && purifyOptions?.convert_matching_text ? transformRules : [],
+    transform_rules: ruleType === 'naming' ? transformRules : (ruleType === 'cleanup' && rule.archive_mode === 'transform' && purifyOptions?.convert_matching_text ? transformRules : []),
     transform_filters: ruleType === 'cleanup' && rule.archive_mode === 'transform' && purifyOptions?.filter_matching_text ? transformFilters : [],
     ...overrides,
   }
@@ -1327,6 +1362,7 @@ const loading = ref(false)
 const archiveLoading = ref(false)
 const purifyLoading = ref(false)
 const linkLoading = ref(false)
+const namingLoading = ref(false)
 const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
@@ -1349,6 +1385,7 @@ const editDialogVisible = ref(false)
 const createPurifyDialogVisible = ref(false)
 const editPurifyDialogVisible = ref(false)
 const createLinkDialogVisible = ref(false)
+const createNamingDialogVisible = ref(false)
 const editLinkDialogVisible = ref(false)
 const createArchiveOptionsExpanded = ref(false)
 const editArchiveOptionsExpanded = ref(false)
@@ -1379,7 +1416,7 @@ const historyKeyword = ref('')
 const historySortBy = ref<'name' | 'modified_at'>('modified_at')
 const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
+const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming'>('all')
 const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
@@ -1389,6 +1426,8 @@ const historyDetailCurrentPage = ref(1)
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
 const linkRules = ref<RuleItem[]>([])
+const namingRules = ref<RuleItem[]>([])
+const availableNamingRuleSets = ref<StoredNamingRuleSet[]>([])
 const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
 
@@ -1519,6 +1558,8 @@ const editLinkForm = reactive({
   strm_suffixes: [] as string[],
   filters_text: '',
 })
+
+const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null })
 
 const createLinkStrmSuffixInput = ref('')
 const editLinkStrmSuffixInput = ref('')
@@ -1809,10 +1850,14 @@ function resolveInitialDirectory(form: Exclude<DirectoryPickerTarget, null>) {
       return editLinkForm.source_dir
     case 'editLink.target_dir':
       return editLinkForm.target_dir
+    case 'createNaming.source_dir':
+      return createNamingForm.source_dir
+    default:
+      return ''
   }
 }
 
-function openDirectoryPicker(form: 'create' | 'edit' | 'createPurify' | 'editPurify' | 'createLink' | 'editLink', field: 'source_dir' | 'target_dir') {
+function openDirectoryPicker(form: 'create' | 'edit' | 'createPurify' | 'editPurify' | 'createLink' | 'editLink' | 'createNaming', field: 'source_dir' | 'target_dir') {
   const target = `${form}.${field}` as DirectoryPickerTarget
   directoryPickerTarget.value = target
   directoryPickerInitialPath.value = target ? resolveInitialDirectory(target as Exclude<DirectoryPickerTarget, null>) : ''
@@ -1850,6 +1895,9 @@ function applyDirectorySelection(path: string) {
       break
     case 'editLink.target_dir':
       editLinkForm.target_dir = path
+      break
+    case 'createNaming.source_dir':
+      createNamingForm.source_dir = path
       break
   }
 
@@ -1916,10 +1964,45 @@ async function loadLinkRules() {
   }
 }
 
+function loadAvailableNamingRuleSets() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('nestify.namingRuleSets') || '[]') as StoredNamingRuleSet[]
+    const singleRules = JSON.parse(localStorage.getItem('nestify.namingRules') || '[]') as Array<Record<string, unknown> & { id?: number; label?: string }>
+    const singleOptions = Array.isArray(singleRules) ? singleRules.map((rule, index) => ({ id: -(Number(rule.id) || index + 1), name: `单规则：${String(rule.label || '命名规则')}`, rules: [rule] })) : []
+    availableNamingRuleSets.value = [...singleOptions, ...(Array.isArray(parsed) ? parsed : [])]
+  } catch {
+    availableNamingRuleSets.value = []
+  }
+}
+
+function openCreateNamingDialog() {
+  loadAvailableNamingRuleSets()
+  Object.assign(createNamingForm, { name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: availableNamingRuleSets.value[0]?.id ?? null })
+  createNamingDialogVisible.value = true
+}
+
+function namingRuleSetName(rule: RuleItem) {
+  return rule.description || `${parseFiltersJSON(rule.transform_rules_json).length} 条命名规则`
+}
+
+async function loadNamingRules() {
+  namingLoading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await fetchRules({ page: 1, page_size: 50, rule_type: 'naming' })
+    namingRules.value = response.data?.items ?? []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '命名规则加载失败'
+  } finally {
+    namingLoading.value = false
+  }
+}
+
 function getRuleItemsByType(ruleType: RuleListType) {
   if (ruleType === 'archive') return archiveRules.value
   if (ruleType === 'cleanup') return purifyRules.value
-  return linkRules.value
+  if (ruleType === 'link') return linkRules.value
+  return namingRules.value
 }
 
 function setRuleItemsByType(ruleType: RuleListType, items: RuleItem[]) {
@@ -1931,7 +2014,8 @@ function setRuleItemsByType(ruleType: RuleListType, items: RuleItem[]) {
     purifyRules.value = items
     return
   }
-  linkRules.value = items
+  if (ruleType === 'link') linkRules.value = items
+  else namingRules.value = items
 }
 
 function getTableRefByType(ruleType: RuleListType) {
@@ -2059,6 +2143,10 @@ async function switchTab(tab: TabKey) {
 
   if (tab === 'link') {
     await loadLinkRules()
+    return
+  }
+  if (tab === 'naming') {
+    await loadNamingRules()
     return
   }
 
@@ -2248,6 +2336,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
 	case 'link':
 		if (item?.link_mode === 'strm') return 'Strm'
 		return item?.link_mode === 'hard' ? '硬链' : '软链'
+	case 'naming':
+		return '命名'
 	default:
 		return '—'
 	}
@@ -2266,6 +2356,8 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
 	case 'link':
 		if (item?.link_mode === 'strm') return 'custom-mode-tag--strm'
 		return item?.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'
+	case 'naming':
+		return 'custom-mode-tag--naming'
 	default:
 		return ''
 	}
@@ -2544,6 +2636,41 @@ async function submitCreateLinkRule() {
   }
 }
 
+async function submitCreateNamingRule() {
+  const selectedSet = availableNamingRuleSets.value.find((item) => item.id === createNamingForm.rule_set_id)
+  if (!createNamingForm.name.trim() || !createNamingForm.source_dir.trim() || !selectedSet) {
+    errorMessage.value = '请填写规则名称、监控路径并选择命名工坊规则集'
+    return
+  }
+  creating.value = true
+  errorMessage.value = ''
+  try {
+    await createRule({
+      name: createNamingForm.name,
+      description: selectedSet.name,
+      enabled: createNamingForm.enabled,
+      monitor_enabled: createNamingForm.monitor_enabled,
+      compatibility_mode: 'local',
+      archive_mode: 'naming',
+      rule_type: 'naming',
+      run_mode: resolveRunMode(createNamingForm.monitor_enabled, createNamingForm.schedule_enabled),
+      source_dir: createNamingForm.source_dir,
+      target_dir: '',
+      watch_debounce_ms: 2000,
+      cron_expression: createNamingForm.schedule_enabled ? createNamingForm.cron_expression : '',
+      run_on_start: false,
+      transform_rules: selectedSet.rules.map((rule) => JSON.stringify(rule)),
+    })
+    createNamingDialogVisible.value = false
+    ElMessage.success('命名规则创建成功')
+    await loadNamingRules()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '命名规则创建失败'
+  } finally {
+    creating.value = false
+  }
+}
+
 async function submitUpdateLinkRule() {
   if (!editingLinkRuleID.value) {
     errorMessage.value = '缺少链路规则 ID'
@@ -2650,7 +2777,8 @@ async function refreshRuleList(type: RuleListType) {
     return
   }
 
-  await loadLinkRules()
+  if (type === 'link') await loadLinkRules()
+  else await loadNamingRules()
 }
 
 function isEditingCron(ruleId: number) {
@@ -2750,6 +2878,8 @@ async function removeRule(id: number, type: RuleListType) {
       await loadArchiveRules()
     } else if (type === 'link') {
       await loadLinkRules()
+    } else if (type === 'naming') {
+      await loadNamingRules()
     } else {
       await loadPurifyRules()
     }
@@ -2784,6 +2914,7 @@ async function removeHistoryItem(id: string) {
 
 onMounted(() => {
   void loadArchiveRules()
+  loadAvailableNamingRuleSets()
 })
 </script>
 
@@ -2794,6 +2925,8 @@ onMounted(() => {
 .rules-tabs__item:hover { color: var(--el-color-primary); }
 .rules-tabs__item.is-active { color: var(--el-color-primary); font-weight: 600; }
 .rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--el-color-primary); border-radius: 999px; }
+.rules-tabs__item--naming.is-active { color: #0f9f87; }
+.rules-tabs__item--naming.is-active::after { background: #0f9f87; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
@@ -2859,6 +2992,13 @@ onMounted(() => {
 }
 
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
+.rule-actions--nowrap { width: 100%; flex-wrap: nowrap; gap: 18px; }
+.rules-table-scroll { width: 100%; overflow-x: auto; }
+.naming-rules-table { min-width: 1280px; }
+.naming-add-button { color: #fff; border-color: #0f9f87; background: #0f9f87; }
+.naming-add-button:hover { color: #fff; border-color: #0c8a75; background: #0c8a75; }
+.rule-action--naming { color: #0f9f87; }
+.rule-action__execute-icon--naming { stroke-width: 1.75; }
 .rule-action { flex: 0 0 auto; padding: 4px; font-size: 18px; }
 .rule-action--primary { color: var(--el-color-primary); }
 .rule-action--success { color: var(--el-color-success); }
@@ -2874,6 +3014,7 @@ onMounted(() => {
 .custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .custom-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
+.custom-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); border-color: rgba(15, 159, 135, 0.28); }
 .rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }

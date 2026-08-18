@@ -97,6 +97,8 @@ func buildRuleTypeWhereClause(ruleType string) (string, []any) {
 		return ` WHERE rule_type = ?`, []any{"cleanup"}
 	case "link":
 		return ` WHERE rule_type = ?`, []any{"link"}
+	case "naming":
+		return ` WHERE rule_type = ?`, []any{"naming"}
 	default:
 		return "", nil
 	}
@@ -447,6 +449,8 @@ func deriveRuleType(archiveMode string) string {
 		return "cleanup"
 	case "link":
 		return "link"
+	case "naming":
+		return "naming"
 	default:
 		return "archive"
 	}

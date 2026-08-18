@@ -578,7 +578,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
@@ -736,6 +736,24 @@ const nextRuleSetID = ref(1)
 
 const addedRules = ref<AddedNamingRule[]>([])
 const nextAddedRuleID = ref(1)
+const namingRuleSetsStorageKey = 'nestify.namingRuleSets'
+const namingRulesStorageKey = 'nestify.namingRules'
+
+onMounted(() => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(namingRuleSetsStorageKey) || '[]') as NamingRuleSet[]
+    namingRuleSets.value = Array.isArray(stored) ? stored : []
+    const storedRules = JSON.parse(localStorage.getItem(namingRulesStorageKey) || '[]') as AddedNamingRule[]
+    addedRules.value = Array.isArray(storedRules) ? storedRules : []
+    nextRuleSetID.value = Math.max(0, ...namingRuleSets.value.map((item) => item.id)) + 1
+    nextAddedRuleID.value = Math.max(0, ...addedRules.value.map((item) => item.id)) + 1
+  } catch {
+    namingRuleSets.value = []
+  }
+})
+
+watch(namingRuleSets, (value) => localStorage.setItem(namingRuleSetsStorageKey, JSON.stringify(value)), { deep: true })
+watch(addedRules, (value) => localStorage.setItem(namingRulesStorageKey, JSON.stringify(value)), { deep: true })
 
 const sortedSourceItems = computed(() => sortSourceItems(sourceItems.value))
 

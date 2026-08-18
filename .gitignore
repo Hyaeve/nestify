@@ -16,6 +16,8 @@ data/
 !.env.example
 *.log
 *.exe
+.gocache/
+.gomodcache/
 
 # Editor and OS metadata
 .idea/

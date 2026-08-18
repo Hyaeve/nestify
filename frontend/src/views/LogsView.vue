@@ -65,6 +65,7 @@
             <el-option label="归档规则" value="archive" />
             <el-option label="净化规则" value="cleanup" />
             <el-option label="链路规则" value="link" />
+            <el-option label="命名规则" value="naming" />
           </el-select>
 
           <el-select v-model="logsSortBy" class="logs-toolbar__select logs-toolbar__select--sort" placeholder="排序" @change="handleFiltersChange">
@@ -354,7 +355,7 @@ const filteredTotal = ref(0)
 const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link'>('all')
+const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming'>('all')
 const logsSortBy = ref<'name' | 'modified_at'>('modified_at')
 const logsSortOrder = ref<'asc' | 'desc'>('desc')
 const logsPageSizeOptions = [25, 50]
@@ -577,6 +578,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
     case 'link':
       if (item?.link_mode === 'strm') return 'Strm'
       return item?.link_mode === 'hard' ? '硬链' : '软链'
+    case 'naming':
+      return '命名'
     default:
       return '未知'
   }
@@ -595,6 +598,8 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
     case 'link':
       if (item?.link_mode === 'strm') return 'logs-mode-tag--strm'
       return item?.link_mode === 'hard' ? 'logs-mode-tag--hardlink' : 'logs-mode-tag--softlink'
+    case 'naming':
+      return 'logs-mode-tag--naming'
     default:
       return ''
   }
@@ -999,6 +1004,7 @@ onMounted(() => {
 .logs-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .logs-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .logs-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
+.logs-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); }
 
 .logs-tree-table :deep(.el-table__row) { cursor: pointer; }
 

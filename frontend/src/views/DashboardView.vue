@@ -301,6 +301,7 @@ function archiveModeText(mode: RuleItem['archive_mode']) {
   if (mode === 'cleanup') return '清理'
   if (mode === 'transform') return '转换'
   if (mode === 'link') return '链路'
+  if (mode === 'naming') return '命名'
   return '未知'
 }
 
@@ -310,6 +311,7 @@ function dashboardModeText(mode?: string) {
   if (mode === 'cleanup') return '清理'
   if (mode === 'transform') return '转换'
   if (mode === 'link') return '链路'
+  if (mode === 'naming') return '命名'
   return '未知'
 }
 
@@ -319,6 +321,7 @@ function dashboardModeTagClass(mode?: string) {
   if (mode === 'cleanup') return 'dashboard-mode-tag--cleanup'
   if (mode === 'transform') return 'dashboard-mode-tag--transform'
   if (mode === 'link') return 'dashboard-mode-tag--hardlink'
+  if (mode === 'naming') return 'dashboard-mode-tag--naming'
   return ''
 }
 
@@ -809,6 +812,7 @@ onBeforeUnmount(() => {
 .dashboard-mode-tag--cleanup { color: #5f9f45; background: rgba(95, 159, 69, 0.12); }
 .dashboard-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .dashboard-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
+.dashboard-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); }
 
 .summary-item__meta {
   display: flex;
