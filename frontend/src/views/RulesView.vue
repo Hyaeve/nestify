@@ -20,7 +20,7 @@
         </div>
       </template>
 
-      <el-table v-if="archiveRules.length" ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handleArchiveRuleContextMenu">
+      <div v-if="archiveRules.length" class="rules-table-scroll"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -91,10 +91,10 @@
               <el-tooltip content="执行" placement="top">
                 <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
                   <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6.5 5.5v13" />
-                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
-                    <path d="M5 19.5h14" />
-                    <path d="m16 17 3 2.5-3 2.5" />
+                    <path d="M5 4.5h11.5v4" />
+                    <path d="M8 7.5h11v12H8z" />
+                    <path d="M11 13.5h5.5" />
+                    <path d="m14.5 10.5 3 3-3 3" />
                   </svg>
                 </el-button>
               </el-tooltip>
@@ -106,7 +106,7 @@
             </div>
           </template>
         </el-table-column>
-      </el-table>
+      </el-table></div>
 
       <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
 
@@ -334,7 +334,7 @@
         </div>
       </template>
 
-      <el-table v-if="purifyRules.length" ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handlePurifyRuleContextMenu">
+      <div v-if="purifyRules.length" class="rules-table-scroll"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -412,10 +412,10 @@
               <el-tooltip content="执行" placement="top">
                 <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
                   <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6.5 5.5v13" />
-                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
-                    <path d="M5 19.5h14" />
-                    <path d="m16 17 3 2.5-3 2.5" />
+                    <path d="M5 4.5h11.5v4" />
+                    <path d="M8 7.5h11v12H8z" />
+                    <path d="M11 13.5h5.5" />
+                    <path d="m14.5 10.5 3 3-3 3" />
                   </svg>
                 </el-button>
               </el-tooltip>
@@ -427,7 +427,7 @@
             </div>
           </template>
         </el-table-column>
-      </el-table>
+      </el-table></div>
 
       <div v-if="purifyRulesTotal > 0" class="history-pagination">
         <el-pagination
@@ -455,7 +455,7 @@
         </div>
       </template>
 
-      <el-table v-if="linkRules.length" ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable" table-layout="auto" @row-contextmenu="handleLinkRuleContextMenu">
+      <div v-if="linkRules.length" class="rules-table-scroll"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -529,10 +529,10 @@
                 <el-dropdown trigger="click" @command="(command: string) => handleStrmSyncCommand(scope.row.id, command)">
                   <el-button link class="rule-action rule-action--success" aria-label="执行 Strm 同步">
                     <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6.5 5.5v13" />
-                      <path d="m10 8.25 6.75 3.75L10 15.75Z" />
-                      <path d="M5 19.5h14" />
-                      <path d="m16 17 3 2.5-3 2.5" />
+                      <path d="M5 4.5h11.5v4" />
+                      <path d="M8 7.5h11v12H8z" />
+                      <path d="M11 13.5h5.5" />
+                      <path d="m14.5 10.5 3 3-3 3" />
                     </svg>
                   </el-button>
                   <template #dropdown>
@@ -546,10 +546,10 @@
               <el-tooltip v-else content="执行" placement="top">
                 <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
                   <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6.5 5.5v13" />
-                    <path d="m10 8.25 6.75 3.75L10 15.75Z" />
-                    <path d="M5 19.5h14" />
-                    <path d="m16 17 3 2.5-3 2.5" />
+                    <path d="M5 4.5h11.5v4" />
+                    <path d="M8 7.5h11v12H8z" />
+                    <path d="M11 13.5h5.5" />
+                    <path d="m14.5 10.5 3 3-3 3" />
                   </svg>
                 </el-button>
               </el-tooltip>
@@ -561,7 +561,7 @@
             </div>
           </template>
         </el-table-column>
-      </el-table>
+      </el-table></div>
 
       <div v-if="linkRulesTotal > 0" class="history-pagination">
         <el-pagination
@@ -2988,13 +2988,30 @@ onMounted(() => {
 }
 
 .rules-page :deep(.rules-table .el-table__fixed-right) {
-  box-shadow: -10px 0 18px rgba(15, 23, 42, 0.05);
+  z-index: 20;
+  background: var(--el-bg-color);
+  box-shadow: -12px 0 20px rgba(15, 23, 42, 0.12);
+}
+
+.rules-page :deep(.rules-table .el-table-fixed-column--right) {
+  z-index: 21 !important;
+  background: var(--el-bg-color) !important;
+}
+
+.rules-page :deep(.rules-table th.el-table-fixed-column--right) {
+  background: var(--el-fill-color-light) !important;
+}
+
+.rules-page :deep(.rules-table .el-table__fixed-right::before),
+.rules-page :deep(.rules-table .el-table__fixed-right-patch) {
+  z-index: 22;
+  background: var(--el-bg-color);
 }
 
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
 .rule-actions--nowrap { width: 100%; flex-wrap: nowrap; gap: 18px; }
-.rules-table-scroll { width: 100%; overflow-x: auto; }
-.naming-rules-table { min-width: 1280px; }
+.rules-table-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: stable; }
+.rules-table--wide, .naming-rules-table { min-width: 1380px; }
 .naming-add-button { color: #fff; border-color: #0f9f87; background: #0f9f87; }
 .naming-add-button:hover { color: #fff; border-color: #0c8a75; background: #0c8a75; }
 .rule-action--naming { color: #0f9f87; }
