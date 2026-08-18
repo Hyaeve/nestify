@@ -20,7 +20,7 @@
         </div>
       </template>
 
-      <div v-if="archiveRules.length" class="rules-table-scroll"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
+      <div v-if="archiveRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -334,7 +334,7 @@
         </div>
       </template>
 
-      <div v-if="purifyRules.length" class="rules-table-scroll"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
+      <div v-if="purifyRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -455,7 +455,7 @@
         </div>
       </template>
 
-      <div v-if="linkRules.length" class="rules-table-scroll"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
+      <div v-if="linkRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -581,7 +581,7 @@
 
     <el-card v-show="activeTab === 'naming'" class="page-card rules-card naming-rules-card">
       <template #header><div class="rules-card__header"><div class="rules-card__title">命名规则</div><el-button class="naming-add-button" round @click="openCreateNamingDialog">+ 添加规则</el-button></div></template>
-      <div class="rules-table-scroll">
+      <div class="rules-table-scroll" @wheel="handleRulesTableWheel">
         <el-table v-if="namingRules.length" v-loading="namingLoading" :data="namingRules" row-key="id" class="rules-table naming-rules-table" table-layout="fixed">
           <el-table-column prop="name" label="规则名称" width="210" />
           <el-table-column label="模式" width="110"><template #default><span class="custom-mode-tag custom-mode-tag--naming">命名</span></template></el-table-column>
@@ -1238,6 +1238,17 @@ function formatHistorySize(sizeBytes?: number) {
 
 function dragHandleModeClass(mode?: string) {
   return mode === 'compatibility' ? 'is-compatibility' : 'is-local'
+}
+
+function handleRulesTableWheel(event: WheelEvent) {
+  const container = event.currentTarget as HTMLElement | null
+  if (!container || container.scrollWidth <= container.clientWidth) return
+
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+  if (!delta) return
+  const previous = container.scrollLeft
+  container.scrollLeft += delta
+  if (container.scrollLeft !== previous) event.preventDefault()
 }
 
 function getCronPreviewItems(ruleId: number) {
@@ -3010,7 +3021,17 @@ onMounted(() => {
 
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
 .rule-actions--nowrap { width: 100%; flex-wrap: nowrap; gap: 18px; }
-.rules-table-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-gutter: stable; }
+.rules-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.38) transparent;
+}
+.rules-table-scroll::-webkit-scrollbar { height: 6px; }
+.rules-table-scroll::-webkit-scrollbar-track { background: transparent; }
+.rules-table-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.34); border-radius: 999px; }
+.rules-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.48); }
 .rules-table--wide, .naming-rules-table { min-width: 1380px; }
 .naming-add-button { color: #fff; border-color: #0f9f87; background: #0f9f87; }
 .naming-add-button:hover { color: #fff; border-color: #0c8a75; background: #0c8a75; }
