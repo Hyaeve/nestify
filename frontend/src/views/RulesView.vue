@@ -1266,13 +1266,20 @@ function handleRulesTableWheel(event: WheelEvent) {
   const container = origin.classList.contains('rules-table-scroll')
     ? origin
     : origin.closest('.rules-card')?.querySelector<HTMLElement>('.rules-table-scroll')
-  if (!container || container.scrollWidth <= container.clientWidth) return
+  if (!container) return
+
+  const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+  if (maxScrollLeft <= 0) return
 
   const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
   if (!delta) return
+
   const previous = container.scrollLeft
-  container.scrollLeft += delta
-  if (container.scrollLeft !== previous) event.preventDefault()
+  const next = Math.max(0, Math.min(maxScrollLeft, previous + delta))
+  if (next === previous) return
+
+  container.scrollLeft = next
+  event.preventDefault()
 }
 
 function getCronPreviewItems(ruleId: number) {

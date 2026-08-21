@@ -12,10 +12,7 @@
         <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu">
           <el-menu-item index="/dashboard">
             <el-icon class="nav-icon nav-icon--dashboard">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__arc" fill-rule="evenodd" d="M3.35 16.15a8.65 8.65 0 0 1 17.3 0 1.42 1.42 0 0 1-2.84 0 5.81 5.81 0 0 0-11.62 0 1.42 1.42 0 0 1-2.84 0Zm2.92-5.3 1.9 1.12a6.75 6.75 0 0 0-.78 1.9H5.16a8.8 8.8 0 0 1 1.11-3.02Zm4.58-2.37v2.22a6.64 6.64 0 0 0-1.7.62L8.03 9.38a8.62 8.62 0 0 1 2.82-.9Zm2.3 0a8.62 8.62 0 0 1 2.82.9l-1.12 1.94a6.64 6.64 0 0 0-1.7-.62V8.48Zm4.58 2.37a8.8 8.8 0 0 1 1.11 3.02h-2.23a6.75 6.75 0 0 0-.78-1.9l1.9-1.12Z" />
-                <path class="nav-icon__needle" d="M12.45 14.35 16.2 9.2a.78.78 0 0 1 1.22.95l-3.85 5.08a1.6 1.6 0 1 1-1.12-.88Z" />
-              </svg>
+              <span class="nav-image-icon" :style="{ '--icon-image': `url(${dashboardIcon})` }" aria-hidden="true"></span>
             </el-icon>
             <span>仪表盘</span>
           </el-menu-item>
@@ -34,22 +31,14 @@
           </el-menu-item>
           <el-menu-item index="/naming-workshop">
             <el-icon class="nav-icon nav-icon--naming">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path class="nav-icon__nameplate" d="M4.35 8.05c0-1.3 1.05-2.35 2.35-2.35h7.25l3.7 3.68v6.57c0 1.3-1.05 2.35-2.35 2.35H6.7a2.35 2.35 0 0 1-2.35-2.35Z" />
-                <path class="nav-icon__fold" d="M13.75 5.85v3.78h3.72" />
-                <path class="nav-icon__text" d="M7.45 12.05h4.25" />
-                <path class="nav-icon__text" d="M7.45 15.05h3.25" />
-                <path class="nav-icon__pencil-body" d="M13.15 16.95 18.9 11.2a1.35 1.35 0 0 1 1.9 1.9l-5.75 5.75-2.45.55Z" />
-                <path class="nav-icon__pencil-tip" d="m17.75 12.35 1.9 1.9" />
-                <path class="nav-icon__gear" d="M7.1 4.2v-1" />
-                <path class="nav-icon__gear" d="M4.95 5.1 4.2 4.35" />
-                <path class="nav-icon__gear" d="M3.95 7.25h-1" />
-              </svg>
+              <span class="nav-image-icon" :style="{ '--icon-image': `url(${namingWorkshopIcon})` }" aria-hidden="true"></span>
             </el-icon>
             <span>命名工坊</span>
           </el-menu-item>
           <el-menu-item index="/logs">
-            <el-icon><Document /></el-icon>
+            <el-icon class="nav-icon nav-icon--logs">
+              <span class="nav-image-icon" :style="{ '--icon-image': `url(${logsIcon})` }" aria-hidden="true"></span>
+            </el-icon>
             <span>任务日志</span>
           </el-menu-item>
           <el-menu-item index="/settings">
@@ -119,7 +108,6 @@ import {
   Apple,
   ArrowLeftBold,
   ArrowRightBold,
-  Document,
   MoreFilled,
   Operation,
   RefreshRight,
@@ -130,6 +118,9 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
+import dashboardIcon from '../../icon/仪表盘.png'
+import namingWorkshopIcon from '../../icon/命名工坊.png'
+import logsIcon from '../../icon/日志.png'
 import { restartSystem } from '../api/system'
 import { useAuthStore } from '../stores/auth'
 import { getStoredTheme, setTheme, type ThemeMode } from '../utils/theme'
@@ -625,27 +616,26 @@ async function handleLogout() {
   transform: translate(-50%, -50%);
 }
 
-.nav-icon svg {
+.nav-image-icon {
+  display: block;
   width: 26px;
   height: 26px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2.15;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  background: currentColor;
+  -webkit-mask: var(--icon-image) center / contain no-repeat;
+  mask: var(--icon-image) center / contain no-repeat;
+  opacity: 0.78;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.nav-icon--dashboard svg {
+.nav-icon--dashboard .nav-image-icon {
   width: 30px;
   height: 30px;
-  fill: currentColor;
-  stroke: none;
 }
 
-.nav-icon--dashboard .nav-icon__arc,
-.nav-icon--dashboard .nav-icon__needle {
-  transform: translateY(0.2px) scale(1.08);
-  transform-origin: 12px 13px;
+:deep(.el-menu-item:hover) .nav-image-icon,
+:deep(.el-menu-item.is-active) .nav-image-icon {
+  opacity: 1;
+  transform: scale(1.04);
 }
 
 .nav-icon--folder svg {
@@ -655,40 +645,15 @@ async function handleLogout() {
   opacity: 0.72;
 }
 
-.nav-icon--naming svg {
+.nav-icon--naming .nav-image-icon {
   width: 29px;
   height: 29px;
-  opacity: 0.9;
+  opacity: 0.86;
 }
 
-.nav-icon--naming .nav-icon__nameplate,
-.nav-icon--naming .nav-icon__fold,
-.nav-icon--naming .nav-icon__text,
-.nav-icon--naming .nav-icon__pencil-body,
-.nav-icon--naming .nav-icon__pencil-tip,
-.nav-icon--naming .nav-icon__gear {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.nav-icon--naming .nav-icon__nameplate {
-  stroke-width: 1.55;
-}
-
-.nav-icon--naming .nav-icon__fold,
-.nav-icon--naming .nav-icon__text {
-  stroke-width: 1.35;
-}
-
-.nav-icon--naming .nav-icon__pencil-body,
-.nav-icon--naming .nav-icon__pencil-tip {
-  stroke-width: 1.65;
-}
-
-.nav-icon--naming .nav-icon__gear {
-  stroke-width: 1.45;
+.nav-icon--logs .nav-image-icon {
+  width: 27px;
+  height: 27px;
 }
 
 :deep(.el-menu-item.is-active) {

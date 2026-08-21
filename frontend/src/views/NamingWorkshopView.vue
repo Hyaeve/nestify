@@ -131,25 +131,12 @@
             </el-tooltip>
             <el-tooltip content="规则集" placement="right" :show-after="500">
               <el-button class="rail-button rail-button--set" circle aria-label="规则集" @click="openRuleSetDialog">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                  <path d="M5.2 5.2h13.6v4.1H5.2V5.2Z" />
-                  <path d="M5.2 12.1h13.6v6.7H5.2v-6.7Z" />
-                  <path d="M8 7.25h4.8" />
-                  <path d="M8 14.7h5.7" />
-                  <path d="M15.9 15.7h2.4" />
-                </svg>
+                <span class="rail-image-icon rail-image-icon--set" :style="{ '--icon-image': `url(${ruleSetIcon})` }" aria-hidden="true"></span>
               </el-button>
             </el-tooltip>
             <el-tooltip content="添加规则" placement="right" :show-after="500">
               <el-button class="rail-button rail-button--rule" circle aria-label="添加规则" @click="ruleDialogVisible = true">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="line-icon">
-                  <path d="M6.2 4.8h8.9l2.7 2.7v11.7H6.2V4.8Z" />
-                  <path d="M14.9 4.95v2.75h2.75" />
-                  <path d="M8.9 10.5h6.2" />
-                  <path d="M8.9 14.2h3.1" />
-                  <path d="M15.8 13.05v5" />
-                  <path d="M13.3 15.55h5" />
-                </svg>
+                <span class="rail-image-icon rail-image-icon--rule" :style="{ '--icon-image': `url(${addRuleIcon})` }" aria-hidden="true"></span>
               </el-button>
             </el-tooltip>
           </div>
@@ -580,6 +567,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+import ruleSetIcon from '../../icon/规则集.png'
+import addRuleIcon from '../../icon/添加规则.png'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { browseDirectories, fetchBrowseRoots, type DirectoryEntry } from '../api/paths'
@@ -1759,10 +1749,22 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   box-shadow: none;
 }
 
-.rail-button .line-icon {
-  width: 24px;
-  height: 24px;
-  stroke-width: 2;
+.rail-image-icon {
+  display: block;
+  width: 25px;
+  height: 25px;
+  background: currentColor;
+  border-radius: 6px;
+  opacity: 0.78;
+  -webkit-mask: var(--icon-image) center / contain no-repeat;
+  mask: var(--icon-image) center / contain no-repeat;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.rail-button:hover .rail-image-icon,
+.rail-button:focus-visible .rail-image-icon {
+  opacity: 0.96;
+  transform: scale(1.04);
 }
 
 .rail-button:not(.is-disabled):hover,
