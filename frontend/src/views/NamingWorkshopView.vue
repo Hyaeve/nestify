@@ -1774,6 +1774,11 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.rail-button .line-icon {
+  width: 25px;
+  height: 25px;
+}
+
 .rail-button--filter:not(.is-disabled):hover {
   color: #1f9d8b;
   border-color: #9be7d7;

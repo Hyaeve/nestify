@@ -17,15 +17,14 @@
             <span>仪表盘</span>
           </el-menu-item>
           <el-menu-item index="/rules">
-            <el-icon><Operation /></el-icon>
+            <el-icon class="nav-icon nav-icon--rules">
+              <span class="nav-image-icon" :style="{ '--icon-image': `url(${rulesIcon})` }" aria-hidden="true"></span>
+            </el-icon>
             <span>规则管理</span>
           </el-menu-item>
           <el-menu-item index="/manual-pack">
             <el-icon class="nav-icon nav-icon--folder">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4.05 7.35a2.1 2.1 0 0 1 2.1-2.1h4.35l1.75 2.1h5.95a2.1 2.1 0 0 1 2.1 2.1v1.05" />
-                <path d="M4.45 10.25h15.45a1.8 1.8 0 0 1 1.76 2.16l-.98 4.9a2.45 2.45 0 0 1-2.4 1.97H5.95a2.45 2.45 0 0 1-2.41-2.01l-.85-4.62a2 2 0 0 1 1.76-2.4Z" />
-              </svg>
+              <span class="nav-image-icon" :style="{ '--icon-image': `url(${folderIcon})` }" aria-hidden="true"></span>
             </el-icon>
             <span>文件管理</span>
           </el-menu-item>
@@ -109,7 +108,6 @@ import {
   ArrowLeftBold,
   ArrowRightBold,
   MoreFilled,
-  Operation,
   RefreshRight,
   Setting,
   Sunny,
@@ -119,6 +117,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import dashboardIcon from '../../icon/仪表盘.png'
+import rulesIcon from '../../icon/规则管理.png'
+import folderIcon from '../../icon/文件管理.png'
 import namingWorkshopIcon from '../../icon/命名工坊.png'
 import logsIcon from '../../icon/日志.png'
 import { restartSystem } from '../api/system'
@@ -651,9 +651,16 @@ async function handleLogout() {
   opacity: 0.86;
 }
 
+.nav-icon--rules .nav-image-icon,
 .nav-icon--logs .nav-image-icon {
   width: 27px;
   height: 27px;
+}
+
+.nav-icon--folder .nav-image-icon {
+  width: 28px;
+  height: 28px;
+  opacity: 0.82;
 }
 
 :deep(.el-menu-item.is-active) {
