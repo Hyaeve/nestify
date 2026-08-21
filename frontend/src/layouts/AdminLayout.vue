@@ -620,11 +620,12 @@ async function handleLogout() {
   display: block;
   width: 26px;
   height: 26px;
-  background: currentColor;
+  color: inherit;
+  background-color: currentColor;
   -webkit-mask: var(--icon-image) center / contain no-repeat;
   mask: var(--icon-image) center / contain no-repeat;
-  opacity: 0.78;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 1;
+  transition: transform 0.2s ease;
 }
 
 .nav-icon--dashboard .nav-image-icon {
@@ -634,7 +635,6 @@ async function handleLogout() {
 
 :deep(.el-menu-item:hover) .nav-image-icon,
 :deep(.el-menu-item.is-active) .nav-image-icon {
-  opacity: 1;
   transform: scale(1.04);
 }
 
@@ -648,10 +648,13 @@ async function handleLogout() {
 .nav-icon--naming .nav-image-icon {
   width: 29px;
   height: 29px;
-  opacity: 0.86;
 }
 
-.nav-icon--rules .nav-image-icon,
+.nav-icon--rules .nav-image-icon {
+  width: 24px;
+  height: 24px;
+}
+
 .nav-icon--logs .nav-image-icon {
   width: 27px;
   height: 27px;
@@ -660,7 +663,6 @@ async function handleLogout() {
 .nav-icon--folder .nav-image-icon {
   width: 28px;
   height: 28px;
-  opacity: 0.82;
 }
 
 :deep(.el-menu-item.is-active) {
