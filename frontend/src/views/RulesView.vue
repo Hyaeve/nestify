@@ -110,7 +110,7 @@
 
       <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
 
-      <div v-if="archiveRulesTotal > 0" class="history-pagination">
+      <div v-if="archiveRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
         <el-pagination
           v-model:current-page="archiveRulesCurrentPage"
           v-model:page-size="archiveRulesPageSize"
@@ -429,7 +429,7 @@
         </el-table-column>
       </el-table></div>
 
-      <div v-if="purifyRulesTotal > 0" class="history-pagination">
+      <div v-if="purifyRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
         <el-pagination
           v-model:current-page="purifyRulesCurrentPage"
           v-model:page-size="purifyRulesPageSize"
@@ -563,7 +563,7 @@
         </el-table-column>
       </el-table></div>
 
-      <div v-if="linkRulesTotal > 0" class="history-pagination">
+      <div v-if="linkRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
         <el-pagination
           v-model:current-page="linkRulesCurrentPage"
           v-model:page-size="linkRulesPageSize"
@@ -603,6 +603,12 @@
         <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
+        <el-form-item label="应用范围">
+          <el-row :gutter="12">
+            <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_dirs">包含文件夹</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件夹</span></label></el-col>
+            <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_files">包含文件</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件</span></label></el-col>
+          </el-row>
+        </el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="计划执行"><el-switch v-model="createNamingForm.schedule_enabled" /></el-form-item></el-col></el-row>
         <el-form-item v-if="createNamingForm.schedule_enabled" label="计划表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="例如：0 8 * * *" /></el-form-item>
         <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
@@ -1241,7 +1247,12 @@ function dragHandleModeClass(mode?: string) {
 }
 
 function handleRulesTableWheel(event: WheelEvent) {
-  const container = event.currentTarget as HTMLElement | null
+  const origin = event.currentTarget as HTMLElement | null
+  if (!origin) return
+
+  const container = origin.classList.contains('rules-table-scroll')
+    ? origin
+    : origin.closest('.rules-card')?.querySelector<HTMLElement>('.rules-table-scroll')
   if (!container || container.scrollWidth <= container.clientWidth) return
 
   const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
@@ -1570,7 +1581,7 @@ const editLinkForm = reactive({
   filters_text: '',
 })
 
-const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null })
+const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null, options: { naming_include_files: false, naming_include_dirs: false } })
 
 const createLinkStrmSuffixInput = ref('')
 const editLinkStrmSuffixInput = ref('')
@@ -1988,7 +1999,7 @@ function loadAvailableNamingRuleSets() {
 
 function openCreateNamingDialog() {
   loadAvailableNamingRuleSets()
-  Object.assign(createNamingForm, { name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: availableNamingRuleSets.value[0]?.id ?? null })
+  Object.assign(createNamingForm, { name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: availableNamingRuleSets.value[0]?.id ?? null, options: { naming_include_files: false, naming_include_dirs: false } })
   createNamingDialogVisible.value = true
 }
 
@@ -2670,6 +2681,7 @@ async function submitCreateNamingRule() {
       watch_debounce_ms: 2000,
       cron_expression: createNamingForm.schedule_enabled ? createNamingForm.cron_expression : '',
       run_on_start: false,
+      options: { ...createNamingForm.options },
       transform_rules: selectedSet.rules.map((rule) => JSON.stringify(rule)),
     })
     createNamingDialogVisible.value = false
@@ -3157,6 +3169,8 @@ onMounted(() => {
 .mode-config-toggle__icon.is-expanded { transform: rotate(180deg); }
 .mode-option-card { display: flex; flex-direction: column; gap: 6px; min-height: 92px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); cursor: pointer; }
 .mode-option-card--compact { min-height: auto; padding: 12px 14px; }
+.naming-scope-card { min-height: 72px; margin-bottom: 0; }
+.naming-scope-card .mode-option-card__description { padding-left: 24px; }
 .mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
 .mode-option-card.is-disabled { cursor: not-allowed; opacity: 0.68; }
 .mode-option-card.is-disabled:hover { border-color: var(--el-border-color); }

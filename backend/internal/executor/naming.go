@@ -32,16 +32,24 @@ type namingRuleDefinition struct {
 func (s *Service) executeNamingRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	stats := executionStats{}
 	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
+	includeFiles := req.Options["naming_include_files"]
+	includeDirs := req.Options["naming_include_dirs"]
 	entries, err := os.ReadDir(sourceDir)
 	if err != nil {
 		return stats, fmt.Errorf("read naming source dir: %w", err)
 	}
 	sort.Slice(entries, func(i, j int) bool { return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name()) })
+	// An unset scope intentionally matches nothing; both options are opt-in.
 	rules := parseNamingRules(req.TransformRules)
-	for index, entry := range entries {
+	order := 0
+	for _, entry := range entries {
+		if (entry.IsDir() && !includeDirs) || (!entry.IsDir() && !includeFiles) {
+			continue
+		}
+		order++
 		stats.ProcessedFiles++
 		oldName := entry.Name()
-		newName := applyNamingRules(oldName, entry.IsDir(), index+1, rules)
+		newName := applyNamingRules(oldName, entry.IsDir(), order, rules)
 		if newName == oldName || strings.TrimSpace(newName) == "" {
 			stats.SkipCount++
 			continue
