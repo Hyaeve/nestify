@@ -603,12 +603,18 @@
         <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
-        <el-form-item label="应用范围">
-          <el-row :gutter="12">
-            <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_dirs">包含文件夹</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件夹</span></label></el-col>
-            <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_files">包含文件</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件</span></label></el-col>
-          </el-row>
-        </el-form-item>
+        <button type="button" class="mode-config-toggle" @click="namingScopeOptionsExpanded = !namingScopeOptionsExpanded">
+          <div><div class="mode-config-panel__title">功能模块</div></div>
+          <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': namingScopeOptionsExpanded }">⌄</span></div>
+        </button>
+        <el-collapse-transition>
+          <div v-show="namingScopeOptionsExpanded" class="mode-config-panel naming-scope-panel">
+            <el-row :gutter="12">
+              <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_dirs">包含文件夹</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件夹</span></label></el-col>
+              <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_files">包含文件</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件</span></label></el-col>
+            </el-row>
+          </div>
+        </el-collapse-transition>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="计划执行"><el-switch v-model="createNamingForm.schedule_enabled" /></el-form-item></el-col></el-row>
         <el-form-item v-if="createNamingForm.schedule_enabled" label="计划表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="例如：0 8 * * *" /></el-form-item>
         <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
@@ -1248,7 +1254,14 @@ function dragHandleModeClass(mode?: string) {
 
 function handleRulesTableWheel(event: WheelEvent) {
   const origin = event.currentTarget as HTMLElement | null
-  if (!origin) return
+  const target = event.target as HTMLElement | null
+  if (!origin || !target) return
+
+  const isPagination = origin.classList.contains('history-pagination')
+  const isTableHeader = Boolean(target.closest('.el-table__header-wrapper'))
+  const originRect = origin.getBoundingClientRect()
+  const isBottomScrollbar = event.clientY >= originRect.bottom - 16
+  if (!isPagination && !isTableHeader && !isBottomScrollbar) return
 
   const container = origin.classList.contains('rules-table-scroll')
     ? origin
@@ -1411,6 +1424,7 @@ const createNamingDialogVisible = ref(false)
 const editLinkDialogVisible = ref(false)
 const createArchiveOptionsExpanded = ref(false)
 const editArchiveOptionsExpanded = ref(false)
+const namingScopeOptionsExpanded = ref(false)
 const createPurifyOptionsExpanded = ref(false)
 const editPurifyOptionsExpanded = ref(false)
 
@@ -3167,9 +3181,10 @@ onMounted(() => {
 .mode-config-toggle__meta { display: flex; align-items: center; gap: 10px; }
 .mode-config-toggle__icon { font-size: 18px; line-height: 1; color: var(--el-text-color-secondary); transition: transform 0.2s ease; }
 .mode-config-toggle__icon.is-expanded { transform: rotate(180deg); }
+.naming-scope-panel { margin-bottom: 18px; }
 .mode-option-card { display: flex; flex-direction: column; gap: 6px; min-height: 92px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); cursor: pointer; }
 .mode-option-card--compact { min-height: auto; padding: 12px 14px; }
-.naming-scope-card { min-height: 72px; margin-bottom: 0; }
+.naming-scope-card { min-height: 92px; margin-bottom: 0; }
 .naming-scope-card .mode-option-card__description { padding-left: 24px; }
 .mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
 .mode-option-card.is-disabled { cursor: not-allowed; opacity: 0.68; }
