@@ -38,7 +38,7 @@
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
         <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="Cron" min-width="180">
+        <el-table-column label="Cron" min-width="140">
           <template #default="scope">
             <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
               <template v-if="isEditingCron(scope.row.id)">
@@ -352,14 +352,14 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="监控目录" min-width="420">
+        <el-table-column label="监控目录" min-width="300">
           <template #default="scope">
             <div class="source-dir-tags">
               <el-tag v-for="dir in getRuleSourceDirs(scope.row)" :key="dir" class="source-dir-tags__item" type="info" effect="plain">{{ dir }}</el-tag>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="Cron" min-width="180">
+        <el-table-column label="Cron" min-width="140">
           <template #default="scope">
             <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
               <template v-if="isEditingCron(scope.row.id)">
@@ -475,7 +475,7 @@
         </el-table-column>
         <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
         <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="Cron" min-width="180">
+        <el-table-column label="Cron" min-width="140">
           <template #default="scope">
             <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
               <template v-if="isEditingCron(scope.row.id)">
