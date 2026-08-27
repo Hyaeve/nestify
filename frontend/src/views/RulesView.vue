@@ -352,12 +352,8 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="监控目录" min-width="240">
-          <template #default="scope">
-            <div class="source-dir-tags">
-              <el-tag v-for="dir in getRuleSourceDirs(scope.row)" :key="dir" class="source-dir-tags__item" type="info" effect="plain">{{ dir }}</el-tag>
-            </div>
-          </template>
+        <el-table-column label="监控目录" min-width="240" show-overflow-tooltip>
+          <template #default="scope">{{ getRuleSourceDirsText(scope.row) }}</template>
         </el-table-column>
         <el-table-column label="Cron" width="140">
           <template #default="scope">
@@ -1348,6 +1344,10 @@ function normalizeSourceDirs(sourceDir?: string, sourceDirs: string[] = []) {
 
 function getRuleSourceDirs(rule: RuleItem) {
   return normalizeSourceDirs(rule.source_dir, rule.source_dirs)
+}
+
+function getRuleSourceDirsText(rule: RuleItem) {
+  return getRuleSourceDirs(rule).join('  |  ')
 }
 
 function addPurifySourceDir(target: 'create' | 'edit', path: string) {
@@ -3215,9 +3215,6 @@ onBeforeUnmount(() => {
 .mode-option-tooltip__content { max-width: 18em; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
 :global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.source-dir-tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.source-dir-tags__item { max-width: 100%; }
-.source-dir-tags__item :deep(.el-tag__content) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }
 .source-dir-editor__tag { max-width: 100%; }

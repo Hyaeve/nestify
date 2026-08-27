@@ -1784,6 +1784,16 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   width: 30px;
   height: 30px;
   stroke-width: 1.85;
+  opacity: 0.78;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.rail-button--preview:hover .line-icon,
+.rail-button--preview:focus-visible .line-icon,
+.rail-button--rename:hover .line-icon,
+.rail-button--rename:focus-visible .line-icon {
+  opacity: 0.96;
+  transform: scale(1.04);
 }
 
 .rail-button--filter:not(.is-disabled):hover {
