@@ -1,5 +1,5 @@
 <template>
-  <div class="rules-page">
+  <div ref="rulesPageRef" class="rules-page">
     <div class="rules-tabs">
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'rules' }" @click="switchTab('rules')">归档规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="switchTab('purify')">净化规则</button>
@@ -20,7 +20,7 @@
         </div>
       </template>
 
-      <div v-if="archiveRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
+      <div v-if="archiveRules.length" class="rules-table-scroll"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -110,7 +110,7 @@
 
       <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
 
-      <div v-if="archiveRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
+      <div v-if="archiveRulesTotal > 0" class="history-pagination">
         <el-pagination
           v-model:current-page="archiveRulesCurrentPage"
           v-model:page-size="archiveRulesPageSize"
@@ -334,7 +334,7 @@
         </div>
       </template>
 
-      <div v-if="purifyRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
+      <div v-if="purifyRules.length" class="rules-table-scroll"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -429,7 +429,7 @@
         </el-table-column>
       </el-table></div>
 
-      <div v-if="purifyRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
+      <div v-if="purifyRulesTotal > 0" class="history-pagination">
         <el-pagination
           v-model:current-page="purifyRulesCurrentPage"
           v-model:page-size="purifyRulesPageSize"
@@ -455,7 +455,7 @@
         </div>
       </template>
 
-      <div v-if="linkRules.length" class="rules-table-scroll" @wheel="handleRulesTableWheel"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
+      <div v-if="linkRules.length" class="rules-table-scroll"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
         <el-table-column label="规则名称" min-width="180">
           <template #default="scope">
             <div class="rule-name-cell">
@@ -563,7 +563,7 @@
         </el-table-column>
       </el-table></div>
 
-      <div v-if="linkRulesTotal > 0" class="history-pagination" @wheel="handleRulesTableWheel">
+      <div v-if="linkRulesTotal > 0" class="history-pagination">
         <el-pagination
           v-model:current-page="linkRulesCurrentPage"
           v-model:page-size="linkRulesPageSize"
@@ -581,7 +581,7 @@
 
     <el-card v-show="activeTab === 'naming'" class="page-card rules-card naming-rules-card">
       <template #header><div class="rules-card__header"><div class="rules-card__title">命名规则</div><el-button class="naming-add-button" round @click="openCreateNamingDialog">+ 添加规则</el-button></div></template>
-      <div class="rules-table-scroll" @wheel="handleRulesTableWheel">
+      <div class="rules-table-scroll">
         <el-table v-if="namingRules.length" v-loading="namingLoading" :data="namingRules" row-key="id" class="rules-table naming-rules-table" table-layout="fixed">
           <el-table-column prop="name" label="规则名称" width="210" />
           <el-table-column label="模式" width="110"><template #default><span class="custom-mode-tag custom-mode-tag--naming">命名</span></template></el-table-column>
@@ -1000,7 +1000,7 @@
 
 <script setup lang="ts">
 import { Delete, Edit } from '@element-plus/icons-vue'
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
@@ -1248,25 +1248,34 @@ function formatHistorySize(sizeBytes?: number) {
   return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(2)} ${units[index]}`
 }
 
+const RULES_WHEEL_SCROLLBAR_BAND = 10
+const rulesPageRef = ref<HTMLElement | null>(null)
+
 function dragHandleModeClass(mode?: string) {
   return mode === 'compatibility' ? 'is-compatibility' : 'is-local'
 }
 
+function getActiveRulesTableScroll(): HTMLElement | null {
+  const root = rulesPageRef.value
+  if (!root) return null
+
+  const containers = Array.from(root.querySelectorAll<HTMLElement>('.rules-table-scroll'))
+  return containers.find((item) => item.offsetParent !== null && item.clientWidth > 0) ?? null
+}
+
 function handleRulesTableWheel(event: WheelEvent) {
-  const origin = event.currentTarget as HTMLElement | null
   const target = event.target as HTMLElement | null
-  if (!origin || !target) return
+  if (!target) return
+  if (target.closest('.el-overlay, .el-popper')) return
 
-  const isPagination = origin.classList.contains('history-pagination')
-  const isTableHeader = Boolean(target.closest('.el-table__header-wrapper'))
-  const originRect = origin.getBoundingClientRect()
-  const isBottomScrollbar = event.clientY >= originRect.bottom - 16
-  if (!isPagination && !isTableHeader && !isBottomScrollbar) return
-
-  const container = origin.classList.contains('rules-table-scroll')
-    ? origin
-    : origin.closest('.rules-card')?.querySelector<HTMLElement>('.rules-table-scroll')
+  const container = getActiveRulesTableScroll()
   if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  const withinColumns = event.clientX >= rect.left && event.clientX <= rect.right
+  const isTableHeader = Boolean(target.closest('.el-table__header-wrapper'))
+  const isBelowScrollbarTop = event.clientY >= rect.bottom - RULES_WHEEL_SCROLLBAR_BAND
+  if (!isTableHeader && !(withinColumns && isBelowScrollbarTop)) return
 
   const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
   if (maxScrollLeft <= 0) return
@@ -1276,9 +1285,10 @@ function handleRulesTableWheel(event: WheelEvent) {
 
   const previous = container.scrollLeft
   const next = Math.max(0, Math.min(maxScrollLeft, previous + delta))
-  if (next === previous) return
+  if (next !== previous) {
+    container.scrollLeft = next
+  }
 
-  container.scrollLeft = next
   event.preventDefault()
 }
 
@@ -2957,8 +2967,13 @@ async function removeHistoryItem(id: string) {
 }
 
 onMounted(() => {
+  window.addEventListener('wheel', handleRulesTableWheel, { passive: false })
   void loadArchiveRules()
   loadAvailableNamingRuleSets()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('wheel', handleRulesTableWheel)
 })
 </script>
 
