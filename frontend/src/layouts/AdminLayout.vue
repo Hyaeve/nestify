@@ -651,8 +651,8 @@ async function handleLogout() {
 }
 
 .nav-icon--rules .nav-image-icon {
-  width: 24px;
-  height: 24px;
+  width: 21px;
+  height: 21px;
 }
 
 .nav-icon--logs .nav-image-icon {
