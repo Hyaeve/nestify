@@ -695,7 +695,7 @@ async function handleLogout() {
   background: #d7ebfb;
 }
 
-:deep(.el-menu-item span) {
+:deep(.el-menu-item > span) {
   color: inherit;
   max-width: 96px;
   overflow: hidden;
@@ -707,7 +707,7 @@ async function handleLogout() {
     transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-:deep(.el-menu--collapse .el-menu-item span) {
+:deep(.el-menu--collapse .el-menu-item > span) {
   max-width: 0;
   opacity: 0;
   transform: translateX(-8px);
