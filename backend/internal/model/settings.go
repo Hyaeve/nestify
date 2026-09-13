@@ -9,12 +9,24 @@ type Settings struct {
 	LogRetentionDays       int       `json:"log_retention_days"`
 	LogRetentionMaxRecords int       `json:"log_retention_max_records"`
 	HistoryViewMode        string    `json:"history_view_mode"`
+	CacheDir               string    `json:"cache_dir"`
+	CachePersistEnabled    bool      `json:"cache_persist_enabled"`
+	IgnoredExtensions      []string  `json:"ignored_extensions"`
+	UploadQueueUpperLimit  int       `json:"upload_queue_upper_limit"`
+	UploadQueueLowerLimit  int       `json:"upload_queue_lower_limit"`
+	MaxConcurrentScans     int       `json:"max_concurrent_scans"`
 	CreatedAt              time.Time `json:"created_at"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
 
 type UpdateSettingsInput struct {
-	LogRetentionDays       int    `json:"log_retention_days"`
-	LogRetentionMaxRecords int    `json:"log_retention_max_records"`
-	HistoryViewMode        string `json:"history_view_mode"`
+	LogRetentionDays       int      `json:"log_retention_days"`
+	LogRetentionMaxRecords int      `json:"log_retention_max_records"`
+	HistoryViewMode        string   `json:"history_view_mode"`
+	CacheDir               string   `json:"cache_dir"`
+	CachePersistEnabled    *bool    `json:"cache_persist_enabled"`
+	IgnoredExtensions      []string `json:"ignored_extensions"`
+	UploadQueueUpperLimit  int      `json:"upload_queue_upper_limit"`
+	UploadQueueLowerLimit  int      `json:"upload_queue_lower_limit"`
+	MaxConcurrentScans     int      `json:"max_concurrent_scans"`
 }

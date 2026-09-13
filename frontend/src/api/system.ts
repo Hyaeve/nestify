@@ -23,6 +23,12 @@ export interface SettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
   history_view_mode: string
+  cache_dir: string
+  cache_persist_enabled: boolean
+  ignored_extensions: string[]
+  upload_queue_upper_limit: number
+  upload_queue_lower_limit: number
+  max_concurrent_scans: number
   created_at: string
   updated_at: string
 }
@@ -31,6 +37,12 @@ export interface UpdateSettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
   history_view_mode: string
+  cache_dir: string
+  cache_persist_enabled: boolean
+  ignored_extensions: string[]
+  upload_queue_upper_limit: number
+  upload_queue_lower_limit: number
+  max_concurrent_scans: number
 }
 
 export interface RuleBackupPayload {

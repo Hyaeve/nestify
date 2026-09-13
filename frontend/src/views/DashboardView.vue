@@ -17,72 +17,95 @@
       </div>
     </section>
 
-    <section class="dashboard-overview">
-      <div class="metric-card metric-card--rules">
-        <div class="metric-card__icon">规</div>
-        <div>
-          <div class="metric-card__label">总规则数</div>
-          <div class="metric-card__value">{{ totalRuleCount }}</div>
-          <div class="metric-card__hint">已启用 {{ enabledRuleCount }} 条规则</div>
-        </div>
-      </div>
-      <div class="metric-card metric-card--processed">
-        <div class="metric-card__icon">处</div>
-        <div>
-          <div class="metric-card__label">今日处理</div>
-          <div class="metric-card__value">{{ todayProcessedCount }}</div>
-          <div class="metric-card__hint">今日执行 {{ todayRunCount }} 次任务</div>
-        </div>
-      </div>
-      <div class="metric-card metric-card--running">
-        <div class="metric-card__icon">行</div>
-        <div>
-          <div class="metric-card__label">运行中任务</div>
-          <div class="metric-card__value">{{ runningTaskCount }}</div>
-          <div class="metric-card__hint">{{ runningTaskHint }}</div>
-        </div>
-      </div>
-      <div class="metric-card metric-card--resource">
-        <div class="metric-card__icon">资</div>
-        <div>
-          <div class="metric-card__label">系统资源</div>
-          <div class="metric-card__value">{{ formatPercentage(systemResource?.cpu_usage) }}</div>
-          <div class="metric-card__hint">内存 {{ formatPercentage(systemResource?.memory_usage) }}</div>
-        </div>
-      </div>
-    </section>
-
     <section class="dashboard-content">
-      <div class="dashboard-panel dashboard-panel--summary">
-        <div class="dashboard-panel__header">
+      <!-- 左侧大窗口：任务预览 -->
+      <div class="dashboard-panel task-preview-card">
+        <div class="task-preview-card__header">
           <div>
-            <div class="dashboard-panel__eyebrow">EXECUTION</div>
-            <h3 class="page-section-title">最近执行摘要</h3>
+            <div class="dashboard-panel__eyebrow">LIVE TASKS</div>
+            <h3 class="page-section-title">任务预览</h3>
           </div>
-          <span class="dashboard-panel__count">{{ summaryItems.length }} 条记录</span>
-        </div>
-        <div v-if="summaryItems.length" class="summary-list">
-          <div v-for="item in summaryItems" :key="item.id" class="summary-item">
-            <div class="summary-item__header">
-              <div class="summary-item__title">
-                <span class="summary-item__dot"></span>
-                <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
-              </div>
-              <div class="summary-item__badges">
-                <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
-                <el-tag :type="getStatusType(item.status)" effect="light" size="small">{{ getStatusText(item.status) }}</el-tag>
-              </div>
-            </div>
-            <div class="summary-item__meta">
-              <span>{{ formatDate(item.started_at) }}</span>
-              <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
-            </div>
+          <div class="task-preview-card__actions">
+            <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="light" size="small">
+              {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
+            </el-tag>
+            <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
           </div>
         </div>
-        <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
+
+        <div v-if="runningPreviewItems.length" class="task-preview-list">
+          <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
+            <div class="task-preview-item__header">
+              <div>
+                <div class="task-preview-item__name">
+                  <span class="task-preview-item__kind" :class="`task-preview-item__kind--${item.kind}`">{{ item.kind === 'backup' ? '备份' : '规则' }}</span>
+                  {{ item.ruleName }}
+                </div>
+                <div class="task-preview-item__meta">{{ item.metaText }}</div>
+                <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
+              </div>
+              <div class="task-preview-item__badges">
+                <span v-if="item.kind === 'rule'" class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                <el-tag type="warning" effect="light" size="small">进行中</el-tag>
+              </div>
+            </div>
+
+            <el-progress :percentage="item.progress" :stroke-width="8" :show-text="false" status="success" />
+
+            <div class="task-preview-item__stats">
+              <span>扫描 {{ item.scanned }}</span>
+              <span>成功 {{ item.success_count }}</span>
+              <span>跳过 {{ item.skip_count }}</span>
+              <span>失败 {{ item.failure_count }}</span>
+            </div>
+
+            <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
+            <div class="task-preview-item__logs">
+              <div v-if="item.logsLoading" class="task-preview-item__logs-loading">执行情况加载中...</div>
+              <template v-else>
+                <div v-for="(log, logIndex) in item.logs" :key="logIndex" class="task-preview-item__log-line">
+                  {{ log }}
+                </div>
+                <div v-if="!item.logs.length" class="task-preview-item__logs-empty">暂无执行日志</div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <el-empty v-else class="task-preview-empty" description="当前没有正在执行的任务" />
       </div>
 
+      <!-- 右侧：上执行摘要 + 下系统资源 -->
       <div class="dashboard-side-stack">
+        <div class="dashboard-panel dashboard-panel--summary">
+          <div class="dashboard-panel__header">
+            <div>
+              <div class="dashboard-panel__eyebrow">EXECUTION</div>
+              <h3 class="page-section-title">执行摘要</h3>
+            </div>
+            <span class="dashboard-panel__count">{{ summaryItems.length }} 条记录</span>
+          </div>
+          <div v-if="summaryItems.length" class="summary-list">
+            <div v-for="item in summaryItems" :key="item.id" class="summary-item">
+              <div class="summary-item__header">
+                <div class="summary-item__title">
+                  <span class="summary-item__dot"></span>
+                  <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
+                </div>
+                <div class="summary-item__badges">
+                  <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                  <el-tag :type="getStatusType(item.status)" effect="light" size="small">{{ getStatusText(item.status) }}</el-tag>
+                </div>
+              </div>
+              <div class="summary-item__meta">
+                <span>{{ formatDate(item.started_at) }}</span>
+                <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
+        </div>
+
         <div class="dashboard-panel resource-card">
           <div class="dashboard-panel__header">
             <div>
@@ -92,8 +115,8 @@
             <el-tag :type="healthTagType" effect="light" size="small">{{ healthStatus }}</el-tag>
           </div>
 
-          <div class="resource-stack">
-            <div class="resource-metric">
+          <div class="resource-stack resource-stack--compact">
+            <div class="resource-metric resource-metric--compact">
               <div class="resource-metric__head">
                 <div class="resource-metric__main">
                   <span class="resource-metric__icon">⚙</span>
@@ -101,11 +124,10 @@
                 </div>
                 <span class="resource-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
               </div>
-              <div class="resource-metric__desc">{{ systemResource?.cpu_model || '未知型号' }}</div>
-              <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="12" color="#2563eb" />
+              <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="8" color="#2563eb" />
             </div>
 
-            <div class="resource-metric">
+            <div class="resource-metric resource-metric--compact">
               <div class="resource-metric__head">
                 <div class="resource-metric__main">
                   <span class="resource-metric__icon">▣</span>
@@ -113,12 +135,11 @@
                 </div>
                 <span class="resource-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
               </div>
-              <div class="resource-metric__desc">{{ formatMemorySummary }}</div>
-              <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="12" color="#7c3aed" />
+              <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="8" color="#7c3aed" />
             </div>
 
-            <div class="resource-highlight">
-              <span class="resource-highlight__label">Nestify 内存占用</span>
+            <div class="resource-highlight resource-highlight--compact">
+              <span class="resource-highlight__label">Nestify 内存</span>
               <span class="resource-highlight__value">{{ systemResource?.nestify_memory || '0 B' }}</span>
             </div>
           </div>
@@ -130,58 +151,6 @@
             :closable="false"
             :title="healthError"
           />
-        </div>
-
-        <div class="dashboard-panel task-preview-card">
-          <div class="task-preview-card__header">
-            <div>
-              <div class="dashboard-panel__eyebrow">LIVE TASKS</div>
-              <h3 class="page-section-title">任务预览</h3>
-            </div>
-            <div class="task-preview-card__actions">
-              <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="light" size="small">
-                {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
-              </el-tag>
-              <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
-            </div>
-          </div>
-
-          <div v-if="runningPreviewItems.length" class="task-preview-list">
-            <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
-              <div class="task-preview-item__header">
-                <div>
-                  <div class="task-preview-item__name">{{ item.ruleName }}</div>
-                  <div class="task-preview-item__meta">{{ dashboardModeText(item.archive_mode) }} · {{ item.runModeText }}</div>
-                  <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
-                </div>
-                <div class="task-preview-item__badges">
-                  <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
-                  <el-tag type="warning" effect="light" size="small">进行中</el-tag>
-                </div>
-              </div>
-
-              <el-progress :percentage="estimateRunProgress(item)" :stroke-width="8" :show-text="false" status="success" />
-
-              <div class="task-preview-item__stats">
-                <span>成功 {{ item.success_count }}</span>
-                <span>跳过 {{ item.skip_count }}</span>
-                <span>失败 {{ item.failure_count }}</span>
-              </div>
-
-              <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
-              <div class="task-preview-item__logs">
-                <div v-if="previewLogsLoadingMap[item.id]" class="task-preview-item__logs-loading">执行情况加载中...</div>
-                <template v-else>
-                  <div v-for="log in getPreviewLogs(item.id)" :key="log.id" class="task-preview-item__log-line">
-                    {{ formatRunLogLine(log) }}
-                  </div>
-                  <div v-if="!getPreviewLogs(item.id).length" class="task-preview-item__logs-empty">暂无执行日志</div>
-                </template>
-              </div>
-            </div>
-          </div>
-
-          <el-empty v-else class="task-preview-empty" description="当前没有正在执行的规则任务" />
         </div>
       </div>
     </section>
@@ -196,6 +165,7 @@ import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResour
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { fetchRules, type RuleItem } from '../api/rules'
+import { fetchRunningBackups } from '../api/backups'
 
 const health = ref<HealthPayload | null>(null)
 const healthError = ref('')
@@ -204,12 +174,28 @@ const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const systemResource = ref<SystemResourcePayload | null>(null)
 const rules = ref<RuleItem[]>([])
 const runHistoryItems = ref<RunHistoryItem[]>(emptyRunHistory())
-type RunningPreviewItem = RunInstance & { ruleName: string; runModeText: string; sourceDir: string }
-const runningRuns = ref<RunningPreviewItem[]>([])
+
+// 统一的任务预览条目（规则任务 + 备份任务）
+interface PreviewTask {
+  id: string
+  kind: 'rule' | 'backup'
+  ruleName: string
+  metaText: string
+  archive_mode?: string
+  sourceDir: string
+  progress: number
+  scanned: number
+  success_count: number
+  skip_count: number
+  failure_count: number
+  logs: string[]
+  logsLoading: boolean
+  detailText: string
+}
+
+const runningPreviewItems = ref<PreviewTask[]>([])
 const dashboardExecutionHints = ref<Record<number, string>>({})
 const previewRefreshing = ref(false)
-const previewLogsMap = ref<Record<string, RunLogEntry[]>>({})
-const previewLogsLoadingMap = ref<Record<string, boolean>>({})
 let previewPollTimer: number | null = null
 
 const healthStatus = computed(() => {
@@ -220,42 +206,6 @@ const healthStatus = computed(() => {
 
 const healthTime = computed(() => formatHealthTime(health.value?.time))
 const healthTagType = computed(() => (health.value ? 'success' : loading.value ? 'warning' : 'danger'))
-const formatMemorySummary = computed(() => {
-  if (!systemResource.value) {
-    return '0 B / 0 B'
-  }
-
-  return `${systemResource.value.memory_used} / ${systemResource.value.memory_total}`
-})
-
-const totalRuleCount = computed(() => rules.value.length)
-const enabledRuleCount = computed(() => rules.value.filter((item) => item.enabled).length)
-const runningPreviewItems = computed(() => runningRuns.value.slice(0, 2))
-
-const todayRunCount = computed(() => {
-  const today = new Date()
-  const key = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
-
-  return runHistoryItems.value.filter((item) => {
-    const date = new Date(item.started_at)
-    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === key
-  }).length
-})
-
-const todayProcessedCount = computed(() => {
-  const today = new Date()
-  const key = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`
-
-  return runHistoryItems.value
-    .filter((item) => {
-      const date = new Date(item.started_at)
-      return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` === key
-    })
-    .reduce((total, item) => total + (item.processed_files || 0), 0)
-})
-
-const runningTaskCount = computed(() => runningRuns.value.length)
-const runningTaskHint = computed(() => (runningTaskCount.value > 0 ? '存在正在执行的规则任务' : '当前没有活跃任务'))
 
 function formatHealthTime(value?: string) {
   if (!value) {
@@ -295,16 +245,6 @@ function formatPercentage(value?: number) {
   return `${value.toFixed(1)}%`
 }
 
-function archiveModeText(mode: RuleItem['archive_mode']) {
-  if (mode === 'package') return '打包'
-  if (mode === 'collect') return '收集'
-  if (mode === 'cleanup') return '清理'
-  if (mode === 'transform') return '转换'
-  if (mode === 'link') return '链路'
-  if (mode === 'naming') return '命名'
-  return '未知'
-}
-
 function dashboardModeText(mode?: string) {
   if (mode === 'package') return '打包'
   if (mode === 'collect') return '收集'
@@ -325,43 +265,14 @@ function dashboardModeTagClass(mode?: string) {
   return ''
 }
 
-function runDetailText(item: RunningPreviewItem) {
-	const executionHint = item.rule_id ? dashboardExecutionHints.value[item.rule_id] : ''
-	const currentTarget = executionHint || item.current_volume_or_dir || item.current_series || '正在扫描源目录'
-	return `当前执行：${currentTarget} · ${dashboardModeText(item.archive_mode)}`
-}
-
 function runModeText(mode: RuleItem['run_mode']) {
   if (mode === 'watch') return '监听模式'
   if (mode === 'cron') return '定时模式'
   return '手动模式'
 }
 
-function estimateProgress(item: RuleItem) {
-  const total = item.last_success_count + item.last_skip_count + item.last_failure_count
-  if (total <= 0) {
-    return 12
-  }
-
-  return Math.min(92, Math.max(18, total % 100))
-}
-
-function estimateRunProgress(item: RunningPreviewItem) {
-	const total = item.success_count + item.skip_count + item.failure_count
-	if (total <= 0) {
-		return 12
-	}
-
-	return Math.min(92, Math.max(18, total % 100))
-}
-
-function getPreviewLogs(runID: string) {
-	return previewLogsMap.value[runID] ?? []
-}
-
-function formatRunLogLine(log: RunLogEntry) {
-	const time = new Date(log.created_at).toLocaleTimeString('zh-CN', { hour12: false })
-	return `[${time}] ${log.message}`
+function runDetailText(item: PreviewTask) {
+  return item.detailText
 }
 
 async function loadHealth() {
@@ -393,74 +304,128 @@ async function loadSummary() {
 async function loadRules() {
   try {
     rules.value = (await fetchRules()).data?.items ?? []
+  } catch {
+    rules.value = []
+  }
+}
+
+// 拉取规则任务（running）
+async function loadRuleRunningTasks(): Promise<PreviewTask[]> {
+  try {
     const runs = (await fetchRuns()).data?.items ?? []
     const runningRuleItems = rules.value.reduce<Record<number, RuleItem>>((map, item) => {
       map[item.id] = item
       return map
     }, {})
-    runningRuns.value = runs
+
+    interface RuleTaskDraft extends PreviewTask {
+      rawRunId: string
+    }
+
+    const running: RuleTaskDraft[] = runs
       .filter((item) => item.status === 'running' && typeof item.rule_id === 'number')
       .map((item) => {
         const rule = item.rule_id ? runningRuleItems[item.rule_id] : undefined
-        return {
-          ...item,
+        const triggerMode = rule ? runModeText(rule.run_mode) : (item.trigger_mode === 'cron' ? '定时模式' : item.trigger_mode === 'watch' ? '监听模式' : '手动模式')
+        const executionHint = item.rule_id ? dashboardExecutionHints.value[item.rule_id] : ''
+        const currentTarget = executionHint || item.current_volume_or_dir || item.current_series || '正在扫描源目录'
+        const draft: RuleTaskDraft = {
+          id: `rule-${item.id}`,
+          kind: 'rule',
           ruleName: rule?.name || item.rule_name || '未知规则',
-          runModeText: rule ? runModeText(rule.run_mode) : (item.trigger_mode === 'cron' ? '定时模式' : item.trigger_mode === 'watch' ? '监听模式' : '手动模式'),
+          metaText: `${dashboardModeText(item.archive_mode)} · ${triggerMode}`,
+          archive_mode: item.archive_mode,
           sourceDir: rule?.source_dir || '',
+          progress: estimateProgress(item),
+          scanned: item.processed_files ?? 0,
+          success_count: item.success_count,
+          skip_count: item.skip_count,
+          failure_count: item.failure_count,
+          logs: [],
+          logsLoading: true,
+          detailText: `当前执行：${currentTarget} · ${dashboardModeText(item.archive_mode)}`,
+          rawRunId: item.id,
         }
+        return draft
       })
-    dashboardExecutionHints.value = {}
-    await loadRunningPreviewLogs(runningRuns.value)
+
+    // 加载日志
+    await Promise.all(running.map(async (item) => {
+      try {
+        const response = await fetchRunLogs(item.rawRunId)
+        item.logs = (response.data?.items ?? []).slice(-5).map((log: RunLogEntry) => {
+          const time = new Date(log.created_at).toLocaleTimeString('zh-CN', { hour12: false })
+          return `[${time}] ${log.message}`
+        })
+      } catch {
+        item.logs = []
+      } finally {
+        item.logsLoading = false
+      }
+    }))
+
+    return running.map(({ rawRunId: _rawRunId, ...rest }) => rest)
   } catch {
-    rules.value = []
-    runningRuns.value = []
-    dashboardExecutionHints.value = {}
-    previewLogsMap.value = {}
-    previewLogsLoadingMap.value = {}
+    return []
   }
 }
 
-async function loadRunningPreviewLogs(items: RunningPreviewItem[]) {
-	const nextLogsMap: Record<string, RunLogEntry[]> = { ...previewLogsMap.value }
-	const nextLoadingMap: Record<string, boolean> = { ...previewLogsLoadingMap.value }
-
-	await Promise.all(items.map(async (item) => {
-		nextLoadingMap[item.id] = true
-		try {
-			const response = await fetchRunLogs(item.id)
-			nextLogsMap[item.id] = (response.data?.items ?? []).slice(-5)
-		} catch {
-			nextLogsMap[item.id] = []
-		} finally {
-			nextLoadingMap[item.id] = false
-		}
-	}))
-
-	previewLogsMap.value = nextLogsMap
-	previewLogsLoadingMap.value = nextLoadingMap
+// 拉取备份任务（running）
+async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
+  try {
+    const response = await fetchRunningBackups()
+    const items = response.data?.items ?? []
+    return items.map((snapshot) => {
+      const triggerLabel = snapshot.phase || '备份中'
+      const total = snapshot.scanned + snapshot.copied + snapshot.skipped + snapshot.deleted + snapshot.failed
+      const progress = total <= 0 ? 12 : Math.min(92, Math.max(18, total % 100))
+      return {
+        id: `backup-${snapshot.task_id}`,
+        kind: 'backup' as const,
+        ruleName: snapshot.task_name || `备份任务 #${snapshot.task_id}`,
+        metaText: triggerLabel,
+        sourceDir: '',
+        progress,
+        scanned: snapshot.scanned,
+        success_count: snapshot.copied,
+        skip_count: snapshot.skipped,
+        failure_count: snapshot.failed,
+        logs: (snapshot.recent_logs ?? []).slice(-5),
+        logsLoading: false,
+        detailText: snapshot.progress || snapshot.phase || '备份中',
+      }
+    })
+  } catch {
+    return []
+  }
 }
 
 async function refreshRunningPreview() {
-	previewRefreshing.value = true
-	try {
-		await loadRules()
-	} finally {
-		previewRefreshing.value = false
-	}
+  previewRefreshing.value = true
+  try {
+    await loadRules()
+    const [ruleTasks, backupTasks] = await Promise.all([
+      loadRuleRunningTasks(),
+      loadBackupRunningTasks(),
+    ])
+    runningPreviewItems.value = [...ruleTasks, ...backupTasks]
+  } finally {
+    previewRefreshing.value = false
+  }
 }
 
 function startPreviewPolling() {
-	stopPreviewPolling()
-	previewPollTimer = window.setInterval(() => {
-		void refreshRunningPreview()
-	}, 5000)
+  stopPreviewPolling()
+  previewPollTimer = window.setInterval(() => {
+    void refreshRunningPreview()
+  }, 5000)
 }
 
 function stopPreviewPolling() {
-	if (previewPollTimer !== null) {
-		window.clearInterval(previewPollTimer)
-		previewPollTimer = null
-	}
+  if (previewPollTimer !== null) {
+    window.clearInterval(previewPollTimer)
+    previewPollTimer = null
+  }
 }
 
 async function loadSystemResource() {
@@ -472,16 +437,25 @@ async function loadSystemResource() {
   }
 }
 
+function estimateProgress(item: RunInstance) {
+  const total = item.success_count + item.skip_count + item.failure_count
+  if (total <= 0) {
+    return 12
+  }
+  return Math.min(92, Math.max(18, total % 100))
+}
+
 onMounted(() => {
   void loadHealth()
   void loadSummary()
   void loadSystemResource()
   void loadRules()
+  void refreshRunningPreview()
   startPreviewPolling()
 })
 
 onBeforeUnmount(() => {
-	stopPreviewPolling()
+  stopPreviewPolling()
 })
 </script>
 
@@ -617,67 +591,9 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.18);
 }
 
-.dashboard-overview {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.metric-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 108px;
-  padding: 22px;
-  border: 1px solid #eef2f7;
-  border-radius: 24px;
-  background: #ffffff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
-}
-
-.metric-card__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 900;
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
-}
-
-.metric-card--rules .metric-card__icon { background: linear-gradient(135deg, #2563eb, #60a5fa); }
-.metric-card--processed .metric-card__icon { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
-.metric-card--running .metric-card__icon { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
-.metric-card--resource .metric-card__icon { background: linear-gradient(135deg, #10b981, #34d399); }
-
-.metric-card__label {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.metric-card__value {
-  margin-top: 8px;
-  color: #0f172a;
-  font-size: 30px;
-  line-height: 1;
-  font-weight: 900;
-}
-
-.metric-card__hint {
-  margin-top: 8px;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .dashboard-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.7fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(340px, 0.6fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -793,6 +709,34 @@ onBeforeUnmount(() => {
   font-weight: 900;
 }
 
+.task-preview-item__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-preview-item__kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 800;
+}
+
+.task-preview-item__kind--backup {
+  color: #5b7a6e;
+  background: #eef3f1;
+}
+
+.task-preview-item__kind--rule {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
 .dashboard-mode-tag {
   display: inline-flex;
   align-items: center;
@@ -834,11 +778,20 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.resource-stack--compact {
+  gap: 10px;
+}
+
 .resource-metric {
   padding: 16px;
   border: 1px solid #dbeafe;
   border-radius: 18px;
   background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
+}
+
+.resource-metric--compact {
+  padding: 12px 14px;
+  border-radius: 14px;
 }
 
 .resource-metric__head {
@@ -912,6 +865,11 @@ onBeforeUnmount(() => {
   border: 1px solid #bfdbfe;
   border-radius: 18px;
   background: #eff6ff;
+}
+
+.resource-highlight--compact {
+  padding: 12px 14px;
+  border-radius: 14px;
 }
 
 .resource-highlight__label {
@@ -1019,10 +977,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .dashboard-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .dashboard-content {
     grid-template-columns: 1fr;
   }
@@ -1035,10 +989,6 @@ onBeforeUnmount(() => {
   .summary-item__header,
   .task-preview-item__header {
     flex-direction: column;
-  }
-
-  .dashboard-overview {
-    grid-template-columns: 1fr;
   }
 
   .dashboard-hero {

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,13 +33,18 @@ func (s *Store) ensureDefaultSettings() error {
 
 func (s *Store) GetSettings() (*model.Settings, error) {
 	row := s.db.QueryRow(`
-		SELECT id, timezone, log_level, log_retention_days, log_retention_max_records, history_view_mode, created_at, updated_at
+		SELECT id, timezone, log_level, log_retention_days, log_retention_max_records, history_view_mode,
+		       cache_dir, cache_persist_enabled, ignored_extensions_json,
+		       upload_queue_upper_limit, upload_queue_lower_limit, max_concurrent_scans,
+		       created_at, updated_at
 		FROM settings
 		WHERE id = 1
 	`)
 
 	var item model.Settings
 	var createdAt, updatedAt string
+	var cachePersist int
+	var ignoredJSON string
 	err := row.Scan(
 		&item.ID,
 		&item.Timezone,
@@ -46,6 +52,12 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 		&item.LogRetentionDays,
 		&item.LogRetentionMaxRecords,
 		&item.HistoryViewMode,
+		&item.CacheDir,
+		&cachePersist,
+		&ignoredJSON,
+		&item.UploadQueueUpperLimit,
+		&item.UploadQueueLowerLimit,
+		&item.MaxConcurrentScans,
 		&createdAt,
 		&updatedAt,
 	)
@@ -56,6 +68,10 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 		return nil, fmt.Errorf("get settings: %w", err)
 	}
 
+	item.CachePersistEnabled = cachePersist != 0
+	if err := json.Unmarshal([]byte(ignoredJSON), &item.IgnoredExtensions); err != nil {
+		item.IgnoredExtensions = []string{}
+	}
 	item.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	item.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 
@@ -63,15 +79,85 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 }
 
 func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings, error) {
+	// 合并现有设置，避免未传字段被覆盖为空值。
+	current, err := s.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+	if current == nil {
+		current = &model.Settings{
+			LogRetentionDays:       5,
+			LogRetentionMaxRecords: 10000,
+			HistoryViewMode:        "flat",
+			CacheDir:               "/tmp",
+			CachePersistEnabled:    true,
+			UploadQueueUpperLimit:  10000,
+			MaxConcurrentScans:     1,
+		}
+	}
+
+	cacheDir := input.CacheDir
+	if cacheDir == "" {
+		cacheDir = current.CacheDir
+	}
+	if cacheDir == "" {
+		cacheDir = "/tmp"
+	}
+
+	cachePersist := current.CachePersistEnabled
+	if input.CachePersistEnabled != nil {
+		cachePersist = *input.CachePersistEnabled
+	}
+
+	ignored := current.IgnoredExtensions
+	if input.IgnoredExtensions != nil {
+		ignored = input.IgnoredExtensions
+	}
+
+	upperLimit := input.UploadQueueUpperLimit
+	if upperLimit <= 0 {
+		upperLimit = current.UploadQueueUpperLimit
+	}
+	lowerLimit := input.UploadQueueLowerLimit
+	if lowerLimit <= 0 {
+		lowerLimit = current.UploadQueueLowerLimit
+	}
+	concurrent := input.MaxConcurrentScans
+	if concurrent <= 0 {
+		concurrent = current.MaxConcurrentScans
+	}
+
+	ignoredJSON, err := json.Marshal(ignored)
+	if err != nil {
+		return nil, fmt.Errorf("marshal ignored extensions: %w", err)
+	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := s.db.Exec(`
 		UPDATE settings
 		SET log_retention_days = ?,
 		    log_retention_max_records = ?,
 		    history_view_mode = ?,
+		    cache_dir = ?,
+		    cache_persist_enabled = ?,
+		    ignored_extensions_json = ?,
+		    upload_queue_upper_limit = ?,
+		    upload_queue_lower_limit = ?,
+		    max_concurrent_scans = ?,
 		    updated_at = ?
 		WHERE id = 1
-	`, input.LogRetentionDays, input.LogRetentionMaxRecords, input.HistoryViewMode, now)
+	`,
+		input.LogRetentionDays,
+		input.LogRetentionMaxRecords,
+		input.HistoryViewMode,
+		cacheDir,
+		boolToInt(cachePersist),
+		string(ignoredJSON),
+		upperLimit,
+		lowerLimit,
+		concurrent,
+		now,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("update settings: %w", err)
 	}

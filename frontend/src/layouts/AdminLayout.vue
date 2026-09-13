@@ -68,6 +68,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <el-button circle class="icon-button icon-button--refresh" aria-label="刷新" title="刷新" @click="refreshPage">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
           <el-button circle class="icon-button" @click="toggleTheme">
             <el-icon>
               <Apple v-if="isAppleTVTheme" />
@@ -108,6 +111,7 @@ import {
   ArrowLeftBold,
   ArrowRightBold,
   MoreFilled,
+  Refresh,
   RefreshRight,
   Setting,
   Sunny,
@@ -158,6 +162,10 @@ function toggleTheme() {
   const currentIndex = themeCycle.indexOf(themeMode.value)
   themeMode.value = themeCycle[(currentIndex + 1) % themeCycle.length]
   setTheme(themeMode.value)
+}
+
+function refreshPage() {
+  window.location.reload()
 }
 
 async function handleHeaderCommand(command: string) {
@@ -328,17 +336,18 @@ async function handleLogout() {
 
 .page-title__crumb,
 .page-title__text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .page-title__text {
   min-width: 0;
+  font-weight: 700;
 }
 
 .page-title__crumb,
 .page-title__divider {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-secondary);
 }
@@ -414,6 +423,18 @@ async function handleLogout() {
   border-color: var(--border-color);
   background: var(--bg-elevated);
   color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+}
+
+.icon-button :deep(.el-icon) {
+  font-size: 20px;
+}
+
+.icon-button--refresh:not(.is-disabled):hover {
+  color: #1688e8;
+  border-color: #b7d8ff;
+  background: #edf7ff;
 }
 
 .aside-toggle {

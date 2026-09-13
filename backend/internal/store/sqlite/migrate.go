@@ -55,6 +55,12 @@ func (s *Store) migrate() error {
 			log_retention_days INTEGER NOT NULL,
 			log_retention_max_records INTEGER NOT NULL,
 			history_view_mode TEXT NOT NULL DEFAULT 'flat',
+			cache_dir TEXT NOT NULL DEFAULT '/tmp',
+			cache_persist_enabled INTEGER NOT NULL DEFAULT 1,
+			ignored_extensions_json TEXT NOT NULL DEFAULT '[]',
+			upload_queue_upper_limit INTEGER NOT NULL DEFAULT 10000,
+			upload_queue_lower_limit INTEGER NOT NULL DEFAULT 0,
+			max_concurrent_scans INTEGER NOT NULL DEFAULT 1,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
@@ -215,6 +221,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure settings extended columns")
+	if err := s.ensureSettingsExtendedColumns(); err != nil {
+		log.Printf("sqlite:migrate: ensure settings extended columns failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure performance indexes")
 	if err := s.ensurePerformanceIndexes(); err != nil {
 		log.Printf("sqlite:migrate: ensure performance indexes failed: %v", err)
@@ -249,6 +261,52 @@ func (s *Store) ensureSettingsHistoryViewModeColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE settings ADD COLUMN history_view_mode TEXT NOT NULL DEFAULT 'flat';`); err != nil {
 		return fmt.Errorf("add settings history_view_mode column: %w", err)
+	}
+
+	return nil
+}
+
+// ensureSettingsExtendedColumns 为 settings 表补齐缓存/持久化/忽略扩展名/资源限制等新列。
+func (s *Store) ensureSettingsExtendedColumns() error {
+	existing := map[string]bool{}
+	rows, err := s.db.Query(`PRAGMA table_info(settings);`)
+	if err != nil {
+		return fmt.Errorf("query settings schema: %w", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan settings schema: %w", err)
+		}
+		existing[strings.ToLower(name)] = true
+	}
+	rows.Close()
+
+	columns := []struct {
+		name string
+		dcl  string
+	}{
+		{"cache_dir", `cache_dir TEXT NOT NULL DEFAULT '/tmp'`},
+		{"cache_persist_enabled", `cache_persist_enabled INTEGER NOT NULL DEFAULT 1`},
+		{"ignored_extensions_json", `ignored_extensions_json TEXT NOT NULL DEFAULT '[]'`},
+		{"upload_queue_upper_limit", `upload_queue_upper_limit INTEGER NOT NULL DEFAULT 10000`},
+		{"upload_queue_lower_limit", `upload_queue_lower_limit INTEGER NOT NULL DEFAULT 0`},
+		{"max_concurrent_scans", `max_concurrent_scans INTEGER NOT NULL DEFAULT 1`},
+	}
+
+	for _, col := range columns {
+		if existing[strings.ToLower(col.name)] {
+			continue
+		}
+		if _, err := s.db.Exec(`ALTER TABLE settings ADD COLUMN ` + col.dcl + `;`); err != nil {
+			return fmt.Errorf("add settings %s column: %w", col.name, err)
+		}
 	}
 
 	return nil

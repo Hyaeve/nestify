@@ -200,6 +200,7 @@
           @selection-change="handleSelectionChange"
           @select="handleSelectRow"
           @row-contextmenu="handleRowContextMenu"
+          @click="handleTableClick"
         >
           <el-table-column type="selection" width="52" />
           <el-table-column label="名称" min-width="520">
@@ -1003,6 +1004,17 @@ function handleSelectRow(_selection: FileManagerEntry[], row: FileManagerEntry) 
 function clearSelection() {
   tableRef.value?.clearSelection?.()
   selectedRows.value = []
+}
+
+function handleTableClick(event: MouseEvent) {
+  // 点击非条目区域（未命中任何表格行）时取消多选。
+  const target = event.target as HTMLElement | null
+  if (!target) return
+
+  const rowElement = target.closest('tr.el-table__row') as HTMLElement | null
+  if (!rowElement && selectedRows.value.length > 0) {
+    clearSelection()
+  }
 }
 
 function handleRowContextMenu(row: FileManagerEntry, _column: unknown, event: MouseEvent) {

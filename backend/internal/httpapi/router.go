@@ -152,6 +152,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/mounts/", api.handleMountByID)
 	mux.HandleFunc("/api/v1/backups", api.handleBackups)
 	mux.HandleFunc("/api/v1/backups/reorder", api.handleReorderBackups)
+	mux.HandleFunc("/api/v1/backups/running", api.handleRunningBackups)
 	mux.HandleFunc("/api/v1/backups/", api.handleBackupByID)
 
 	registerStaticRoutes(mux, deps.Env.WebDir)
@@ -199,9 +200,15 @@ type updateAdminAccountRequest struct {
 }
 
 type updateSettingsRequest struct {
-	LogRetentionDays       int    `json:"log_retention_days"`
-	LogRetentionMaxRecords int    `json:"log_retention_max_records"`
-	HistoryViewMode        string `json:"history_view_mode"`
+	LogRetentionDays       int       `json:"log_retention_days"`
+	LogRetentionMaxRecords int       `json:"log_retention_max_records"`
+	HistoryViewMode        string    `json:"history_view_mode"`
+	CacheDir               string    `json:"cache_dir"`
+	CachePersistEnabled    *bool     `json:"cache_persist_enabled"`
+	IgnoredExtensions      []string  `json:"ignored_extensions"`
+	UploadQueueUpperLimit  int       `json:"upload_queue_upper_limit"`
+	UploadQueueLowerLimit  int       `json:"upload_queue_lower_limit"`
+	MaxConcurrentScans     int       `json:"max_concurrent_scans"`
 }
 
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -1133,6 +1140,12 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		LogRetentionDays:       input.LogRetentionDays,
 		LogRetentionMaxRecords: input.LogRetentionMaxRecords,
 		HistoryViewMode:        historyViewMode,
+		CacheDir:               input.CacheDir,
+		CachePersistEnabled:    input.CachePersistEnabled,
+		IgnoredExtensions:      input.IgnoredExtensions,
+		UploadQueueUpperLimit:  input.UploadQueueUpperLimit,
+		UploadQueueLowerLimit:  input.UploadQueueLowerLimit,
+		MaxConcurrentScans:     input.MaxConcurrentScans,
 	})
 	if err != nil {
 		writeInternalError(w, err)

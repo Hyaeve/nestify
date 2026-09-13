@@ -32,6 +32,37 @@ func (a *apiHandler) handleReorderBackups(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "备份规则顺序已更新"})
 }
 
+func (a *apiHandler) handleRunningBackups(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if !a.requireSession(w, r) {
+		return
+	}
+	if a.backups == nil {
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "暂无运行中的备份任务",
+			Data:    map[string]any{"items": []model.BackupStatusSnapshot{}},
+		})
+		return
+	}
+
+	snapshots := make([]model.BackupStatusSnapshot, 0)
+	for _, id := range a.backups.RunningTaskIDs() {
+		snapshots = append(snapshots, a.backups.Status(id))
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "运行中备份任务已加载",
+		Data:    map[string]any{"items": snapshots},
+	})
+}
+
 func (a *apiHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 	if !a.requireSession(w, r) {
 		return

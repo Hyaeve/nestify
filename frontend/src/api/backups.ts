@@ -116,3 +116,11 @@ export function reorderBackups(items: BackupReorderItem[]) {
 export function fetchBackupStatus(id: number) {
   return getJSON<BackupStatusSnapshot>(`/api/v1/backups/${id}/status`)
 }
+
+export interface RunningBackupsPayload {
+  items: BackupStatusSnapshot[]
+}
+
+export function fetchRunningBackups() {
+  return getJSON<RunningBackupsPayload>('/api/v1/backups/running')
+}

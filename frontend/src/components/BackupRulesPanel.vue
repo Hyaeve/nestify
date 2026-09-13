@@ -3,7 +3,10 @@
     <template #header>
       <div class="rules-card__header">
         <div class="rules-card__title">备份规则</div>
-        <el-button type="primary" round @click="openCreateWizard">+ 添加备份</el-button>
+        <div class="rules-card__header-actions">
+          <el-button round @click="openResourceLimitDialog">资源限制</el-button>
+          <el-button type="primary" round @click="openCreateWizard">+ 添加备份</el-button>
+        </div>
       </div>
     </template>
 
@@ -320,6 +323,65 @@
       </template>
     </el-dialog>
 
+    <!-- 资源限制 -->
+    <el-dialog v-model="resourceLimitVisible" title="资源限制" width="520px">
+      <el-form label-position="top">
+        <el-form-item label="队列上限">
+          <div class="resource-limit__row">
+            <el-select v-model="resourceLimitForm.upperMode" style="width: 160px" @change="onUpperModeChange">
+              <el-option label="无限制" value="unlimited" />
+              <el-option label="自定义" value="custom" />
+            </el-select>
+            <el-input-number
+              v-if="resourceLimitForm.upperMode === 'custom'"
+              v-model="resourceLimitForm.upperLimit"
+              :min="1"
+              :max="100000000"
+              :step="1000"
+              controls-position="right"
+              style="width: 200px"
+            />
+          </div>
+          <div class="resource-limit__hint">待处理上传任务达到此数量时暂停添加，队列回落后恢复。无限制表示不限（大文件夹可能占用更多内存）。</div>
+        </el-form-item>
+
+        <el-form-item label="队列下限">
+          <div class="resource-limit__row">
+            <el-select v-model="resourceLimitForm.lowerMode" style="width: 160px" @change="onLowerModeChange">
+              <el-option label="无限制" value="unlimited" />
+              <el-option label="自定义" value="custom" />
+            </el-select>
+            <el-input-number
+              v-if="resourceLimitForm.lowerMode === 'custom'"
+              v-model="resourceLimitForm.lowerLimit"
+              :min="1"
+              :max="100000000"
+              :step="1000"
+              controls-position="right"
+              style="width: 200px"
+            />
+          </div>
+          <div class="resource-limit__hint">待处理队列回落到此数量时恢复添加上传任务。未设置时默认为上限的一半。</div>
+        </el-form-item>
+
+        <el-form-item label="最大并发扫描数">
+          <el-input-number
+            v-model="resourceLimitForm.maxConcurrent"
+            :min="1"
+            :max="64"
+            :step="1"
+            controls-position="right"
+            style="width: 200px"
+          />
+          <div class="resource-limit__hint">允许同时进行扫描的备份任务数量，超出的任务排队等待。默认 1。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resourceLimitVisible = false">取消</el-button>
+        <el-button type="primary" :loading="resourceLimitSaving" @click="saveResourceLimit">保存</el-button>
+      </template>
+    </el-dialog>
+
     <DirectoryPickerDialog v-model="pickerVisible" title="选择目录" :initial-path="pickerInitialPath" @selected="applyPathSelection" />
   </el-card>
 </template>
@@ -348,12 +410,24 @@ import {
   type BackupStatusSnapshot,
   type BackupTask,
 } from '../api/backups'
+import { fetchSettings, updateSettings } from '../api/system'
 
 const props = defineProps<{ visible: boolean }>()
 
 const loading = ref(false)
 const backups = ref<BackupTask[]>([])
 const scanningIds = ref<Set<number>>(new Set())
+
+// —— 资源限制 ——
+const resourceLimitVisible = ref(false)
+const resourceLimitSaving = ref(false)
+const resourceLimitForm = reactive({
+  upperMode: 'unlimited' as 'unlimited' | 'custom',
+  upperLimit: 10000,
+  lowerMode: 'unlimited' as 'unlimited' | 'custom',
+  lowerLimit: 5000,
+  maxConcurrent: 1,
+})
 
 // —— 拖拽排序 ——
 const backupGridRef = ref<HTMLElement | null>(null)
@@ -449,6 +523,70 @@ async function loadBackups() {
     ElMessage.error(error instanceof Error ? error.message : '备份规则加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+// —— 资源限制 ——
+function openResourceLimitDialog() {
+  resourceLimitVisible.value = true
+  void loadResourceLimit()
+}
+
+async function loadResourceLimit() {
+  try {
+    const response = await fetchSettings()
+    if (!response.data) return
+    const upper = response.data.upload_queue_upper_limit
+    const lower = response.data.upload_queue_lower_limit
+    resourceLimitForm.upperMode = upper > 0 ? 'custom' : 'unlimited'
+    resourceLimitForm.upperLimit = upper > 0 ? upper : 10000
+    resourceLimitForm.lowerMode = lower > 0 ? 'custom' : 'unlimited'
+    resourceLimitForm.lowerLimit = lower > 0 ? lower : Math.max(1, Math.floor((upper > 0 ? upper : 10000) / 2))
+    resourceLimitForm.maxConcurrent = response.data.max_concurrent_scans > 0 ? response.data.max_concurrent_scans : 1
+  } catch {
+    // 拉取失败时保留默认值
+  }
+}
+
+function onUpperModeChange(mode: string) {
+  if (mode === 'unlimited') {
+    resourceLimitForm.upperLimit = 0
+  } else {
+    resourceLimitForm.upperLimit = 10000
+  }
+}
+
+function onLowerModeChange(mode: string) {
+  if (mode === 'unlimited') {
+    resourceLimitForm.lowerLimit = 0
+  } else {
+    resourceLimitForm.lowerLimit = Math.max(1, Math.floor(resourceLimitForm.upperLimit / 2))
+  }
+}
+
+async function saveResourceLimit() {
+  resourceLimitSaving.value = true
+  try {
+    const upper = resourceLimitForm.upperMode === 'custom' ? resourceLimitForm.upperLimit : 0
+    const lower = resourceLimitForm.lowerMode === 'custom' ? resourceLimitForm.lowerLimit : 0
+    const current = await fetchSettings()
+    await updateSettings({
+      log_retention_days: current.data?.log_retention_days ?? 5,
+      log_retention_max_records: current.data?.log_retention_max_records ?? 10000,
+      history_view_mode: current.data?.history_view_mode ?? 'flat',
+      cache_dir: current.data?.cache_dir ?? '/tmp',
+      cache_persist_enabled: current.data?.cache_persist_enabled !== false,
+      ignored_extensions: current.data?.ignored_extensions ?? [],
+      upload_queue_upper_limit: upper,
+      upload_queue_lower_limit: lower,
+      max_concurrent_scans: resourceLimitForm.maxConcurrent,
+    })
+    ElMessage.success('资源限制已保存')
+    resourceLimitVisible.value = false
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '资源限制保存失败')
+  } finally {
+    resourceLimitSaving.value = false
   }
 }
 
@@ -870,10 +1008,30 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   gap: 16px;
 }
 
+.rules-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .rules-card__title {
   font-size: 18px;
   font-weight: 700;
   color: var(--el-text-color-primary);
+}
+
+/* —— 资源限制弹窗 —— */
+.resource-limit__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resource-limit__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 .backup-grid {

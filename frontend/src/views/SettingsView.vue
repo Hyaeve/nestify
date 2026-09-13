@@ -8,7 +8,10 @@
       <!-- 左侧：登录账户（顶部）+ 基础设置 + 规则备份 -->
       <div class="settings-layout__left">
         <section class="settings-panel settings-panel--account">
-          <div class="settings-panel__title">登录账户</div>
+          <div class="settings-panel__title-row">
+            <div class="settings-panel__title">登录账户</div>
+            <el-button type="primary" size="small" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
+          </div>
           <el-form label-position="top" @submit.prevent="submitAdminChange">
             <el-form-item label="账户">
               <el-input v-model="adminForm.username" placeholder="登录账户" />
@@ -22,14 +25,14 @@
                 autocomplete="new-password"
               />
             </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
-            </el-form-item>
           </el-form>
         </section>
 
         <section class="settings-panel settings-panel--basic">
-          <div class="settings-panel__title">基础设置</div>
+          <div class="settings-panel__title-row">
+            <div class="settings-panel__title">基础设置</div>
+            <el-button type="primary" size="small" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
+          </div>
           <el-form label-position="top" class="settings-basic-form">
             <div class="settings-field-card">
               <div class="settings-field-card__main">
@@ -86,10 +89,6 @@
                   </button>
                 </el-tooltip>
               </div>
-            </div>
-
-            <div class="settings-submit-row">
-              <el-button type="primary" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
             </div>
           </el-form>
         </section>
@@ -169,8 +168,53 @@
             </div>
           </div>
         </section>
+
+        <section class="settings-panel settings-panel--cache">
+          <div class="settings-panel__title">临时缓存</div>
+          <el-form label-position="top" class="cache-form">
+            <el-form-item label="缓存目录">
+              <el-input v-model="cacheForm.cacheDir" placeholder="/tmp">
+                <template #append>
+                  <el-button class="cache-form__dir-button" @click="openCacheDirPicker">选择目录</el-button>
+                </template>
+              </el-input>
+              <div class="cache-form__hint">处理文件过程中临时文件的存储目录，选择后即保存。</div>
+            </el-form-item>
+
+            <el-form-item>
+              <div class="cache-switch-row">
+                <el-switch v-model="cacheForm.cachePersistEnabled" @change="persistCacheSettings" />
+                <span class="cache-switch-row__label">启用缓存持久化</span>
+              </div>
+              <div class="cache-form__hint">将缓存数据存储在数据库中，以便在应用程序重启后保持。</div>
+            </el-form-item>
+
+            <el-form-item label="忽略扩展名">
+              <div class="cache-ignore-tags">
+                <span v-for="(ext, index) in cacheForm.ignoredExtensions" :key="ext" class="cache-ignore-tag">
+                  {{ ext }}
+                  <button type="button" class="cache-ignore-tag__remove" @click="removeIgnoredExtension(index)">×</button>
+                </span>
+                <el-input
+                  v-model="cacheIgnoreDraft"
+                  class="cache-ignore-input"
+                  placeholder="回车添加，例如 .tmp"
+                  @keyup.enter="commitIgnoredExtension"
+                />
+              </div>
+              <div class="cache-form__hint">对上传任务全局生效，匹配的文件将不会被处理。</div>
+            </el-form-item>
+          </el-form>
+        </section>
       </div>
     </div>
+
+    <DirectoryPickerDialog
+      v-model="cacheDirPickerVisible"
+      title="选择缓存目录"
+      :initial-path="cacheForm.cacheDir"
+      @selected="handleCacheDirSelected"
+    />
 
     <!-- 挂载右键菜单（自定义，位于卡片上下文） -->
     <div
@@ -213,6 +257,7 @@ import {
 } from '../api/mounts'
 import { useAuthStore } from '../stores/auth'
 import WebdavMountDialog from '../components/WebdavMountDialog.vue'
+import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 
 const authStore = useAuthStore()
 const submitting = ref(false)
@@ -236,6 +281,15 @@ const settingsForm = reactive({
   logRetentionMaxRecords: 10000,
   historyViewMode: 'flat' as HistoryViewMode,
 })
+
+// —— 临时缓存设置 ——
+const cacheForm = reactive({
+  cacheDir: '/tmp',
+  cachePersistEnabled: true,
+  ignoredExtensions: [] as string[],
+})
+const cacheIgnoreDraft = ref('')
+const cacheDirPickerVisible = ref(false)
 
 // —— WebDAV 挂载状态 ——
 const mounts = ref<WebdavMount[]>([])
@@ -266,6 +320,9 @@ async function loadSettings() {
       settingsForm.logRetentionDays = response.data.log_retention_days || 5
       settingsForm.logRetentionMaxRecords = response.data.log_retention_max_records || 10000
       settingsForm.historyViewMode = normalizeHistoryViewMode(response.data.history_view_mode)
+      cacheForm.cacheDir = response.data.cache_dir || '/tmp'
+      cacheForm.cachePersistEnabled = response.data.cache_persist_enabled !== false
+      cacheForm.ignoredExtensions = response.data.ignored_extensions ?? []
     }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '系统设置加载失败')
@@ -279,12 +336,62 @@ async function submitSettings() {
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
       history_view_mode: settingsForm.historyViewMode,
+      cache_dir: cacheForm.cacheDir,
+      cache_persist_enabled: cacheForm.cachePersistEnabled,
+      ignored_extensions: cacheForm.ignoredExtensions,
+      upload_queue_upper_limit: 0,
+      upload_queue_lower_limit: 0,
+      max_concurrent_scans: 0,
     })
     ElMessage.success('系统设置已保存')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '系统设置保存失败')
   } finally {
     settingsSubmitting.value = false
+  }
+}
+
+// —— 临时缓存 ——
+function openCacheDirPicker() {
+  cacheDirPickerVisible.value = true
+}
+
+async function handleCacheDirSelected(path: string) {
+  cacheForm.cacheDir = path
+  cacheDirPickerVisible.value = false
+  await persistCacheSettings()
+}
+
+function commitIgnoredExtension() {
+  const value = cacheIgnoreDraft.value.trim()
+  if (!value) return
+  if (!cacheForm.ignoredExtensions.includes(value)) {
+    cacheForm.ignoredExtensions.push(value)
+  }
+  cacheIgnoreDraft.value = ''
+  void persistCacheSettings()
+}
+
+function removeIgnoredExtension(index: number) {
+  cacheForm.ignoredExtensions.splice(index, 1)
+  void persistCacheSettings()
+}
+
+async function persistCacheSettings() {
+  try {
+    await updateSettings({
+      log_retention_days: settingsForm.logRetentionDays,
+      log_retention_max_records: settingsForm.logRetentionMaxRecords,
+      history_view_mode: settingsForm.historyViewMode,
+      cache_dir: cacheForm.cacheDir,
+      cache_persist_enabled: cacheForm.cachePersistEnabled,
+      ignored_extensions: cacheForm.ignoredExtensions,
+      upload_queue_upper_limit: 0,
+      upload_queue_lower_limit: 0,
+      max_concurrent_scans: 0,
+    })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '缓存设置保存失败')
   }
 }
 
@@ -456,6 +563,18 @@ async function handleBackupFileChange(file: UploadFile) {
   font-weight: 800;
 }
 
+.settings-panel__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.settings-panel__title-row .settings-panel__title {
+  margin-bottom: 0;
+}
+
 .settings-panel__header {
   display: flex;
   align-items: center;
@@ -479,6 +598,9 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .mount-card {
@@ -681,6 +803,97 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* —— 临时缓存 —— */
+.cache-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cache-form__hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
+.cache-form__dir-button {
+  min-width: 88px;
+}
+
+.cache-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cache-switch-row__label {
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.cache-ignore-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.cache-ignore-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #5b7a6e;
+  background: #eef3f1;
+}
+
+.cache-ignore-tag__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: #5b7a6e;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cache-ignore-tag__remove:hover {
+  background: #dfe9e4;
+}
+
+.cache-ignore-input {
+  width: 100%;
+  max-width: 46%;
+}
+
+/* 细浅隐藏的滚动条 */
+.mounts-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.mounts-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.mounts-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.mounts-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .settings-view-mode-group {
