@@ -147,6 +147,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/rules/reorder", api.handleReorderRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
 	mux.HandleFunc("/api/v1/mounts", api.handleMounts)
+	mux.HandleFunc("/api/v1/mounts/test", api.handleMountTest)
 	mux.HandleFunc("/api/v1/mounts/browse", api.handleMountBrowse)
 	mux.HandleFunc("/api/v1/mounts/", api.handleMountByID)
 	mux.HandleFunc("/api/v1/backups", api.handleBackups)

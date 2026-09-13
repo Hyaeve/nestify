@@ -198,6 +198,7 @@
           row-key="path"
           :row-class-name="getRowClassName"
           @selection-change="handleSelectionChange"
+          @select="handleSelectRow"
           @row-contextmenu="handleRowContextMenu"
         >
           <el-table-column type="selection" width="52" />
@@ -479,6 +480,8 @@ const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const selectedRows = ref<FileManagerEntry[]>([])
+const shiftPressed = ref(false)
+const lastAnchorPath = ref<string | null>(null)
 const searchKeyword = ref('')
 const sortBy = ref<SortBy>('modified_at')
 const sortOrder = ref<SortOrder>('desc')
@@ -622,8 +625,17 @@ function hideContextMenu() {
 }
 
 function handleWindowKeyDown(event: KeyboardEvent) {
+  if (event.key === 'Shift') {
+    shiftPressed.value = true
+  }
   if (event.key === 'Escape') {
     hideContextMenu()
+  }
+}
+
+function handleWindowKeyUp(event: KeyboardEvent) {
+  if (event.key === 'Shift') {
+    shiftPressed.value = false
   }
 }
 
@@ -958,6 +970,33 @@ function handleEntryPrimaryAction(entry: FileManagerEntry) {
 
 function handleSelectionChange(rows: FileManagerEntry[]) {
   selectedRows.value = rows
+  if (rows.length > 0) {
+    lastAnchorPath.value = rows[rows.length - 1].path
+  }
+}
+
+function handleSelectRow(_selection: FileManagerEntry[], row: FileManagerEntry) {
+  // shift + 点击复选框时，在锚点与当前行之间做范围选择。
+  if (shiftPressed.value && lastAnchorPath.value) {
+    const anchorIndex = pagedEntries.value.findIndex((item) => item.path === lastAnchorPath.value)
+    const currentIndex = pagedEntries.value.findIndex((item) => item.path === row.path)
+    if (anchorIndex >= 0 && currentIndex >= 0 && anchorIndex !== currentIndex) {
+      const start = Math.min(anchorIndex, currentIndex)
+      const end = Math.max(anchorIndex, currentIndex)
+      const rangeRows = pagedEntries.value.slice(start, end + 1)
+      const selectedSet = new Set(rangeRows.map((item) => item.path))
+      // 保证范围内的行被选中，范围外的保持现有状态。
+      pagedEntries.value.forEach((item) => {
+        const shouldSelect = selectedSet.has(item.path)
+        const isSelected = selectedPathSet.value.has(item.path)
+        if (shouldSelect && !isSelected) {
+          tableRef.value?.toggleRowSelection(item, true)
+        }
+      })
+      return
+    }
+  }
+  lastAnchorPath.value = row.path
 }
 
 function clearSelection() {
@@ -1362,12 +1401,14 @@ onMounted(() => {
   loadStarredFolders()
   loadRecentVisitedPaths()
   window.addEventListener('keydown', handleWindowKeyDown)
+  window.addEventListener('keyup', handleWindowKeyUp)
   window.addEventListener('scroll', hideContextMenu, true)
   void initialize()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleWindowKeyDown)
+  window.removeEventListener('keyup', handleWindowKeyUp)
   window.removeEventListener('scroll', hideContextMenu, true)
 })
 </script>
@@ -1663,13 +1704,13 @@ onBeforeUnmount(() => {
 .entry-name {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 3px 10px;
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   transition: background-color 0.2s ease;
 }
 
@@ -1700,7 +1741,7 @@ onBeforeUnmount(() => {
 
 .entry-name__icon {
   flex-shrink: 0;
-  font-size: 24px;
+  font-size: 20px;
   color: #f5b942;
 }
 
@@ -1714,9 +1755,10 @@ onBeforeUnmount(() => {
 }
 
 .entry-name__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.25;
   transition: color 0.2s ease;
 }
 
@@ -1725,9 +1767,10 @@ onBeforeUnmount(() => {
 }
 
 .entry-name__path {
-  margin-top: 4px;
+  margin-top: 1px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.2;
   transition: color 0.2s ease;
 }
 
@@ -1879,5 +1922,14 @@ onBeforeUnmount(() => {
 
 :deep(.el-table__body tr.current-row > td.el-table__cell) {
   background: var(--accent-soft);
+}
+
+/* 压缩条目行高 */
+:deep(.el-table .el-table__cell) {
+  padding: 4px 0;
+}
+
+:deep(.el-table .cell) {
+  line-height: 1.3;
 }
 </style>

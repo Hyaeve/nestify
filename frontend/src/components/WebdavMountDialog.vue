@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    :title="isEditing ? '编辑 WebDAV 挂载' : '添加 WebDAV 挂载'"
+    :title="isEditing ? '编辑远程挂载' : '添加远程挂载'"
     width="560px"
     destroy-on-close
     @update:model-value="handleVisibleChange"
@@ -51,8 +51,12 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="handleVisibleChange(false)">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">确认</el-button>
+      <div class="mount-dialog-footer">
+        <el-button :loading="testing" @click="handleTest">测试</el-button>
+        <div class="mount-dialog-footer__spacer" />
+        <el-button @click="handleVisibleChange(false)">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">确认</el-button>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -61,7 +65,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { createMount, updateMount, type MountInput, type WebdavMount } from '../api/mounts'
+import { createMount, updateMount, testMountConnection, type MountInput, type WebdavMount } from '../api/mounts'
 
 const props = defineProps<{
   modelValue: boolean
@@ -74,6 +78,7 @@ const emit = defineEmits<{
 }>()
 
 const submitting = ref(false)
+const testing = ref(false)
 const isEditing = computed(() => Boolean(props.mount?.id))
 
 const form = reactive<MountInput>({
@@ -110,28 +115,57 @@ function handleVisibleChange(value: boolean) {
   emit('update:modelValue', value)
 }
 
-async function handleSubmit() {
+function buildPayload(): MountInput {
+  return {
+    name: form.name.trim(),
+    scheme: form.scheme,
+    host: form.host.trim(),
+    port: Number(form.port) || 0,
+    username: form.username.trim(),
+    password: form.password,
+    base_path: form.base_path.trim(),
+    enabled: form.enabled,
+  }
+}
+
+function validateForm(): string | null {
   if (!form.name.trim()) {
-    ElMessage.error('请填写挂载名称')
-    return
+    return '请填写挂载名称'
   }
   if (!form.host.trim()) {
-    ElMessage.error('请填写域名或 IP')
+    return '请填写域名或 IP'
+  }
+  return null
+}
+
+async function handleTest() {
+  const message = validateForm()
+  if (message) {
+    ElMessage.error(message)
+    return
+  }
+
+  testing.value = true
+  try {
+    const response = await testMountConnection(buildPayload())
+    ElMessage.success(`连接成功，发现 ${response.data?.count ?? 0} 个目录/文件`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '连接测试失败')
+  } finally {
+    testing.value = false
+  }
+}
+
+async function handleSubmit() {
+  const message = validateForm()
+  if (message) {
+    ElMessage.error(message)
     return
   }
 
   submitting.value = true
   try {
-    const payload: MountInput = {
-      name: form.name.trim(),
-      scheme: form.scheme,
-      host: form.host.trim(),
-      port: Number(form.port) || 0,
-      username: form.username.trim(),
-      password: form.password,
-      base_path: form.base_path.trim(),
-      enabled: form.enabled,
-    }
+    const payload: MountInput = buildPayload()
 
     if (isEditing.value && props.mount) {
       await updateMount(props.mount.id, payload)
@@ -168,5 +202,15 @@ async function handleSubmit() {
 
 .mount-form__row-item--port {
   flex: 0 0 132px;
+}
+
+.mount-dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mount-dialog-footer__spacer {
+  flex: 1 1 auto;
 }
 </style>

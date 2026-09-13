@@ -103,6 +103,11 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 	}
 
 	remotePath := joinRemotePath(c.basePath, normalizeInternalPath(internalPath))
+	// 目录级 PROPFIND 必须带尾斜杠，否则 OpenList / Alist 等会返回 301 重定向，
+	// 而 Go http.Client 对 301/302 会把 PROPFIND 降级为 GET，导致拿不到 multistatus、目录显示为空。
+	if !strings.HasSuffix(remotePath, "/") {
+		remotePath += "/"
+	}
 	requestURL := c.baseURL + escapePath(remotePath)
 
 	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody))
@@ -136,6 +141,8 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 	}
 
 	basePrefix := normalizeInternalPath(c.basePath)
+	// 请求的完整远端路径（不含尾斜杠），用于与响应 href 对齐并过滤自身。
+	requestDir := normalizeInternalPath(joinRemotePath(c.basePath, normalizeInternalPath(internalPath)))
 	entries := make([]Entry, 0, len(multistatus.Responses))
 	for _, item := range multistatus.Responses {
 		decoded, decodeErr := decodeHref(item.Href)
@@ -154,10 +161,13 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 		}
 		relative = normalizeInternalPath(relative)
 
-		if relative == "" || relative == normalizeInternalPath(internalPath) {
+		// 过滤掉请求目录本身（其 href 通常与请求路径一致）。
+		if relative == "" || relative == requestDir {
 			continue
 		}
-		if path.Dir(relative) != normalizeInternalPath(internalPath) {
+		// 只保留当前目录的直接子项。父目录需归一化后再比较，
+		// 否则根目录（""）与 path.Dir 返回的 "/" 永远不相等，导致根目录子项被全部过滤。
+		if normalizeInternalPath(path.Dir(relative)) != requestDir {
 			continue
 		}
 
@@ -220,13 +230,17 @@ func decodeHref(href string) (string, error) {
 		return "", fmt.Errorf("empty href")
 	}
 
+	rawPath := trimmed
 	parsed, err := url.Parse(trimmed)
-	if err != nil {
-		return "", err
+	if err == nil {
+		if parsed.Path != "" {
+			rawPath = parsed.Path
+		}
 	}
-	rawPath := parsed.Path
-	if rawPath == "" {
-		rawPath = trimmed
+
+	// 部分实现返回的是相对路径（不带前导 /），统一补上以便后续处理。
+	if !strings.HasPrefix(rawPath, "/") {
+		rawPath = "/" + rawPath
 	}
 
 	decoded, err := url.PathUnescape(rawPath)

@@ -5,84 +5,29 @@
     </template>
 
     <div class="settings-layout">
-      <!-- 左侧：WebDAV 挂载（顶部）+ 规则备份（底部） -->
+      <!-- 左侧：登录账户（顶部）+ 基础设置 + 规则备份 -->
       <div class="settings-layout__left">
-        <section class="settings-panel settings-panel--mounts">
-          <div class="settings-panel__header">
-            <div class="settings-panel__title">WebDAV 挂载</div>
-            <el-button type="primary" size="small" @click="openAddMount">添加挂载</el-button>
-          </div>
-
-          <div v-if="mounts.length === 0" class="mounts-empty">
-            暂无挂载，点击右上角「添加挂载」连接 WebDAV 网盘。
-          </div>
-
-          <div v-else class="mounts-list">
-            <div
-              v-for="mount in mounts"
-              :key="mount.id"
-              class="mount-card"
-              :class="{ 'mount-card--disabled': !mount.enabled }"
-              @click="openEditMount(mount)"
-              @contextmenu.prevent="openMountContextMenu($event, mount)"
-            >
-              <div class="mount-card__icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M2.5 8.5h19" />
-                  <path d="M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V8A1.5 1.5 0 0 1 4 6.5Z" />
-                  <path d="M2.5 8.5a1.5 1.5 0 0 1 1.5-1.5h4.3l2 2h9.2a1.5 1.5 0 0 1 1.5 1.5" />
-                </svg>
-              </div>
-              <div class="mount-card__body">
-                <div class="mount-card__name">{{ mount.name }}</div>
-                <div class="mount-card__meta">{{ mount.base_url }}</div>
-                <div class="mount-card__state">
-                  <span class="mount-card__dot" :class="{ 'is-on': mount.enabled }"></span>
-                  {{ mount.enabled ? '已启用' : '已停用' }}
-                </div>
-              </div>
-              <div class="mount-card__actions" @click.stop>
-                <el-dropdown trigger="click" @command="(cmd: string) => handleMountCommand(cmd, mount)">
-                  <button type="button" class="mount-card__more" aria-label="更多操作">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <circle cx="5" cy="12" r="1.6" />
-                      <circle cx="12" cy="12" r="1.6" />
-                      <circle cx="19" cy="12" r="1.6" />
-                    </svg>
-                  </button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item :command="mount.enabled ? 'disable' : 'enable'">
-                        {{ mount.enabled ? '停用' : '启用' }}
-                      </el-dropdown-item>
-                      <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </div>
-            </div>
-          </div>
+        <section class="settings-panel settings-panel--account">
+          <div class="settings-panel__title">登录账户</div>
+          <el-form label-position="top" @submit.prevent="submitAdminChange">
+            <el-form-item label="账户">
+              <el-input v-model="adminForm.username" placeholder="登录账户" />
+            </el-form-item>
+            <el-form-item label="密码">
+              <el-input
+                v-model="adminForm.password"
+                type="password"
+                show-password
+                placeholder="留空则不修改密码"
+                autocomplete="new-password"
+              />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
+            </el-form-item>
+          </el-form>
         </section>
 
-        <section class="settings-panel settings-panel--backup">
-          <div class="settings-panel__title">规则备份</div>
-          <div class="settings-actions">
-            <el-button type="primary" :loading="exportingRules" @click="handleExportRulesBackup">导出规则</el-button>
-            <el-upload
-              :show-file-list="false"
-              accept="application/json,.json"
-              :auto-upload="false"
-              :on-change="handleBackupFileChange"
-            >
-              <el-button :loading="importingRules">导入规则备份</el-button>
-            </el-upload>
-          </div>
-        </section>
-      </div>
-
-      <!-- 右侧：基础设置（顶部）+ 登录账户（右下角） -->
-      <div class="settings-layout__right">
         <section class="settings-panel settings-panel--basic">
           <div class="settings-panel__title">基础设置</div>
           <el-form label-position="top" class="settings-basic-form">
@@ -149,25 +94,80 @@
           </el-form>
         </section>
 
-        <section class="settings-panel settings-panel--account">
-          <div class="settings-panel__title">登录账户</div>
-          <el-form label-position="top" @submit.prevent="submitAdminChange">
-            <el-form-item label="账户">
-              <el-input v-model="adminForm.username" placeholder="登录账户" />
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input
-                v-model="adminForm.password"
-                type="password"
-                show-password
-                placeholder="留空则不修改密码"
-                autocomplete="new-password"
-              />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
-            </el-form-item>
-          </el-form>
+        <section class="settings-panel settings-panel--backup">
+          <div class="settings-panel__title">规则备份</div>
+          <div class="settings-actions">
+            <el-button type="primary" :loading="exportingRules" @click="handleExportRulesBackup">导出规则</el-button>
+            <el-upload
+              :show-file-list="false"
+              accept="application/json,.json"
+              :auto-upload="false"
+              :on-change="handleBackupFileChange"
+            >
+              <el-button :loading="importingRules">导入规则备份</el-button>
+            </el-upload>
+          </div>
+        </section>
+      </div>
+
+      <!-- 右侧：远程挂载（占位更大） -->
+      <div class="settings-layout__right">
+        <section class="settings-panel settings-panel--mounts">
+          <div class="settings-panel__header">
+            <div class="settings-panel__title">远程挂载</div>
+            <el-button type="primary" size="small" @click="openAddMount">添加挂载</el-button>
+          </div>
+
+          <div v-if="mounts.length === 0" class="mounts-empty">
+            暂无挂载，点击右上角「添加挂载」连接 WebDAV 网盘。
+          </div>
+
+          <div v-else class="mounts-list">
+            <div
+              v-for="mount in mounts"
+              :key="mount.id"
+              class="mount-card"
+              :class="{ 'mount-card--disabled': !mount.enabled }"
+              @click="openEditMount(mount)"
+              @contextmenu.prevent="openMountContextMenu($event, mount)"
+            >
+              <div class="mount-card__icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2.5 8.5h19" />
+                  <path d="M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V8A1.5 1.5 0 0 1 4 6.5Z" />
+                  <path d="M2.5 8.5a1.5 1.5 0 0 1 1.5-1.5h4.3l2 2h9.2a1.5 1.5 0 0 1 1.5 1.5" />
+                </svg>
+              </div>
+              <div class="mount-card__body">
+                <div class="mount-card__name">{{ mount.name }}</div>
+                <div class="mount-card__meta">{{ mount.base_url }}</div>
+                <div class="mount-card__state">
+                  <span class="mount-card__dot" :class="{ 'is-on': mount.enabled }"></span>
+                  {{ mount.enabled ? '已启用' : '已停用' }}
+                </div>
+              </div>
+              <div class="mount-card__actions" @click.stop>
+                <el-dropdown trigger="click" @command="(cmd: string) => handleMountCommand(cmd, mount)">
+                  <button type="button" class="mount-card__more" aria-label="更多操作">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="5" cy="12" r="1.6" />
+                      <circle cx="12" cy="12" r="1.6" />
+                      <circle cx="19" cy="12" r="1.6" />
+                    </svg>
+                  </button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item :command="mount.enabled ? 'disable' : 'enable'">
+                        {{ mount.enabled ? '停用' : '启用' }}
+                      </el-dropdown-item>
+                      <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </div>
@@ -429,7 +429,7 @@ async function handleBackupFileChange(file: UploadFile) {
 <style scoped>
 .settings-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   gap: 16px;
   align-items: start;
 }

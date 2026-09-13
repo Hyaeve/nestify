@@ -668,6 +668,19 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 </script>
 
 <style scoped>
+.rules-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rules-card__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
 .backup-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -868,7 +881,10 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 .backup-wizard-body {
   max-height: 52vh;
   overflow-y: auto;
-  padding: 4px 2px;
+  padding: 20px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 16px;
+  background: var(--el-bg-color);
 }
 
 .backup-wizard-footer {

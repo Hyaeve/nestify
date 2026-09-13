@@ -55,3 +55,7 @@ export function deleteMount(id: number) {
 export function browseMountDirectory(path: string) {
   return getJSON<BrowseDirectoriesPayload>(`/api/v1/mounts/browse?path=${encodeURIComponent(path)}`)
 }
+
+export function testMountConnection(payload: MountInput) {
+  return postJSON<{ count: number }>('/api/v1/mounts/test', payload)
+}

@@ -231,6 +231,56 @@ func pathBase(value string) string {
 	return trimmed
 }
 
+// handleMountTest 用给定参数（无需保存）发起一次 PROPFIND，验证 WebDAV 连接是否可用。
+func (a *apiHandler) handleMountTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var input model.CreateMountInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	if message := validateMountInput(input.Name, input.Host, input.Port); message != "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_MOUNT", Message: message})
+		return
+	}
+
+	mount := model.WebdavMount{
+		Name:     strings.TrimSpace(input.Name),
+		Scheme:   model.NormalizeMountScheme(input.Scheme),
+		Host:     strings.TrimSpace(input.Host),
+		Port:     input.Port,
+		Username: strings.TrimSpace(input.Username),
+		BasePath: model.NormalizeMountBasePath(input.BasePath),
+		Enabled:  true,
+	}
+
+	client := webdav.NewClient(mount, input.Password)
+	entries, err := client.List(r.Context(), "")
+	if err != nil {
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: false,
+			Code:    "MOUNT_TEST_FAILED",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "连接成功",
+		Data:    map[string]any{"count": len(entries)},
+	})
+}
+
 func validateMountInput(name, host string, port int) string {
 	if strings.TrimSpace(name) == "" {
 		return "挂载名称不能为空"
