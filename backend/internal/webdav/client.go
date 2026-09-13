@@ -66,6 +66,178 @@ func (c *Client) BuildFileURL(internalPath string) string {
 	return c.baseURL + escapePath(joinRemotePath(c.basePath, normalized))
 }
 
+// requestURL 拼接某内部路径对应的完整请求地址（不含尾斜杠处理）。
+func (c *Client) requestURL(internalPath string) string {
+	normalized := normalizeInternalPath(internalPath)
+	return c.baseURL + escapePath(joinRemotePath(c.basePath, normalized))
+}
+
+// PutFile 通过 PUT 上传文件内容到 WebDAV 内部路径（自动创建父目录可选项由上层处理）。
+func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Reader, size int64) error {
+	if err := c.Wait(ctx); err != nil {
+		return err
+	}
+
+	requestURL := c.requestURL(internalPath)
+	request, err := http.NewRequestWithContext(ctx, "PUT", requestURL, content)
+	if err != nil {
+		return fmt.Errorf("build put request: %w", err)
+	}
+	if size >= 0 {
+		request.ContentLength = size
+	}
+	request.Header.Set("Accept", "*/*")
+	if c.username != "" || c.password != "" {
+		request.SetBasicAuth(c.username, c.password)
+	}
+
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("webdav put failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return nil
+	}
+	if response.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+	}
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+	return fmt.Errorf("WebDAV PUT 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// MkdirAll 在 WebDAV 上逐级创建目录（MKCOL）。已存在则忽略。
+func (c *Client) MkdirAll(ctx context.Context, internalPath string) error {
+	normalized := normalizeInternalPath(internalPath)
+	if normalized == "" {
+		return nil
+	}
+
+	segments := strings.Split(strings.Trim(normalized, "/"), "/")
+	current := ""
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+		if current == "" {
+			current = segment
+		} else {
+			current = current + "/" + segment
+		}
+		if err := c.mkcol(ctx, current); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) mkcol(ctx context.Context, internalPath string) error {
+	if err := c.Wait(ctx); err != nil {
+		return err
+	}
+
+	requestURL := c.requestURL(internalPath)
+	request, err := http.NewRequestWithContext(ctx, "MKCOL", requestURL, nil)
+	if err != nil {
+		return fmt.Errorf("build mkcol request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		request.SetBasicAuth(c.username, c.password)
+	}
+
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("webdav mkcol failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return nil
+	}
+	// 405 Method Not Allowed 通常表示目录已存在（部分实现如此）。
+	if response.StatusCode == http.StatusMethodNotAllowed {
+		return nil
+	}
+	if response.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+	}
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+	return fmt.Errorf("WebDAV MKCOL 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// Exists 判断某内部路径是否存在（文件或目录）。
+func (c *Client) Exists(ctx context.Context, internalPath string) (bool, error) {
+	if err := c.Wait(ctx); err != nil {
+		return false, err
+	}
+
+	requestURL := c.requestURL(internalPath)
+	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody))
+	if err != nil {
+		return false, fmt.Errorf("build propfind request: %w", err)
+	}
+	request.Header.Set("Depth", "0")
+	request.Header.Set("Content-Type", "application/xml; charset=utf-8")
+	if c.username != "" || c.password != "" {
+		request.SetBasicAuth(c.username, c.password)
+	}
+
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return false, fmt.Errorf("webdav propfind failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return true, nil
+	}
+	if response.StatusCode == http.StatusUnauthorized {
+		return false, fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+	}
+	return false, fmt.Errorf("WebDAV PROPFIND 返回状态 %d", response.StatusCode)
+}
+
+// Delete 删除某个内部路径（文件或目录，目录用 DELETE 可能递归取决于服务端实现）。
+func (c *Client) Delete(ctx context.Context, internalPath string) error {
+	if err := c.Wait(ctx); err != nil {
+		return err
+	}
+
+	requestURL := c.requestURL(internalPath)
+	request, err := http.NewRequestWithContext(ctx, "DELETE", requestURL, nil)
+	if err != nil {
+		return fmt.Errorf("build delete request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		request.SetBasicAuth(c.username, c.password)
+	}
+
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("webdav delete failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode >= 200 && response.StatusCode < 300 || response.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if response.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+	}
+	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+	return fmt.Errorf("WebDAV DELETE 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// InternalPath 返回挂载下某相对路径（以 / 开头的内部路径）对应的内部路径字符串。
+func InternalPathFromParts(parts ...string) string {
+	joined := path.Join(parts...)
+	return normalizeInternalPath(joined)
+}
+
 // Wait 在必要时阻塞，保证两次请求之间满足最小间隔。
 func (c *Client) Wait(ctx context.Context) error {
 	c.mu.Lock()

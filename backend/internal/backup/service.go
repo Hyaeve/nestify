@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 
 	"nestify/backend/internal/model"
 	"nestify/backend/internal/store/sqlite"
+	"nestify/backend/internal/webdav"
 )
 
 const (
@@ -192,6 +194,27 @@ func (s *Service) isRunning(taskID int64) bool {
 	return ok && state.Running
 }
 
+// isWebdavPath 判断路径是否为 WebDAV 虚拟挂载路径（webdav://）。
+func isWebdavPath(p string) bool {
+	return strings.HasPrefix(strings.TrimSpace(p), model.MountPathScheme)
+}
+
+// parseWebdavTarget 解析 webdav://id[/internal] 形式的目标路径，返回挂载 ID 与内部相对路径。
+func parseWebdavTarget(p string) (int64, string, error) {
+	trimmed := strings.TrimSpace(p)
+	rest := strings.TrimPrefix(trimmed, model.MountPathScheme)
+	parts := strings.SplitN(rest, "/", 2)
+	id, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, "", fmt.Errorf("无效的 WebDAV 目标路径：%s", p)
+	}
+	internal := ""
+	if len(parts) == 2 {
+		internal = strings.Trim(strings.TrimLeft(parts[1], "/"), "/")
+	}
+	return id, internal, nil
+}
+
 // RunTask 触发一次备份。forceFull 为真时忽略增量判断，执行完整扫描。
 func (s *Service) RunTask(taskID int64, forceFull bool) error {
 	task, err := s.store.GetBackup(taskID)
@@ -306,7 +329,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 		if stats.Failed > 0 {
 			status = "failed"
 		}
-		summary := fmt.Sprintf("备份完成：扫描 %d，复制 %d，跳过 %d，删除 %d，失败 %d",
+		summary := fmt.Sprintf("备份完成：扫描 %d，上传 %d，跳过 %d，删除 %d，失败 %d",
 			stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed)
 
 		s.mu.Lock()
@@ -404,10 +427,36 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 
 	s.setPhase(task.ID, "复制文件", fmt.Sprintf("共 %d 个文件", len(sourceIndex)))
 
-	type sourceItem struct {
-		relative string
-		absolute string
+	// 预解析 WebDAV 目标，避免每个文件重复解析。本地目标保持原路径。
+	targets := make([]targetDesc, 0, len(task.TargetDirs))
+	for _, targetDir := range task.TargetDirs {
+		desc := targetDesc{raw: targetDir}
+		if isWebdavPath(targetDir) {
+			mountID, internal, err := parseWebdavTarget(targetDir)
+			if err != nil {
+				stats.Failed++
+				s.log(task.ID, "目标路径无效：%s（%v）", targetDir, err)
+				continue
+			}
+			credential, credErr := s.store.GetMountCredential(mountID)
+			if credErr != nil || credential == nil {
+				stats.Failed++
+				s.log(task.ID, "WebDAV 挂载不可用：%s", targetDir)
+				continue
+			}
+			if !credential.Mount.Enabled {
+				stats.Failed++
+				s.log(task.ID, "WebDAV 挂载「%s」已停用", credential.Mount.Name)
+				continue
+			}
+			desc.isWebdav = true
+			desc.mountID = mountID
+			desc.internal = internal
+			desc.client = webdav.NewClient(credential.Mount, credential.Password)
+		}
+		targets = append(targets, desc)
 	}
+
 	items := make([]sourceItem, 0, len(sourceIndex))
 	for relative, absolute := range sourceIndex {
 		items = append(items, sourceItem{relative: relative, absolute: absolute})
@@ -426,15 +475,22 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 			continue
 		}
 
-		for _, targetDir := range task.TargetDirs {
-			destination := filepath.Join(targetDir, item.relative)
-			if err := s.copyOne(task, item.absolute, destination, fileInfo, stats); err != nil {
-				stats.Failed++
-				s.log(task.ID, "复制失败：%s（%v）", item.relative, err)
+		for _, target := range targets {
+			if target.isWebdav {
+				if err := s.copyOneWebdav(task, target, item, fileInfo, stats); err != nil {
+					stats.Failed++
+					s.log(task.ID, "上传失败：%s（%v）", item.relative, err)
+				}
+			} else {
+				destination := filepath.Join(target.raw, item.relative)
+				if err := s.copyOne(task, item.absolute, destination, fileInfo, stats); err != nil {
+					stats.Failed++
+					s.log(task.ID, "复制失败：%s（%v）", item.relative, err)
+				}
 			}
 		}
 
-		if (task.CompletionRule == model.BackupCompletionDeleteSource || task.CompletionRule == model.BackupCompletionDeleteSourceDirs) && len(task.TargetDirs) > 0 {
+		if (task.CompletionRule == model.BackupCompletionDeleteSource || task.CompletionRule == model.BackupCompletionDeleteSourceDirs) && len(targets) > 0 {
 			if err := os.Remove(item.absolute); err == nil {
 				stats.Deleted++
 				delete(sourceIndex, item.relative)
@@ -444,18 +500,22 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 
 	if task.CompletionRule == model.BackupCompletionDeleteSourceDirs {
 		for _, sourceDir := range task.SourceDirs {
-			pruneEmptyDirs(sourceDir, stats)
+			s.pruneEmptyDirs(sourceDir, matcher, stats)
 		}
 	}
 
-	if task.SyncDeleteFromTarget && len(task.TargetDirs) > 0 {
+	if task.SyncDeleteFromTarget && len(targets) > 0 {
 		s.setPhase(task.ID, "同步删除目标", "")
-		for _, targetDir := range task.TargetDirs {
-			s.syncDeleteMissing(targetDir, sourceIndex, matcher, stats)
+		for _, target := range targets {
+			if target.isWebdav {
+				s.syncDeleteMissingWebdav(task, target, sourceIndex, matcher, stats)
+			} else {
+				s.syncDeleteMissing(target.raw, sourceIndex, matcher, stats)
+			}
 		}
 	}
 
-	s.log(task.ID, "备份结束：复制 %d，跳过 %d，失败 %d", stats.Copied, stats.Skipped, stats.Failed)
+	s.log(task.ID, "备份结束：上传 %d，跳过 %d，失败 %d", stats.Copied, stats.Skipped, stats.Failed)
 }
 
 type runStats struct {
@@ -464,6 +524,21 @@ type runStats struct {
 	Skipped int
 	Deleted int
 	Failed  int
+}
+
+// sourceItem 是一个待复制的源文件条目。
+type sourceItem struct {
+	relative string
+	absolute string
+}
+
+// targetDesc 描述一个备份目标（本地目录或 WebDAV 挂载）。
+type targetDesc struct {
+	raw      string
+	isWebdav bool
+	mountID  int64
+	internal string
+	client   *webdav.Client
 }
 
 func (s *Service) copyOne(task model.BackupTask, sourcePath, destination string, info os.FileInfo, stats *runStats) error {
@@ -507,6 +582,53 @@ func sourceDiskPath(root, relative string) string {
 	return filepath.Join(root, relative)
 }
 
+// copyOneWebdav 将源文件上传到 WebDAV 目标。
+// 替换规则：目标已存在且为「跳过」时跳过；「覆盖」时 PUT 覆盖。
+func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item sourceItem, info os.FileInfo, stats *runStats) error {
+	ctx := context.Background()
+	internalPath := webdav.InternalPathFromParts(target.internal, filepath.ToSlash(item.relative))
+
+	if exists, err := target.client.Exists(ctx, internalPath); err == nil && exists {
+		if task.ReplaceRule != model.BackupReplaceOverwrite {
+			stats.Skipped++
+			return nil
+		}
+	} else if err != nil {
+		s.log(task.ID, "检查远端文件失败：%s（%v），尝试覆盖上传", item.relative, err)
+	}
+
+	// 确保父目录存在。
+	parent := path.Dir(internalPath)
+	if parent != "" && parent != "/" && parent != "." {
+		if err := target.client.MkdirAll(ctx, parent); err != nil {
+			return err
+		}
+	}
+
+	source, err := os.Open(item.absolute)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	if err := target.client.PutFile(ctx, internalPath, source, info.Size()); err != nil {
+		return err
+	}
+
+	stats.Copied++
+	s.log(task.ID, "已上传：%s", internalPath)
+	return nil
+}
+
+func (s *Service) syncDeleteMissingWebdav(task model.BackupTask, target targetDesc, sourceIndex map[string]string, matcher *filterMatcher, stats *runStats) {
+	// WebDAV 目标的「从目标同步删除」需枚举远端目录树，成本较高且易误删。
+	// 为避免误删远端文件，此处不主动删除远端文件，仅记录提示。
+	if len(sourceIndex) == 0 {
+		return
+	}
+	s.log(task.ID, "WebDAV 目标暂不支持从目标同步删除，已跳过")
+}
+
 func (s *Service) syncDeleteMissing(targetDir string, sourceIndex map[string]string, matcher *filterMatcher, stats *runStats) {
 	info, err := os.Stat(targetDir)
 	if err != nil || !info.IsDir() {
@@ -514,7 +636,17 @@ func (s *Service) syncDeleteMissing(targetDir string, sourceIndex map[string]str
 	}
 
 	_ = filepath.WalkDir(targetDir, func(currentPath string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil || entry.IsDir() {
+		if walkErr != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			if currentPath == targetDir {
+				return nil
+			}
+			relative, relErr := filepath.Rel(targetDir, currentPath)
+			if relErr == nil && matcher.excluded(relative, entry.Name(), true, 0) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 
@@ -536,11 +668,19 @@ func (s *Service) syncDeleteMissing(targetDir string, sourceIndex map[string]str
 	})
 }
 
-func pruneEmptyDirs(root string, stats *runStats) {
+// pruneEmptyDirs 删除源目录中已清空的文件夹（完成规则为 delete_source_dir 时）。
+// 被黑名单命中的目录（及其所有子目录）不会被删除。
+func (s *Service) pruneEmptyDirs(root string, matcher *filterMatcher, stats *runStats) {
 	_ = filepath.WalkDir(root, func(currentPath string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil || !entry.IsDir() || currentPath == root {
 			return nil
 		}
+
+		relative, relErr := filepath.Rel(root, currentPath)
+		if relErr == nil && matcher.excluded(relative, entry.Name(), true, 0) {
+			return filepath.SkipDir
+		}
+
 		children, err := os.ReadDir(currentPath)
 		if err != nil || len(children) > 0 {
 			return nil

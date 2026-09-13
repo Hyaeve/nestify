@@ -54,7 +54,8 @@
 
             <div class="task-preview-item__stats">
               <span>扫描 {{ item.scanned }}</span>
-              <span>成功 {{ item.success_count }}</span>
+              <span v-if="item.kind === 'backup'">上传 {{ item.success_count }}</span>
+              <span v-else>成功 {{ item.success_count }}</span>
               <span>跳过 {{ item.skip_count }}</span>
               <span>失败 {{ item.failure_count }}</span>
             </div>

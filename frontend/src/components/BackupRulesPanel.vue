@@ -50,6 +50,12 @@
             <span class="backup-card__last-label">上次备份</span>
             <span class="backup-card__last-value">{{ formatTime(task.last_backup_at) }}</span>
           </div>
+
+          <div v-if="hasLastRun(task)" class="backup-card__last-stats">
+            <span>上传 {{ task.last_copied_files }}</span>
+            <span>跳过 {{ task.last_skipped_files }}</span>
+            <span v-if="task.last_deleted_files">删除 {{ task.last_deleted_files }}</span>
+          </div>
         </div>
 
         <div class="backup-card__footer">
@@ -90,15 +96,16 @@
       @closed="resetWizard"
     >
       <div class="backup-wizard-steps">
-        <div
+        <button
           v-for="(step, index) in wizardSteps"
           :key="index"
-          class="backup-wizard-step"
-          :class="{ 'is-active': wizardStep === index, 'is-done': wizardStep > index }"
+          type="button"
+          class="backup-wizard-tab"
+          :class="{ 'is-active': wizardStep === index }"
+          @click="wizardStep = index"
         >
-          <span class="backup-wizard-step__dot">{{ wizardStep > index ? '✓' : index + 1 }}</span>
-          <span class="backup-wizard-step__label">{{ step }}</span>
-        </div>
+          {{ step }}
+        </button>
       </div>
 
       <!-- 第 1 步：基本设置 -->
@@ -303,7 +310,7 @@
         </div>
         <div class="backup-status__stats">
           <div class="backup-status__stat"><span>扫描</span><b>{{ statusSnapshot.scanned }}</b></div>
-          <div class="backup-status__stat"><span>复制</span><b>{{ statusSnapshot.copied }}</b></div>
+          <div class="backup-status__stat"><span>上传</span><b>{{ statusSnapshot.copied }}</b></div>
           <div class="backup-status__stat"><span>跳过</span><b>{{ statusSnapshot.skipped }}</b></div>
           <div class="backup-status__stat"><span>删除</span><b>{{ statusSnapshot.deleted }}</b></div>
           <div class="backup-status__stat"><span>失败</span><b>{{ statusSnapshot.failed }}</b></div>
@@ -592,6 +599,11 @@ async function saveResourceLimit() {
 
 function visiblePaths(paths: string[]): string[] {
   return paths.slice(0, 2)
+}
+
+// 判断任务是否有过至少一次备份记录（用于展示上次统计）。
+function hasLastRun(task: BackupTask): boolean {
+  return Boolean(task.last_backup_at)
 }
 
 // —— 拖拽排序 ——
@@ -1209,6 +1221,21 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   color: var(--el-text-color-regular);
 }
 
+.backup-card__last-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.backup-card__last-stats span {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #5b7a6e;
+  background: #eef3f1;
+}
+
 .backup-card__footer {
   display: flex;
   align-items: center;
@@ -1249,52 +1276,39 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   padding: 5px 7px;
 }
 
-/* 向导 */
+/* 向导（平等 tabs） */
 .backup-wizard-steps {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
   margin-bottom: 20px;
-}
-
-.backup-wizard-step {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #94a3b8;
-}
-
-.backup-wizard-step__dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
+  padding: 4px;
+  border-radius: 12px;
   background: #f1f5f9;
 }
 
-.backup-wizard-step.is-active {
-  color: #5b7a6e;
-}
-
-.backup-wizard-step.is-active .backup-wizard-step__dot {
-  color: #fff;
-  background: #5b7a6e;
-}
-
-.backup-wizard-step.is-done .backup-wizard-step__dot {
-  color: #5b7a6e;
-  background: #eef3f1;
-}
-
-.backup-wizard-step__label {
+.backup-wizard-tab {
+  flex: 1 1 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
   font-size: 13px;
   font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.backup-wizard-tab:hover {
+  color: #5b7a6e;
+}
+
+.backup-wizard-tab.is-active {
+  color: #5b7a6e;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 .backup-wizard-body {
