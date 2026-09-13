@@ -598,7 +598,7 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 360px;
+  max-height: 324px;
   overflow-y: auto;
   padding-right: 4px;
 }

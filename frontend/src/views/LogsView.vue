@@ -643,11 +643,16 @@ onMounted(() => {
   overflow: hidden;
   padding: 34px 36px;
   border-radius: 30px;
-  color: #ffffff;
+  border: 1px solid #d6e4de;
+  color: #0f172a;
   background:
-    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.25), transparent 28%),
-    linear-gradient(135deg, #2563eb 0%, #4f46e5 52%, #7c3aed 100%);
-  box-shadow: 0 24px 54px rgba(37, 99, 235, 0.25);
+    linear-gradient(rgba(91, 122, 110, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 122, 110, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 14% 18%, rgba(182, 201, 193, 0.5), transparent 30%),
+    radial-gradient(circle at 86% 20%, rgba(223, 233, 228, 0.8), transparent 26%),
+    linear-gradient(100deg, #f2f7f4 0%, #ffffff 46%, #eef4f1 100%);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+  box-shadow: 0 18px 42px rgba(91, 122, 110, 0.1);
 }
 
 .logs-hero::after {
@@ -657,16 +662,16 @@ onMounted(() => {
   width: 260px;
   height: 260px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: radial-gradient(circle, rgba(91, 122, 110, 0.12), transparent 66%);
   content: '';
 }
 
 .logs-hero__eyebrow {
   margin-bottom: 8px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: 0.22em;
-  opacity: 0.78;
+  color: #5b7a6e;
 }
 
 .logs-hero__title {
@@ -674,6 +679,7 @@ onMounted(() => {
   font-size: 36px;
   line-height: 1.15;
   font-weight: 800;
+  color: #0f172a;
 }
 
 .logs-hero__desc {
@@ -681,7 +687,7 @@ onMounted(() => {
   margin: 12px 0 0;
   font-size: 15px;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.84);
+  color: #475569;
 }
 
 .logs-hero__badge {
@@ -691,12 +697,13 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(91, 122, 110, 0.24);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: #5b7a6e;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
   white-space: nowrap;
 }
 

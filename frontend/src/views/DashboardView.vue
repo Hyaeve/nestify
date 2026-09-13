@@ -295,7 +295,8 @@ async function loadSummary() {
   try {
     const items = (await fetchRunHistory()).data?.items ?? []
     runHistoryItems.value = items
-    summaryItems.value = items.slice(0, 6)
+    // 执行摘要：最多可见 5 条，超出通过列表滚动展示。
+    summaryItems.value = items.slice(0, 50)
   } catch {
     runHistoryItems.value = []
     summaryItems.value = []
@@ -613,7 +614,10 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-panel--summary {
-  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .dashboard-panel__header,
@@ -655,12 +659,34 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 18px;
   min-width: 0;
+  height: 100%;
 }
 
 .summary-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 细浅滚动条（执行摘要） */
+.summary-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.summary-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.summary-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.summary-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .summary-item,
@@ -890,6 +916,10 @@ onBeforeUnmount(() => {
   margin-top: 16px;
 }
 
+.resource-card {
+  flex: 0 0 auto;
+}
+
 .task-preview-card {
   flex: 1;
   min-height: 0;
@@ -904,6 +934,27 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 细浅滚动条（任务预览） */
+.task-preview-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.task-preview-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.task-preview-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.task-preview-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .task-preview-item__header {
