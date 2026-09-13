@@ -67,15 +67,22 @@ func PrepareMode(req ExecuteRuleRequest) (*PreparedMode, error) {
 		}, nil
 	case "link":
 		modeLabel := "软链"
-		if strings.TrimSpace(req.LinkMode) == "hard" {
+		switch strings.TrimSpace(req.LinkMode) {
+		case "hard":
 			modeLabel = "硬链"
+		case "strm":
+			modeLabel = "Strm"
+		}
+		summary := fmt.Sprintf("%s模式链路规则已准备", modeLabel)
+		if strings.EqualFold(strings.TrimSpace(req.LinkMode), "strm") && isWebdavSource(req.SourceDir) {
+			summary = "Strm 模式链路规则已准备（WebDAV 源，将生成 http strm）"
 		}
 		return &PreparedMode{
 			ArchiveMode: req.ArchiveMode,
 			RuleType:    req.RuleType,
 			SourceDir:   req.SourceDir,
 			TargetDir:   req.TargetDir,
-			Summary:     joinPreparedSummary(fmt.Sprintf("%s模式链路规则已准备", modeLabel), targetDirSummary),
+			Summary:     joinPreparedSummary(summary, targetDirSummary),
 		}, nil
 	case "naming":
 		return &PreparedMode{ArchiveMode: req.ArchiveMode, RuleType: req.RuleType, SourceDir: req.SourceDir, Summary: fmt.Sprintf("命名规则已准备，共 %d 条规则", len(req.TransformRules))}, nil

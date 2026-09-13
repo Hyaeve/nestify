@@ -223,7 +223,7 @@
                     </el-icon>
                   </el-button>
                 </el-tooltip>
-                <el-icon class="entry-name__icon">
+                <el-icon class="entry-name__icon" :class="{ 'entry-name__icon--mount': scope.row.is_mount }">
                   <FolderOpened v-if="scope.row.is_dir" />
                   <Document v-else />
                 </el-icon>
@@ -426,6 +426,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import {
+  browseAnyDirectory,
   browseDirectories,
   collectItems,
   copyItems,
@@ -910,7 +911,7 @@ async function openCurrentPath() {
 
   try {
     const previousPath = directoryPath.value
-    const response = await browseDirectories(directoryPath.value)
+    const response = await browseAnyDirectory(directoryPath.value)
     directoryPath.value = response.data?.current_path ?? directoryPath.value
     parentPath.value = response.data?.parent_path ?? ''
     entries.value = response.data?.entries ?? []
@@ -1701,6 +1702,11 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   font-size: 24px;
   color: #f5b942;
+}
+
+/* WebDAV 虚拟挂载文件夹：浅绿色低饱和图标，与物理目录作区分。 */
+.entry-name__icon--mount {
+  color: #9cc3a8;
 }
 
 .entry-name__text {

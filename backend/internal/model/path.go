@@ -14,6 +14,10 @@ type DirectoryEntry struct {
 	Size        int64  `json:"size"`
 	ModifiedAt  string `json:"modified_at"`
 	HasChildren bool   `json:"has_children"`
+
+	// IsMount 标识这是一个 WebDAV 虚拟挂载文件夹（非物理目录）。
+	IsMount   bool   `json:"is_mount,omitempty"`
+	MountHost string `json:"mount_host,omitempty"`
 }
 
 type BrowseDirectoriesResponse struct {

@@ -5,6 +5,7 @@
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'purify' }" @click="switchTab('purify')">净化规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'link' }" @click="switchTab('link')">链路规则</button>
       <button type="button" class="rules-tabs__item rules-tabs__item--naming" :class="{ 'is-active': activeTab === 'naming' }" @click="switchTab('naming')">命名规则</button>
+      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'backup' }" @click="switchTab('backup')">备份规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
@@ -594,6 +595,8 @@
       <el-empty v-if="!namingLoading && namingRules.length === 0" description="暂无命名规则，可选择命名工坊规则或规则集" />
     </el-card>
 
+    <BackupRulesPanel :visible="activeTab === 'backup'" />
+
     <el-dialog v-model="createNamingDialogVisible" title="新增命名规则" width="640px">
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
@@ -916,18 +919,29 @@
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">命中文件后缀</div></div>
+            <div><div class="mode-config-panel__title">媒体文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
-              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
               <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateStrmSuffix" />
             </div>
+          </div>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">元数据文件</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="info">图片 / 数据</el-tag></div>
+          </button>
+          <div class="strm-suffix-editor">
+            <div class="strm-suffix-editor__actions">
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+            </div>
+            <div class="strm-suffix-editor__hint">图片后缀（jpg、png、webp 等）与媒体数据后缀（ass、srt、ssa、nfo 等）</div>
           </div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
@@ -959,18 +973,29 @@
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">命中文件后缀</div></div>
+            <div><div class="mode-config-panel__title">媒体文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
-              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
               <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditStrmSuffix" />
             </div>
+          </div>
+          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+            <div><div class="mode-config-panel__title">元数据文件</div></div>
+            <div class="mode-config-toggle__meta"><el-tag type="info">图片 / 数据</el-tag></div>
+          </button>
+          <div class="strm-suffix-editor">
+            <div class="strm-suffix-editor__actions">
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+            </div>
+            <div class="strm-suffix-editor__hint">图片后缀（jpg、png、webp 等）与媒体数据后缀（ass、srt、ssa、nfo 等）</div>
           </div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
@@ -1002,6 +1027,7 @@ import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
+import BackupRulesPanel from '../components/BackupRulesPanel.vue'
 import { fetchRun, prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
@@ -1036,7 +1062,7 @@ type HistoryTreeRow = RunHistoryItem & {
   children?: HistoryTreeRow[]
 }
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | 'createNaming.source_dir' | null
-type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'history'
+type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'backup' | 'history'
 type RuleListType = 'archive' | 'cleanup' | 'link' | 'naming'
 type StoredNamingRuleSet = { id: number; name: string; rules: Array<Record<string, unknown>> }
 type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
@@ -1151,6 +1177,8 @@ function parseFiltersText(value: string) {
 
 const strmVideoSuffixPreset = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts', '.rmvb', '.rm', '.3gp', '.iso']
 const strmAudioSuffixPreset = ['.mp3', '.flac', '.wav', '.aac', '.m4a', '.ogg', '.wma', '.ape', '.alac', '.opus']
+const strmImageSuffixPreset = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.avif']
+const strmDataSuffixPreset = ['.ass', '.srt', '.ssa', '.sub', '.nfo', '.vtt', '.idx']
 
 function normalizeLinkMode(value?: string): LinkMode {
   if (value === 'hard' || value === 'strm') return value
@@ -1756,12 +1784,46 @@ function removeEditStrmSuffix(suffix: string) {
   editLinkForm.strm_suffixes = editLinkForm.strm_suffixes.filter((item) => item !== suffix)
 }
 
-function fillCreateStrmPreset(type: 'video' | 'audio') {
-  createLinkForm.strm_suffixes = normalizeStrmSuffixes([...createLinkForm.strm_suffixes, ...(type === 'video' ? strmVideoSuffixPreset : strmAudioSuffixPreset)])
+function fillCreateStrmPreset(type: 'video' | 'audio' | 'image' | 'data') {
+  const preset = strmPresetByType(type)
+  createLinkForm.strm_suffixes = toggleStrmPreset(createLinkForm.strm_suffixes, preset)
 }
 
-function fillEditStrmPreset(type: 'video' | 'audio') {
-  editLinkForm.strm_suffixes = normalizeStrmSuffixes([...editLinkForm.strm_suffixes, ...(type === 'video' ? strmVideoSuffixPreset : strmAudioSuffixPreset)])
+function fillEditStrmPreset(type: 'video' | 'audio' | 'image' | 'data') {
+  const preset = strmPresetByType(type)
+  editLinkForm.strm_suffixes = toggleStrmPreset(editLinkForm.strm_suffixes, preset)
+}
+
+function strmPresetByType(type: 'video' | 'audio' | 'image' | 'data'): string[] {
+  switch (type) {
+    case 'audio':
+      return strmAudioSuffixPreset
+    case 'image':
+      return strmImageSuffixPreset
+    case 'data':
+      return strmDataSuffixPreset
+    default:
+      return strmVideoSuffixPreset
+  }
+}
+
+// 再次点击同一类别：若该类别的后缀已全部存在则全部移除，否则补齐缺失项。
+function toggleStrmPreset(current: string[], preset: string[]) {
+  const normalizedPreset = normalizeStrmSuffixes(preset)
+  const currentSet = new Set(current)
+  const allPresent = normalizedPreset.every((suffix) => currentSet.has(suffix))
+  if (allPresent) {
+    const presetSet = new Set(normalizedPreset)
+    return current.filter((suffix) => !presetSet.has(suffix))
+  }
+  return normalizeStrmSuffixes([...current, ...normalizedPreset])
+}
+
+function strmPresetActive(current: string[], type: 'video' | 'audio' | 'image' | 'data'): boolean {
+  const normalizedPreset = normalizeStrmSuffixes(strmPresetByType(type))
+  if (normalizedPreset.length === 0) return false
+  const currentSet = new Set(current)
+  return normalizedPreset.every((suffix) => currentSet.has(suffix))
 }
 
 function buildDuplicateRuleName(name: string) {
@@ -1836,6 +1898,19 @@ watch(() => createLinkForm.schedule_enabled, (enabled) => {
 
 watch(() => editLinkForm.schedule_enabled, (enabled) => {
   editLinkForm.cron_expression = enabled && !editLinkForm.cron_expression.trim() ? '30 4 * * *' : editLinkForm.cron_expression
+})
+
+// Strm 模式默认不勾选「新文件触发」。
+watch(() => createLinkForm.link_mode, (mode, previous) => {
+  if (mode === 'strm' && previous !== 'strm') {
+    createLinkForm.monitor_enabled = false
+  }
+})
+
+watch(() => editLinkForm.link_mode, (mode, previous) => {
+  if (mode === 'strm' && previous !== 'strm') {
+    editLinkForm.monitor_enabled = false
+  }
 })
 
 function openCreateDialog() {
@@ -2200,6 +2275,9 @@ async function switchTab(tab: TabKey) {
   }
   if (tab === 'naming') {
     await loadNamingRules()
+    return
+  }
+  if (tab === 'backup') {
     return
   }
 
@@ -3226,6 +3304,8 @@ onBeforeUnmount(() => {
 .strm-preset-button__icon { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
+.strm-suffix-editor__hint { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.6; }
+.strm-preset-button.is-active { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: 0 6px 14px rgba(47, 143, 157, 0.22); }
 
 @media (max-width: 900px) {
   .history-toolbar { flex-direction: column; align-items: stretch; }

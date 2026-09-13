@@ -60,8 +60,10 @@ export async function logout() {
 
 export interface UpdateAdminAccountPayload {
   username: string
-  current_password: string
-  new_password: string
+  /** 登录账户面板直接填写的登录密码；留空表示不修改。 */
+  password?: string
+  current_password?: string
+  new_password?: string
 }
 
 export function updateAdminAccount(payload: UpdateAdminAccountPayload) {

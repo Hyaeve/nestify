@@ -242,8 +242,19 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	stats := executionStats{}
 
-	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
-	targetDir := filepath.Clean(strings.TrimSpace(req.TargetDir))
+	rawSourceDir := strings.TrimSpace(req.SourceDir)
+	rawTargetDir := strings.TrimSpace(req.TargetDir)
+
+	// WebDAV 挂载源：不生成物理路径 strm，而是生成 http strm。
+	if isWebdavSource(rawSourceDir) {
+		if rawTargetDir == "" || rawTargetDir == "." {
+			return stats, fmt.Errorf("target dir is required")
+		}
+		return s.executeWebdavStrmRule(runID, req, rawSourceDir, filepath.Clean(rawTargetDir), &stats)
+	}
+
+	sourceDir := filepath.Clean(rawSourceDir)
+	targetDir := filepath.Clean(rawTargetDir)
 	if sourceDir == "" || sourceDir == "." {
 		return stats, fmt.Errorf("source dir is required")
 	}

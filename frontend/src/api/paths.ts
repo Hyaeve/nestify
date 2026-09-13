@@ -16,6 +16,26 @@ export interface DirectoryEntry {
   size: number
   modified_at: string
   has_children: boolean
+  /** 该条目是 WebDAV 虚拟挂载文件夹，而非物理目录。 */
+  is_mount?: boolean
+  /** 虚拟挂载的 http 根地址，仅用于展示。 */
+  mount_host?: string
+}
+
+/** WebDAV 挂载虚拟路径前缀，例如 webdav://12/移动云盘/电视剧。 */
+export const MOUNT_PATH_SCHEME = 'webdav://'
+
+export function isMountPath(path?: string): boolean {
+  return Boolean(path && path.startsWith(MOUNT_PATH_SCHEME))
+}
+
+export function mountIdFromPath(path: string): number | null {
+  if (!isMountPath(path)) {
+    return null
+  }
+  const rest = path.slice(MOUNT_PATH_SCHEME.length)
+  const id = Number.parseInt(rest.split('/')[0] || '', 10)
+  return Number.isFinite(id) && id > 0 ? id : null
 }
 
 export interface BrowseDirectoriesPayload {
@@ -69,6 +89,14 @@ export function fetchBrowseRoots() {
 export function browseDirectories(path?: string) {
   const query = path ? `?path=${encodeURIComponent(path)}` : ''
   return getJSON<BrowseDirectoriesPayload>(`/api/v1/paths/browse${query}`)
+}
+
+/** 统一入口：物理目录走本地浏览接口，WebDAV 挂载目录走挂载浏览接口。 */
+export function browseAnyDirectory(path?: string) {
+  if (isMountPath(path)) {
+    return getJSON<BrowseDirectoriesPayload>(`/api/v1/mounts/browse?path=${encodeURIComponent(path || '')}`)
+  }
+  return browseDirectories(path)
 }
 
 export function validateDirectory(path: string) {

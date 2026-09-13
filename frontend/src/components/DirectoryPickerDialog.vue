@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { browseDirectories, fetchBrowseRoots, validateDirectory, type BrowseRoot, type DirectoryEntry } from '../api/paths'
+import { browseAnyDirectory, fetchBrowseRoots, validateDirectory, type BrowseRoot, type DirectoryEntry } from '../api/paths'
 
 interface TreeNode {
   label: string
@@ -177,7 +177,7 @@ async function populateRootLevel(path: string) {
     return
   }
 
-  const response = await browseDirectories(rootPath)
+  const response = await browseAnyDirectory(rootPath)
   treeData.value = mapDirectoryEntries(response.data?.entries ?? [], response.data?.current_path ?? rootPath)
 }
 
@@ -194,7 +194,7 @@ async function openPath(path: string) {
 
   try {
     await populateRootLevel(targetPath)
-    const response = await browseDirectories(targetPath)
+    const response = await browseAnyDirectory(targetPath)
     currentPath.value = response.data?.current_path ?? ''
     parentPath.value = response.data?.parent_path ?? ''
     pathInput.value = currentPath.value
@@ -220,7 +220,7 @@ async function loadNode(node: { level: number; data?: TreeNode }, resolve: (data
   }
 
   try {
-    const response = await browseDirectories(currentNode.path)
+    const response = await browseAnyDirectory(currentNode.path)
     const children = mapDirectoryEntries(response.data?.entries ?? [], response.data?.current_path ?? currentNode.path)
     resolve(children)
   } catch {

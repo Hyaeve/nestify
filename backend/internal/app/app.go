@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nestify/backend/internal/auth"
+	"nestify/backend/internal/backup"
 	"nestify/backend/internal/config"
 	"nestify/backend/internal/executor"
 	"nestify/backend/internal/httpapi"
@@ -45,6 +46,23 @@ func Run() error {
 	}
 	log.Printf("startup: automation ready")
 
+	log.Printf("startup: creating backup service")
+	backupService := backup.NewService(store)
+	if err := backupService.Start(automationCtx); err != nil {
+		log.Printf("startup: starting backup service failed: %v", err)
+		return err
+	}
+	defer backupService.Stop()
+	log.Printf("startup: backup service ready")
+
+	log.Printf("startup: preparing path browse service")
+	pathBrowseService := pathbrowse.New(env.BrowseRoots)
+	if mounts, mountsErr := store.ListMounts(); mountsErr == nil {
+		pathBrowseService.SetMounts(mounts)
+	} else {
+		log.Printf("startup: loading webdav mounts failed: %v", mountsErr)
+	}
+
 	log.Printf("startup: building http server")
 	srv := &http.Server{
 		Addr: env.HTTPAddr,
@@ -52,8 +70,9 @@ func Run() error {
 			Env:        env,
 			Store:      store,
 			Sessions:   auth.NewSessionManager(24 * time.Hour),
-			PathBrowse: pathbrowse.New(env.BrowseRoots),
+			PathBrowse: pathBrowseService,
 			Executor:   execService,
+			Backups:    backupService,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

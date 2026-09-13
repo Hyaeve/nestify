@@ -24,3 +24,14 @@ data/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# WorkBuddy local workspace data
+.workbuddy/
+
+# Temporary build/check artifacts
+.febuild.txt
+.gobuild.txt
+.gofmt.txt
+.linecounts.txt
+.gitcheck.txt
+.gitlog.txt

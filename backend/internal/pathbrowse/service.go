@@ -12,7 +12,8 @@ import (
 )
 
 type Service struct {
-	roots []string
+	roots  []string
+	mounts []model.WebdavMount
 }
 
 func New(roots []string) *Service {
@@ -24,12 +25,30 @@ func New(roots []string) *Service {
 	return &Service{roots: normalized}
 }
 
+// SetMounts 注入启用中的 WebDAV 挂载，使它们以虚拟文件夹的形式出现在文件管理视图中。
+func (s *Service) SetMounts(mounts []model.WebdavMount) {
+	enabled := make([]model.WebdavMount, 0, len(mounts))
+	for _, mount := range mounts {
+		if mount.Enabled {
+			enabled = append(enabled, mount)
+		}
+	}
+	s.mounts = enabled
+}
+
 func (s *Service) Roots() []model.BrowseRoot {
-	items := make([]model.BrowseRoot, 0, len(s.roots))
+	items := make([]model.BrowseRoot, 0, len(s.roots)+len(s.mounts))
 	for _, root := range s.roots {
 		items = append(items, model.BrowseRoot{
 			Name: root,
 			Path: root,
+		})
+	}
+
+	for _, mount := range s.mounts {
+		items = append(items, model.BrowseRoot{
+			Name: mount.Name,
+			Path: mount.VirtualPath,
 		})
 	}
 
@@ -87,9 +106,26 @@ func (s *Service) Browse(path string) (*model.BrowseDirectoriesResponse, error) 
 		items = append(items, item)
 	}
 
+	// 在根目录下追加 WebDAV 虚拟挂载文件夹，方便在文件管理页直接查看与选择。
+	if samePath(resolved, root) {
+		for _, mount := range s.mounts {
+			items = append(items, model.DirectoryEntry{
+				Name:        mount.Name,
+				Path:        mount.VirtualPath,
+				IsDir:       true,
+				HasChildren: true,
+				IsMount:     true,
+				MountHost:   mount.BaseURL,
+			})
+		}
+	}
+
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].IsDir != items[j].IsDir {
 			return items[i].IsDir
+		}
+		if items[i].IsMount != items[j].IsMount {
+			return items[i].IsMount
 		}
 		return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 	})

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"nestify/backend/internal/auth"
+	"nestify/backend/internal/backup"
 	"nestify/backend/internal/config"
 	"nestify/backend/internal/executor"
 	"nestify/backend/internal/model"
@@ -36,6 +37,7 @@ type Dependencies struct {
 	Sessions   *auth.SessionManager
 	PathBrowse *pathbrowse.Service
 	Executor   *executor.Service
+	Backups    *backup.Service
 }
 
 type apiHandler struct {
@@ -44,6 +46,7 @@ type apiHandler struct {
 	sessions   *auth.SessionManager
 	pathBrowse *pathbrowse.Service
 	executor   *executor.Service
+	backups    *backup.Service
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -53,6 +56,7 @@ func NewRouter(deps Dependencies) http.Handler {
 		sessions:   deps.Sessions,
 		pathBrowse: deps.PathBrowse,
 		executor:   deps.Executor,
+		backups:    deps.Backups,
 	}
 
 	mux := http.NewServeMux()
@@ -142,6 +146,11 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/rules/cron-preview", api.handleRuleCronPreview)
 	mux.HandleFunc("/api/v1/rules/reorder", api.handleReorderRules)
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
+	mux.HandleFunc("/api/v1/mounts", api.handleMounts)
+	mux.HandleFunc("/api/v1/mounts/browse", api.handleMountBrowse)
+	mux.HandleFunc("/api/v1/mounts/", api.handleMountByID)
+	mux.HandleFunc("/api/v1/backups", api.handleBackups)
+	mux.HandleFunc("/api/v1/backups/", api.handleBackupByID)
 
 	registerStaticRoutes(mux, deps.Env.WebDir)
 
@@ -180,7 +189,9 @@ type fileMutationRequest struct {
 }
 
 type updateAdminAccountRequest struct {
-	Username        string `json:"username"`
+	Username string `json:"username"`
+	// Password 是「登录账户」面板里直接填写的登录密码，留空表示不修改。
+	Password        string `json:"password"`
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
 }
@@ -1161,29 +1172,24 @@ func (a *apiHandler) handleUpdateAdminAccount(w http.ResponseWriter, r *http.Req
 	}
 
 	username := strings.TrimSpace(input.Username)
-	currentPassword := input.CurrentPassword
-	newPassword := input.NewPassword
+	currentPassword := strings.TrimSpace(input.CurrentPassword)
+	newPassword := strings.TrimSpace(input.Password)
+	if newPassword == "" {
+		newPassword = strings.TrimSpace(input.NewPassword)
+	}
 	if username == "" {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
 			Success: false,
 			Code:    "INVALID_ADMIN_USERNAME",
-			Message: "管理员账号不能为空",
+			Message: "登录账号不能为空",
 		})
 		return
 	}
-	if strings.TrimSpace(currentPassword) == "" {
-		writeJSON(w, http.StatusBadRequest, jsonResponse{
-			Success: false,
-			Code:    "CURRENT_PASSWORD_REQUIRED",
-			Message: "请输入当前密码",
-		})
-		return
-	}
-	if username == session.User.Username && strings.TrimSpace(newPassword) == "" {
+	if username == session.User.Username && newPassword == "" {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
 			Success: false,
 			Code:    "NO_ADMIN_CHANGES",
-			Message: "请至少修改管理员账号或新密码",
+			Message: "请至少修改登录账号或登录密码",
 		})
 		return
 	}
@@ -1201,7 +1207,8 @@ func (a *apiHandler) handleUpdateAdminAccount(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
-	if auth.ComparePassword(admin.PasswordHash, currentPassword) != nil {
+	// 兼容旧表单：填写了当前密码时仍然校验一次。
+	if currentPassword != "" && auth.ComparePassword(admin.PasswordHash, currentPassword) != nil {
 		writeJSON(w, http.StatusUnauthorized, jsonResponse{
 			Success: false,
 			Code:    "INVALID_CURRENT_PASSWORD",
