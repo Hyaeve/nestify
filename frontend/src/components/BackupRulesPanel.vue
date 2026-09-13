@@ -9,21 +9,28 @@
 
     <el-empty v-if="!loading && backups.length === 0" description="暂无备份规则，点击右上角「添加备份」创建" />
 
-    <div v-else class="backup-grid">
+    <div v-else class="backup-grid" ref="backupGridRef">
       <div v-for="task in backups" :key="task.id" class="backup-card" :class="{ 'backup-card--disabled': !task.enabled }">
         <div class="backup-card__head">
-          <div class="backup-card__name" :title="task.name">{{ task.name }}</div>
+          <div class="backup-card__title-row">
+            <button type="button" class="backup-card__drag" aria-label="拖拽排序" title="拖拽排序">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" /><circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" /></svg>
+            </button>
+            <div class="backup-card__name" :title="task.name">{{ task.name }}</div>
+          </div>
           <span class="backup-card__status-dot" :class="{ 'is-on': task.enabled }"></span>
         </div>
 
         <div class="backup-card__body">
           <div class="backup-card__meta">
             <div class="backup-card__meta-label">源路径</div>
-            <div class="backup-card__meta-value" v-for="src in task.source_dirs" :key="src" :title="src">{{ src }}</div>
+            <div class="backup-card__meta-value" v-for="src in visiblePaths(task.source_dirs)" :key="src" :title="src">{{ src }}</div>
+            <div v-if="task.source_dirs.length > 2" class="backup-card__meta-more">+{{ task.source_dirs.length - 2 }} 更多</div>
           </div>
           <div class="backup-card__meta">
             <div class="backup-card__meta-label">目标路径</div>
-            <div class="backup-card__meta-value" v-for="dst in task.target_dirs" :key="dst" :title="dst">{{ dst }}</div>
+            <div class="backup-card__meta-value" v-for="dst in visiblePaths(task.target_dirs)" :key="dst" :title="dst">{{ dst }}</div>
+            <div v-if="task.target_dirs.length > 2" class="backup-card__meta-more">+{{ task.target_dirs.length - 2 }} 更多</div>
           </div>
 
           <div class="backup-card__tags">
@@ -51,26 +58,21 @@
             @change="toggleEnabled(task)"
           />
           <div class="backup-card__footer-actions">
-            <el-tooltip content="重新扫描（完整扫描）" placement="top">
-              <el-button link class="backup-card__action" :disabled="scanningIds.has(task.id)" @click="rescan(task)">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="backup-card__action-icon"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.7l2.05 2.2" /><path d="M19.75 5.5v4h-4" /><path d="M19.5 12a7.5 7.5 0 0 1-13.2 4.7l-2.05-2.2" /><path d="M4.25 18.5v-4h4" /></svg>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="设置" placement="top">
-              <el-button link class="backup-card__action" @click="openEditWizard(task)">
-                <el-icon><Setting /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="状态详情" placement="top">
-              <el-button link class="backup-card__action" @click="openStatusDialog(task)">
-                <el-icon><InfoFilled /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="移除" placement="top">
-              <el-button link class="backup-card__action backup-card__action--danger" @click="removeTask(task)">
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </el-tooltip>
+            <el-button class="backup-card__btn" :disabled="scanningIds.has(task.id)" @click="rescan(task)">
+              <svg viewBox="0 0 24 24" aria-hidden="true" class="backup-card__btn-icon"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.7l2.05 2.2" /><path d="M19.75 5.5v4h-4" /><path d="M19.5 12a7.5 7.5 0 0 1-13.2 4.7l-2.05-2.2" /><path d="M4.25 18.5v-4h4" /></svg>
+              重新扫描
+            </el-button>
+            <el-button class="backup-card__btn" @click="openEditWizard(task)">
+              <el-icon class="backup-card__btn-icon"><Setting /></el-icon>
+              设置
+            </el-button>
+            <el-button class="backup-card__btn backup-card__btn--danger" @click="removeTask(task)">
+              <el-icon class="backup-card__btn-icon"><Delete /></el-icon>
+              移除
+            </el-button>
+            <el-button class="backup-card__btn backup-card__btn--icon" @click="openStatusDialog(task)">
+              <el-icon><InfoFilled /></el-icon>
+            </el-button>
           </div>
         </div>
       </div>
@@ -82,9 +84,6 @@
       :title="wizardEditing ? '编辑备份规则' : '添加备份规则'"
       width="720px"
       destroy-on-close
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      :show-close="false"
       @closed="resetWizard"
     >
       <div class="backup-wizard-steps">
@@ -146,19 +145,19 @@
             <div class="backup-form-hint">实时监控源文件夹的变化，检测到变更时自动触发备份。</div>
           </el-form-item>
           <el-form-item label="完成规则">
+            <div class="backup-form-hint backup-form-hint--top">备份完成后对源文件执行的操作。</div>
             <el-select v-model="wizardForm.completion_rule" style="width: 100%">
               <el-option label="无操作" value="none" />
               <el-option label="删除源文件" value="delete_source" />
               <el-option label="删除源文件和空文件夹" value="delete_source_dir" />
             </el-select>
-            <div class="backup-form-hint">备份完成后对源文件执行的操作。</div>
           </el-form-item>
           <el-form-item label="替换规则">
+            <div class="backup-form-hint backup-form-hint--top">目标中已存在同名文件时的处理方式。</div>
             <el-select v-model="wizardForm.replace_rule" style="width: 100%">
               <el-option label="跳过" value="skip" />
               <el-option label="覆盖" value="overwrite" />
             </el-select>
-            <div class="backup-form-hint">目标中已存在同名文件时的处理方式。</div>
           </el-form-item>
         </el-form>
       </div>
@@ -175,8 +174,8 @@
             <div class="backup-form-hint">备份启动时执行完整扫描而不是增量扫描。</div>
           </el-form-item>
           <el-form-item label="自动扫描间隔">
+            <div class="backup-form-hint backup-form-hint--top">按此间隔自动扫描更改。0 = 禁用。</div>
             <el-input-number v-model="wizardForm.scan_interval_seconds" :min="0" :max="86400" />
-            <div class="backup-form-hint">按此间隔自动扫描更改。0 = 禁用。</div>
           </el-form-item>
           <el-form-item label="Cron 表达式（计划扫描）">
             <el-input v-model="wizardForm.cron_expression" placeholder="填写则启用，不填写则不启用。例如 0 3 * * *" />
@@ -253,10 +252,12 @@
               </template>
               <template v-else>
                 <div class="backup-filter-tags">
-                  <span v-for="(tag, tagIndex) in ruleTags(rule)" :key="tagIndex" class="backup-filter-tag">
-                    {{ tag }}
-                    <button type="button" class="backup-filter-tag__remove" @click="removeTag(rule, tagIndex)">×</button>
-                  </span>
+                  <div v-if="ruleTags(rule).length" class="backup-filter-tags__list">
+                    <span v-for="(tag, tagIndex) in ruleTags(rule)" :key="tagIndex" class="backup-filter-tag">
+                      {{ tag }}
+                      <button type="button" class="backup-filter-tag__remove" @click="removeTag(rule, tagIndex)">×</button>
+                    </span>
+                  </div>
                   <el-input
                     v-model="rule.draftValue"
                     class="backup-filter-tag-input"
@@ -324,9 +325,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, InfoFilled, Setting } from '@element-plus/icons-vue'
+import Sortable from 'sortablejs'
+import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from './DirectoryPickerDialog.vue'
 import {
@@ -334,6 +337,7 @@ import {
   deleteBackup,
   fetchBackupStatus,
   fetchBackups,
+  reorderBackups,
   runBackup,
   setBackupEnabled,
   updateBackup,
@@ -350,6 +354,11 @@ const props = defineProps<{ visible: boolean }>()
 const loading = ref(false)
 const backups = ref<BackupTask[]>([])
 const scanningIds = ref<Set<number>>(new Set())
+
+// —— 拖拽排序 ——
+const backupGridRef = ref<HTMLElement | null>(null)
+let backupSortable: Sortable | null = null
+const reordering = ref(false)
 
 // —— 向导 ——
 const wizardSteps = ['基本设置', '备份规则', '扫描规则', '筛选规则']
@@ -425,15 +434,73 @@ onMounted(() => {
   void loadBackups()
 })
 
+onBeforeUnmount(() => {
+  destroyBackupSortable()
+})
+
 async function loadBackups() {
   loading.value = true
   try {
     const response = await fetchBackups()
     backups.value = response.data?.items ?? []
+    await nextTick()
+    setupBackupSortable()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '备份规则加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+function visiblePaths(paths: string[]): string[] {
+  return paths.slice(0, 2)
+}
+
+// —— 拖拽排序 ——
+function setupBackupSortable() {
+  destroyBackupSortable()
+  const grid = backupGridRef.value
+  if (!grid || backups.value.length < 2) return
+
+  backupSortable = Sortable.create(grid, {
+    animation: 180,
+    handle: '.backup-card__drag',
+    ghostClass: 'backup-card--ghost',
+    chosenClass: 'backup-card--chosen',
+    dragClass: 'backup-card--drag',
+    onEnd: (event: SortableEvent) => {
+      const oldIndex = event.oldIndex
+      const newIndex = event.newIndex
+      if (oldIndex == null || newIndex == null || oldIndex === newIndex || reordering.value) return
+      void persistBackupOrder(oldIndex, newIndex)
+    },
+  })
+}
+
+function destroyBackupSortable() {
+  if (backupSortable) {
+    backupSortable.destroy()
+    backupSortable = null
+  }
+}
+
+async function persistBackupOrder(oldIndex: number, newIndex: number) {
+  const items = [...backups.value]
+  const [moved] = items.splice(oldIndex, 1)
+  items.splice(newIndex, 0, moved)
+
+  // 先乐观更新本地顺序
+  backups.value = items
+  reordering.value = true
+  try {
+    await reorderBackups(items.map((item, index) => ({ id: item.id, sort_order: index + 1 })))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '调整顺序失败')
+    await loadBackups()
+  } finally {
+    reordering.value = false
+    await nextTick()
+    setupBackupSortable()
   }
 }
 
@@ -835,11 +902,62 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   opacity: 0.62;
 }
 
+.backup-card--ghost {
+  opacity: 0.4;
+}
+
+.backup-card--chosen {
+  border-color: #9db8ad;
+  box-shadow: 0 6px 16px rgba(91, 122, 110, 0.12);
+}
+
+.backup-card--drag {
+  opacity: 0.9;
+}
+
 .backup-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.backup-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.backup-card__drag {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--el-text-color-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: grab;
+}
+
+.backup-card__drag svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.backup-card__drag:hover {
+  color: var(--el-color-primary);
+  background: var(--el-fill-color-light);
+}
+
+.backup-card__drag:active {
+  cursor: grabbing;
 }
 
 .backup-card__name {
@@ -887,6 +1005,12 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.backup-card__meta-more {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  cursor: default;
 }
 
 .backup-card__tags {
@@ -940,22 +1064,31 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   gap: 6px;
 }
 
-.backup-card__action {
-  padding: 4px;
+.backup-card__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 
-.backup-card__action-icon {
-  width: 18px;
-  height: 18px;
+.backup-card__btn-icon {
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.8;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.backup-card__action--danger {
+.backup-card__btn--danger {
   color: #ef4444;
+}
+
+.backup-card__btn--icon {
+  padding: 5px 7px;
 }
 
 /* 向导 */
@@ -1031,6 +1164,11 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   font-size: 12px;
   color: var(--el-text-color-secondary);
   line-height: 1.6;
+}
+
+.backup-form-hint--top {
+  margin-top: 0;
+  margin-bottom: 6px;
 }
 
 .backup-path-list {
@@ -1143,10 +1281,17 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-filter-tags {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.backup-filter-tags__list {
+  display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  width: 100%;
 }
 
 .backup-filter-tag {
@@ -1180,8 +1325,8 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-filter-tag-input {
-  flex: 1 1 160px;
-  min-width: 160px;
+  width: 45%;
+  max-width: 45%;
 }
 
 /* 状态详情 */

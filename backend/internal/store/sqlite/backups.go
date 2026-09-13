@@ -9,13 +9,13 @@ import (
 	"nestify/backend/internal/model"
 )
 
-const backupColumns = `id, name, enabled, source_dirs_json, target_dirs_json, monitor_enabled,
+const backupColumns = `id, sort_order, name, enabled, source_dirs_json, target_dirs_json, monitor_enabled,
 	completion_rule, replace_rule, sync_delete_from_target, force_full_scan, scan_interval_seconds,
 	cron_expression, filter_rules_json, last_backup_at, last_status, last_summary,
 	last_scanned_files, last_copied_files, last_skipped_files, last_deleted_files, created_at, updated_at`
 
 func (s *Store) ListBackups() ([]model.BackupTask, error) {
-	rows, err := s.db.Query(`SELECT ` + backupColumns + ` FROM backup_tasks ORDER BY id ASC;`)
+	rows, err := s.db.Query(`SELECT ` + backupColumns + ` FROM backup_tasks ORDER BY sort_order ASC, id ASC;`)
 	if err != nil {
 		return nil, fmt.Errorf("query backup tasks: %w", err)
 	}
@@ -68,14 +68,20 @@ func (s *Store) CreateBackup(input model.CreateBackupInput) (*model.BackupTask, 
 		forceFull = *input.ForceFullScan
 	}
 
+	var maxSortOrder int
+	if err := s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), 0) FROM backup_tasks`).Scan(&maxSortOrder); err != nil {
+		return nil, fmt.Errorf("query max backup sort_order: %w", err)
+	}
+
 	result, err := s.db.Exec(`
 		INSERT INTO backup_tasks (
-			name, enabled, source_dirs_json, target_dirs_json, monitor_enabled,
+			sort_order, name, enabled, source_dirs_json, target_dirs_json, monitor_enabled,
 			completion_rule, replace_rule, sync_delete_from_target, force_full_scan, scan_interval_seconds,
 			cron_expression, filter_rules_json, last_backup_at, last_status, last_summary,
 			last_scanned_files, last_copied_files, last_skipped_files, last_deleted_files, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', 0, 0, 0, 0, ?, ?);
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', 0, 0, 0, 0, ?, ?);
 	`,
+		maxSortOrder+1,
 		strings.TrimSpace(input.Name),
 		boolToInt(enabled),
 		string(sourceJSON),
@@ -199,6 +205,33 @@ func (s *Store) DeleteBackup(id int64) error {
 	return nil
 }
 
+func (s *Store) ReorderBackups(items []model.BackupReorderItem) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin reorder backups transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`UPDATE backup_tasks SET sort_order = ?, updated_at = ? WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare reorder backups statement: %w", err)
+	}
+	defer stmt.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, item := range items {
+		if _, err := stmt.Exec(item.SortOrder, now, item.ID); err != nil {
+			return fmt.Errorf("update backup sort_order: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit reorder backups transaction: %w", err)
+	}
+
+	return nil
+}
+
 type backupScanner interface {
 	Scan(dest ...any) error
 }
@@ -206,6 +239,7 @@ type backupScanner interface {
 func scanBackupTask(scanner backupScanner) (model.BackupTask, error) {
 	var (
 		id              int64
+		sortOrder       int
 		name            string
 		enabled         int
 		sourceJSON      string
@@ -230,7 +264,7 @@ func scanBackupTask(scanner backupScanner) (model.BackupTask, error) {
 	)
 
 	if err := scanner.Scan(
-		&id, &name, &enabled, &sourceJSON, &targetJSON, &monitorEnabled,
+		&id, &sortOrder, &name, &enabled, &sourceJSON, &targetJSON, &monitorEnabled,
 		&completionRule, &replaceRule, &syncDelete, &forceFull, &scanInterval,
 		&cronExpression, &filterJSON, &lastBackupAt, &lastStatus, &lastSummary,
 		&lastScanned, &lastCopied, &lastSkipped, &lastDeleted, &createdAtSource, &updatedAtSource,
@@ -240,6 +274,7 @@ func scanBackupTask(scanner backupScanner) (model.BackupTask, error) {
 
 	item := model.BackupTask{
 		ID:                   id,
+		SortOrder:            sortOrder,
 		Name:                 name,
 		Enabled:              intToBool(enabled),
 		SourceDirs:           decodeStringList(sourceJSON),

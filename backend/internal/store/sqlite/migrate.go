@@ -74,6 +74,7 @@ func (s *Store) migrate() error {
 		);`,
 		`CREATE TABLE IF NOT EXISTS backup_tasks (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			sort_order INTEGER NOT NULL DEFAULT 0,
 			name TEXT NOT NULL,
 			enabled INTEGER NOT NULL DEFAULT 1,
 			source_dirs_json TEXT NOT NULL DEFAULT '[]',
@@ -187,6 +188,12 @@ func (s *Store) migrate() error {
 	log.Printf("sqlite:migrate: ensure sort_order column")
 	if err := s.ensureRuleSortOrderColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure sort_order column failed: %v", err)
+		return err
+	}
+
+	log.Printf("sqlite:migrate: ensure backup_tasks sort_order column")
+	if err := s.ensureBackupSortOrderColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure backup_tasks sort_order column failed: %v", err)
 		return err
 	}
 
@@ -324,6 +331,51 @@ func (s *Store) ensureRuleSortOrderColumn() error {
 		log.Printf("sqlite:migrate: ensure sort_order column: backfill rows affected unavailable: %v", affectedErr)
 	}
 	log.Printf("sqlite:migrate: ensure sort_order column: complete")
+
+	return nil
+}
+
+func (s *Store) ensureBackupSortOrderColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(backup_tasks);`)
+	if err != nil {
+		return fmt.Errorf("query backup_tasks schema: %w", err)
+	}
+	defer rows.Close()
+
+	hasSortOrder := false
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan backup_tasks schema: %w", err)
+		}
+		if strings.EqualFold(name, "sort_order") {
+			hasSortOrder = true
+			break
+		}
+	}
+
+	if !hasSortOrder {
+		if _, err := s.db.Exec(`ALTER TABLE backup_tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;`); err != nil {
+			return fmt.Errorf("add backup_tasks sort_order column: %w", err)
+		}
+	}
+
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close backup_tasks schema rows: %w", err)
+	}
+
+	if _, err := s.db.Exec(`
+		UPDATE backup_tasks
+		SET sort_order = id
+		WHERE sort_order = 0;
+	`); err != nil {
+		return fmt.Errorf("backfill backup_tasks sort_order column: %w", err)
+	}
 
 	return nil
 }

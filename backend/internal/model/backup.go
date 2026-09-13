@@ -41,6 +41,7 @@ type BackupFilterRule struct {
 // BackupTask 描述一个备份任务。
 type BackupTask struct {
 	ID                   int64              `json:"id"`
+	SortOrder            int                `json:"sort_order"`
 	Name                 string             `json:"name"`
 	Enabled              bool               `json:"enabled"`
 	SourceDirs           []string           `json:"source_dirs"`
@@ -80,6 +81,11 @@ type CreateBackupInput struct {
 }
 
 type UpdateBackupInput = CreateBackupInput
+
+type BackupReorderItem struct {
+	ID        int64 `json:"id"`
+	SortOrder int   `json:"sort_order"`
+}
 
 // BackupStatusSnapshot 是备份任务当前执行情况的快照，用于「状态详情」窗口。
 type BackupStatusSnapshot struct {

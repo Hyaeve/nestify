@@ -21,6 +21,7 @@ export interface BackupFilterRule {
 
 export interface BackupTask {
   id: number
+  sort_order: number
   name: string
   enabled: boolean
   source_dirs: string[]
@@ -101,6 +102,15 @@ export function runBackup(id: number, forceFull = false) {
 
 export function setBackupEnabled(id: number, enabled: boolean) {
   return postJSON<BackupTask>(`/api/v1/backups/${id}/enabled`, { enabled })
+}
+
+export interface BackupReorderItem {
+  id: number
+  sort_order: number
+}
+
+export function reorderBackups(items: BackupReorderItem[]) {
+  return putJSON<Record<string, never>>('/api/v1/backups/reorder', items)
 }
 
 export function fetchBackupStatus(id: number) {

@@ -9,6 +9,29 @@ import (
 	"nestify/backend/internal/model"
 )
 
+func (a *apiHandler) handleReorderBackups(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	var items []model.BackupReorderItem
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_JSON", Message: "Invalid request body"})
+		return
+	}
+
+	if err := a.store.ReorderBackups(items); err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "备份规则顺序已更新"})
+}
+
 func (a *apiHandler) handleBackups(w http.ResponseWriter, r *http.Request) {
 	if !a.requireSession(w, r) {
 		return

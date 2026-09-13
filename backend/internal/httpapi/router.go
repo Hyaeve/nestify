@@ -151,6 +151,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/mounts/browse", api.handleMountBrowse)
 	mux.HandleFunc("/api/v1/mounts/", api.handleMountByID)
 	mux.HandleFunc("/api/v1/backups", api.handleBackups)
+	mux.HandleFunc("/api/v1/backups/reorder", api.handleReorderBackups)
 	mux.HandleFunc("/api/v1/backups/", api.handleBackupByID)
 
 	registerStaticRoutes(mux, deps.Env.WebDir)

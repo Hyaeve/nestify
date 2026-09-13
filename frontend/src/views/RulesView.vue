@@ -1022,6 +1022,7 @@
 <script setup lang="ts">
 import { Delete, Edit } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
@@ -2256,8 +2257,19 @@ async function loadHistory() {
   }
 }
 
+const TabKeys: TabKey[] = ['rules', 'purify', 'link', 'naming', 'backup', 'history']
+
+function syncTabToUrl(tab: TabKey) {
+  const route = useRoute()
+  const router = useRouter()
+  if (route.query.tab !== tab) {
+    void router.replace({ query: { ...route.query, tab } })
+  }
+}
+
 async function switchTab(tab: TabKey) {
   activeTab.value = tab
+  syncTabToUrl(tab)
 
   if (tab === 'rules') {
     await loadArchiveRules()
@@ -3046,7 +3058,14 @@ async function removeHistoryItem(id: string) {
 
 onMounted(() => {
   window.addEventListener('wheel', handleRulesTableWheel, { passive: false })
-  void loadArchiveRules()
+
+  const route = useRoute()
+  const initialTab = route.query.tab
+  if (typeof initialTab === 'string' && (TabKeys as string[]).includes(initialTab)) {
+    void switchTab(initialTab as TabKey)
+  } else {
+    void loadArchiveRules()
+  }
   loadAvailableNamingRuleSets()
 })
 
