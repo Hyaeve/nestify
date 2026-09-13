@@ -11,6 +11,8 @@ export interface WebdavMount {
   port: number
   username: string
   has_password: boolean
+  /** 仅单条挂载（编辑）时返回，列表接口始终为空。 */
+  password?: string
   base_path: string
   enabled: boolean
   sort_order: number
@@ -38,6 +40,11 @@ export interface MountListPayload {
 
 export function fetchMounts() {
   return getJSON<MountListPayload>('/api/v1/mounts')
+}
+
+/** 拉取单个挂载详情（含密码回显，仅编辑时使用）。 */
+export function fetchMount(id: number) {
+  return getJSON<WebdavMount>(`/api/v1/mounts/${id}`)
 }
 
 export function createMount(payload: MountInput) {

@@ -141,8 +141,9 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 	}
 
 	basePrefix := normalizeInternalPath(c.basePath)
-	// 请求的完整远端路径（不含尾斜杠），用于与响应 href 对齐并过滤自身。
-	requestDir := normalizeInternalPath(joinRemotePath(c.basePath, normalizeInternalPath(internalPath)))
+	// 请求目录在「内部路径」坐标系下的值（即去掉 base_path 前缀后的相对挂载根路径）。
+	// 用于与响应 href 对齐并过滤自身及非直接子项。
+	requestDir := normalizeInternalPath(internalPath)
 	entries := make([]Entry, 0, len(multistatus.Responses))
 	for _, item := range multistatus.Responses {
 		decoded, decodeErr := decodeHref(item.Href)

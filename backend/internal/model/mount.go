@@ -7,13 +7,15 @@ const MountPathScheme = "webdav://"
 
 // WebdavMount 描述一个 OpenList / WebDAV 挂载点。
 type WebdavMount struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Scheme      string    `json:"scheme"`
-	Host        string    `json:"host"`
-	Port        int       `json:"port"`
-	Username    string    `json:"username"`
-	HasPassword bool      `json:"has_password"`
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	Scheme      string `json:"scheme"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Username    string `json:"username"`
+	HasPassword bool   `json:"has_password"`
+	// Password 仅在选择单个挂载（编辑）时回填，供前端回显；列表接口始终为空。
+	Password    string    `json:"password,omitempty"`
 	BasePath    string    `json:"base_path"`
 	Enabled     bool      `json:"enabled"`
 	SortOrder   int       `json:"sort_order"`

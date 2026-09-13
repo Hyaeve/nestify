@@ -229,8 +229,9 @@
                   <Document v-else />
                 </el-icon>
                 <div class="entry-name__text">
-                  <div class="entry-name__title">{{ scope.row.name }}</div>
-                  <div class="entry-name__path">{{ scope.row.path }}</div>
+                  <el-tooltip :content="scope.row.path" placement="top" :show-after="500" :disabled="!scope.row.path">
+                    <div class="entry-name__title">{{ scope.row.name }}</div>
+                  </el-tooltip>
                 </div>
               </button>
             </template>
@@ -1704,13 +1705,13 @@ onBeforeUnmount(() => {
 .entry-name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 3px 10px;
+  padding: 2px 8px;
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: background-color 0.2s ease;
 }
 
@@ -1741,7 +1742,7 @@ onBeforeUnmount(() => {
 
 .entry-name__icon {
   flex-shrink: 0;
-  font-size: 20px;
+  font-size: 18px;
   color: #f5b942;
 }
 
@@ -1752,6 +1753,9 @@ onBeforeUnmount(() => {
 
 .entry-name__text {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .entry-name__title {
@@ -1759,6 +1763,9 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   transition: color 0.2s ease;
 }
 
@@ -1766,16 +1773,7 @@ onBeforeUnmount(() => {
   color: #1677ff;
 }
 
-.entry-name__path {
-  margin-top: 1px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.2;
-  transition: color 0.2s ease;
-}
-
-.entry-name:hover .entry-name__title,
-.entry-name:hover .entry-name__path {
+.entry-name:hover .entry-name__title {
   color: var(--el-color-primary);
 }
 
@@ -1926,10 +1924,10 @@ onBeforeUnmount(() => {
 
 /* 压缩条目行高 */
 :deep(.el-table .el-table__cell) {
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 :deep(.el-table .cell) {
-  line-height: 1.3;
+  line-height: 1.25;
 }
 </style>

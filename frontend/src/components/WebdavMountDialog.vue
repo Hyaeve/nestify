@@ -35,7 +35,7 @@
             v-model="form.password"
             type="password"
             show-password
-            :placeholder="isEditing && mount?.has_password ? '留空表示不修改' : 'WebDAV 密码'"
+            :placeholder="loadingPassword ? '正在加载…' : isEditing ? '已保存的密码' : 'WebDAV 密码'"
             autocomplete="new-password"
           />
         </el-form-item>
@@ -65,7 +65,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { createMount, updateMount, testMountConnection, type MountInput, type WebdavMount } from '../api/mounts'
+import { createMount, fetchMount, updateMount, testMountConnection, type MountInput, type WebdavMount } from '../api/mounts'
 
 const props = defineProps<{
   modelValue: boolean
@@ -80,6 +80,7 @@ const emit = defineEmits<{
 const submitting = ref(false)
 const testing = ref(false)
 const isEditing = computed(() => Boolean(props.mount?.id))
+const loadingPassword = ref(false)
 
 const form = reactive<MountInput>({
   name: '',
@@ -104,12 +105,31 @@ watch(
     form.host = mount?.host ?? ''
     form.port = mount?.port ?? 5244
     form.username = mount?.username ?? ''
-    form.password = ''
+    form.password = mount?.password ?? ''
     form.base_path = mount?.base_path ?? ''
     form.enabled = mount?.enabled ?? true
+
+    // 编辑已有挂载时，密码可能尚未随列表接口返回，需要单独拉取详情回填。
+    if (mount?.id) {
+      void loadMountPassword(mount.id)
+    }
   },
   { immediate: true },
 )
+
+async function loadMountPassword(id: number) {
+  loadingPassword.value = true
+  try {
+    const response = await fetchMount(id)
+    if (response.data?.password) {
+      form.password = response.data.password
+    }
+  } catch {
+    // 拉取失败时保持空密码，用户可自行重新填写。
+  } finally {
+    loadingPassword.value = false
+  }
+}
 
 function handleVisibleChange(value: boolean) {
   emit('update:modelValue', value)

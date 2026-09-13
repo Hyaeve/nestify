@@ -118,7 +118,10 @@ func (a *apiHandler) handleMountByID(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, jsonResponse{Success: false, Code: "MOUNT_NOT_FOUND", Message: "挂载不存在"})
 			return
 		}
-		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "WebDAV 挂载已加载", Data: credential.Mount})
+		// 编辑场景需要回显密码（本机管理工具，仅 admin 登录后可见）。
+		detail := credential.Mount
+		detail.Password = credential.Password
+		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "WebDAV 挂载已加载", Data: detail})
 	case http.MethodPut:
 		var input model.UpdateMountInput
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
