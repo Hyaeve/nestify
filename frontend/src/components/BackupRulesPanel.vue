@@ -273,7 +273,8 @@
 
       <template #footer>
         <div class="backup-wizard-footer">
-          <el-button v-if="wizardStep > 0" class="backup-wizard-footer__prev" @click="prevStep">上一步</el-button>
+          <el-button v-if="wizardStep === 0" class="backup-wizard-footer__prev" @click="cancelWizard">取消</el-button>
+          <el-button v-else class="backup-wizard-footer__prev" @click="prevStep">上一步</el-button>
           <el-button v-if="wizardStep < 3" type="primary" @click="nextStep">下一步</el-button>
           <el-button v-else type="primary" :loading="saving" @click="applyWizard">应用</el-button>
         </div>
@@ -531,6 +532,10 @@ function prevStep() {
   if (wizardStep.value > 0) {
     wizardStep.value -= 1
   }
+}
+
+function cancelWizard() {
+  wizardVisible.value = false
 }
 
 async function applyWizard() {
@@ -822,8 +827,8 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-card:hover {
-  border-color: #bcd4ff;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.08);
+  border-color: #b6c9c1;
+  box-shadow: 0 10px 22px rgba(91, 122, 110, 0.08);
 }
 
 .backup-card--disabled {
@@ -983,17 +988,17 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-wizard-step.is-active {
-  color: #2563eb;
+  color: #5b7a6e;
 }
 
 .backup-wizard-step.is-active .backup-wizard-step__dot {
   color: #fff;
-  background: #2563eb;
+  background: #5b7a6e;
 }
 
 .backup-wizard-step.is-done .backup-wizard-step__dot {
-  color: #15803d;
-  background: #ecfdf3;
+  color: #5b7a6e;
+  background: #eef3f1;
 }
 
 .backup-wizard-step__label {
@@ -1086,8 +1091,8 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
-  background: #eff6ff;
+  color: #5b7a6e;
+  background: #eef3f1;
 }
 
 .backup-filter-row__opts {
@@ -1109,14 +1114,14 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-filter-chip:hover {
-  border-color: #bcd4ff;
-  color: #2563eb;
+  border-color: #b6c9c1;
+  color: #5b7a6e;
 }
 
 .backup-filter-chip.is-active {
   color: #fff;
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #5b7a6e;
+  border-color: #5b7a6e;
 }
 
 .backup-filter-row__remove {
@@ -1151,8 +1156,8 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   padding: 3px 8px 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  color: #2563eb;
-  background: #eff6ff;
+  color: #5b7a6e;
+  background: #eef3f1;
 }
 
 .backup-filter-tag__remove {
@@ -1165,13 +1170,13 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border-radius: 50%;
   font-size: 12px;
   line-height: 1;
-  color: #2563eb;
+  color: #5b7a6e;
   background: transparent;
   cursor: pointer;
 }
 
 .backup-filter-tag__remove:hover {
-  background: #dbeafe;
+  background: #dfe9e4;
 }
 
 .backup-filter-tag-input {
