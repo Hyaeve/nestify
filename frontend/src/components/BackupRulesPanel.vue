@@ -82,6 +82,9 @@
       :title="wizardEditing ? '编辑备份规则' : '添加备份规则'"
       width="720px"
       destroy-on-close
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
       @closed="resetWizard"
     >
       <div class="backup-wizard-steps">
@@ -143,17 +146,18 @@
             <div class="backup-form-hint">实时监控源文件夹的变化，检测到变更时自动触发备份。</div>
           </el-form-item>
           <el-form-item label="完成规则">
-            <el-radio-group v-model="wizardForm.completion_rule">
-              <el-radio value="none">无操作</el-radio>
-              <el-radio value="delete_source">删除源文件</el-radio>
-              <el-radio value="delete_source_dir">删除源文件和空文件夹</el-radio>
-            </el-radio-group>
+            <el-select v-model="wizardForm.completion_rule" style="width: 100%">
+              <el-option label="无操作" value="none" />
+              <el-option label="删除源文件" value="delete_source" />
+              <el-option label="删除源文件和空文件夹" value="delete_source_dir" />
+            </el-select>
+            <div class="backup-form-hint">备份完成后对源文件执行的操作。</div>
           </el-form-item>
           <el-form-item label="替换规则">
-            <el-radio-group v-model="wizardForm.replace_rule">
-              <el-radio value="skip">跳过</el-radio>
-              <el-radio value="overwrite">覆盖</el-radio>
-            </el-radio-group>
+            <el-select v-model="wizardForm.replace_rule" style="width: 100%">
+              <el-option label="跳过" value="skip" />
+              <el-option label="覆盖" value="overwrite" />
+            </el-select>
             <div class="backup-form-hint">目标中已存在同名文件时的处理方式。</div>
           </el-form-item>
         </el-form>
@@ -182,47 +186,85 @@
 
       <!-- 第 4 步：筛选规则 -->
       <div v-show="wizardStep === 3" class="backup-wizard-body">
-        <el-dropdown trigger="click" @command="addFilterRule">
-          <el-button type="primary" plain>+ 添加规则</el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="name">名称</el-dropdown-item>
-              <el-dropdown-item command="extension">扩展名</el-dropdown-item>
-              <el-dropdown-item command="regex">正则</el-dropdown-item>
-              <el-dropdown-item command="size">体积</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <div class="backup-filter-toolbar">
+          <el-dropdown trigger="click" @command="addFilterRule">
+            <el-button type="primary" plain>+ 添加规则</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="name">名称</el-dropdown-item>
+                <el-dropdown-item command="extension">扩展名</el-dropdown-item>
+                <el-dropdown-item command="regex">正则</el-dropdown-item>
+                <el-dropdown-item command="size">体积</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <span class="backup-filter-toolbar__hint">添加一条筛选规则，右上角设置名单类型与匹配目标</span>
+        </div>
 
         <div class="backup-filter-list">
           <div v-for="(rule, index) in wizardForm.filter_rules" :key="rule.id" class="backup-filter-row">
-            <div class="backup-filter-row__main">
+            <div class="backup-filter-row__head">
               <span class="backup-filter-row__type">{{ filterTypeLabel(rule.type) }}</span>
-              <div class="backup-filter-row__value">
-                <template v-if="rule.type === 'size'">
-                  <el-input-number v-model="rule.min_size" :min="0" placeholder="最小" />
-                  <el-select v-model="rule.size_unit" style="width: 100px">
-                    <el-option label="Bytes" value="Bytes" />
-                    <el-option label="KB" value="KB" />
-                    <el-option label="MB" value="MB" />
-                    <el-option label="GB" value="GB" />
-                  </el-select>
-                  <span class="backup-filter-row__sep">—</span>
-                  <el-input-number v-model="rule.max_size" :min="0" placeholder="最大（留空不限制）" />
-                </template>
-                <template v-else>
-                  <el-input v-model="rule.value" :placeholder="filterValuePlaceholder(rule.type)" />
-                </template>
+              <div class="backup-filter-row__opts">
+                <button
+                  type="button"
+                  class="backup-filter-chip"
+                  :class="{ 'is-active': rule.blacklist }"
+                  @click="setListMode(rule, 'blacklist')"
+                >黑名单</button>
+                <button
+                  type="button"
+                  class="backup-filter-chip"
+                  :class="{ 'is-active': rule.whitelist }"
+                  @click="setListMode(rule, 'whitelist')"
+                >白名单</button>
+                <button
+                  type="button"
+                  class="backup-filter-chip"
+                  :class="{ 'is-active': rule.match_dir }"
+                  @click="toggleMatch(rule, 'dir')"
+                >文件夹</button>
+                <button
+                  type="button"
+                  class="backup-filter-chip"
+                  :class="{ 'is-active': rule.match_file }"
+                  @click="toggleMatch(rule, 'file')"
+                >文件</button>
+                <el-button link class="backup-filter-row__remove" @click="removeFilterRule(index)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
               </div>
             </div>
-            <div class="backup-filter-row__opts">
-              <el-checkbox-button v-model="rule.blacklist">黑名单</el-checkbox-button>
-              <el-checkbox-button v-model="rule.whitelist">白名单</el-checkbox-button>
-              <el-checkbox-button v-model="rule.match_dir">文件夹</el-checkbox-button>
-              <el-checkbox-button v-model="rule.match_file">文件</el-checkbox-button>
-              <el-button link class="backup-filter-row__remove" @click="removeFilterRule(index)">
-                <el-icon><Delete /></el-icon>
-              </el-button>
+
+            <div class="backup-filter-row__body">
+              <template v-if="rule.type === 'size'">
+                <el-input-number v-model="rule.min_size" :min="0" placeholder="最小" />
+                <el-select v-model="rule.size_unit" style="width: 100px">
+                  <el-option label="Bytes" value="Bytes" />
+                  <el-option label="KB" value="KB" />
+                  <el-option label="MB" value="MB" />
+                  <el-option label="GB" value="GB" />
+                </el-select>
+                <span class="backup-filter-row__sep">—</span>
+                <el-input-number v-model="rule.max_size" :min="0" placeholder="最大（留空不限制）" />
+              </template>
+              <template v-else-if="rule.type === 'regex'">
+                <el-input v-model="rule.value" style="width: 100%" :placeholder="filterValuePlaceholder(rule.type)" />
+              </template>
+              <template v-else>
+                <div class="backup-filter-tags">
+                  <span v-for="(tag, tagIndex) in ruleTags(rule)" :key="tagIndex" class="backup-filter-tag">
+                    {{ tag }}
+                    <button type="button" class="backup-filter-tag__remove" @click="removeTag(rule, tagIndex)">×</button>
+                  </span>
+                  <el-input
+                    v-model="rule.draftValue"
+                    class="backup-filter-tag-input"
+                    :placeholder="filterValuePlaceholder(rule.type)"
+                    @keyup.enter="commitTag(rule)"
+                  />
+                </div>
+              </template>
             </div>
           </div>
           <el-empty v-if="wizardForm.filter_rules.length === 0" :image-size="60" description="尚未添加筛选规则" />
@@ -231,8 +273,7 @@
 
       <template #footer>
         <div class="backup-wizard-footer">
-          <el-button v-if="wizardStep > 0" @click="wizardStep -= 1">上一步</el-button>
-          <el-button @click="wizardVisible = false">取消</el-button>
+          <el-button v-if="wizardStep > 0" class="backup-wizard-footer__prev" @click="prevStep">上一步</el-button>
           <el-button v-if="wizardStep < 3" type="primary" @click="nextStep">下一步</el-button>
           <el-button v-else type="primary" :loading="saving" @click="applyWizard">应用</el-button>
         </div>
@@ -328,7 +369,12 @@ interface WizardForm {
   force_full_scan: boolean
   scan_interval_seconds: number
   cron_expression: string
-  filter_rules: BackupFilterRule[]
+  filter_rules: EditableFilterRule[]
+}
+
+// 带草稿输入框的筛选规则（draftValue 仅前端使用，不落库）
+interface EditableFilterRule extends BackupFilterRule {
+  draftValue: string
 }
 
 function emptyWizardForm(): WizardForm {
@@ -434,7 +480,22 @@ function openEditWizard(task: BackupTask) {
   wizardForm.force_full_scan = task.force_full_scan
   wizardForm.scan_interval_seconds = task.scan_interval_seconds
   wizardForm.cron_expression = task.cron_expression
-  wizardForm.filter_rules = task.filter_rules.map((rule) => ({ ...rule }))
+  wizardForm.filter_rules = task.filter_rules.map((rule) => {
+    // 兼容旧数据：name/extension 类型把 value 字段中逗号/分号/空格分隔的多个值拆入 extensions；
+    // regex 保持单值 value 不变。
+    const isMulti = rule.type === 'name' || rule.type === 'extension'
+    const extensions = [...(rule.extensions ?? [])]
+    const legacy = rule.value ?? ''
+    if (isMulti && legacy.trim()) {
+      for (const part of legacy.split(/[,;|\s]+/)) {
+        const trimmed = part.trim()
+        if (trimmed && !extensions.includes(trimmed)) {
+          extensions.push(trimmed)
+        }
+      }
+    }
+    return { ...rule, extensions, draftValue: '' }
+  })
   wizardStep.value = 0
   wizardVisible.value = true
 }
@@ -466,9 +527,27 @@ function nextStep() {
   wizardStep.value += 1
 }
 
+function prevStep() {
+  if (wizardStep.value > 0) {
+    wizardStep.value -= 1
+  }
+}
+
 async function applyWizard() {
   saving.value = true
   try {
+    // 提交前：把每条规则尚未回车确认的草稿值并入候选，并剥离 draftValue 字段。
+    const filterRules: BackupFilterRule[] = wizardForm.filter_rules
+      .map((rule) => {
+        const { draftValue, ...rest } = rule
+        const extensions = [...(rest.extensions ?? [])]
+        const draft = draftValue.trim()
+        if (draft && !extensions.includes(draft)) {
+          extensions.push(draft)
+        }
+        return { ...rest, extensions }
+      })
+
     const payload = {
       name: wizardForm.name.trim(),
       enabled: true,
@@ -481,7 +560,7 @@ async function applyWizard() {
       force_full_scan: wizardForm.force_full_scan,
       scan_interval_seconds: wizardForm.scan_interval_seconds,
       cron_expression: wizardForm.cron_expression.trim(),
-      filter_rules: wizardForm.filter_rules,
+      filter_rules: filterRules,
     }
 
     if (wizardEditing.value && wizardEditingId.value != null) {
@@ -537,7 +616,7 @@ function applyPathSelection(path: string) {
 
 // —— 筛选规则 ——
 function addFilterRule(type: string) {
-  const rule: BackupFilterRule = {
+  const rule: EditableFilterRule = {
     id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     type: type as BackupFilterType,
     value: '',
@@ -549,12 +628,56 @@ function addFilterRule(type: string) {
     max_size: 0,
     size_unit: 'MB',
     extensions: [],
+    draftValue: '',
   }
   wizardForm.filter_rules.push(rule)
 }
 
 function removeFilterRule(index: number) {
   wizardForm.filter_rules.splice(index, 1)
+}
+
+// 黑名单 / 白名单 二选一
+function setListMode(rule: EditableFilterRule, mode: 'blacklist' | 'whitelist') {
+  if (mode === 'blacklist') {
+    rule.blacklist = true
+    rule.whitelist = false
+  } else {
+    rule.blacklist = false
+    rule.whitelist = true
+  }
+}
+
+// 文件夹 / 文件 至少选一个
+function toggleMatch(rule: EditableFilterRule, target: 'dir' | 'file') {
+  if (target === 'dir') {
+    if (rule.match_dir && !rule.match_file) return
+    rule.match_dir = !rule.match_dir
+  } else {
+    if (rule.match_file && !rule.match_dir) return
+    rule.match_file = !rule.match_file
+  }
+}
+
+// 获取某条规则的候选值列表（多值）
+function ruleTags(rule: EditableFilterRule): string[] {
+  return rule.extensions ?? []
+}
+
+// 回车把草稿值提交为一个候选
+function commitTag(rule: EditableFilterRule) {
+  const draft = rule.draftValue.trim()
+  if (!draft) return
+  if (!rule.extensions) rule.extensions = []
+  if (!rule.extensions.includes(draft)) {
+    rule.extensions.push(draft)
+  }
+  rule.draftValue = ''
+}
+
+// 删除某个候选
+function removeTag(rule: EditableFilterRule, tagIndex: number) {
+  rule.extensions?.splice(tagIndex, 1)
 }
 
 function filterTypeLabel(type: BackupFilterType) {
@@ -573,11 +696,11 @@ function filterTypeLabel(type: BackupFilterType) {
 function filterValuePlaceholder(type: BackupFilterType) {
   switch (type) {
     case 'extension':
-      return '例如 .mkv, .mp4'
+      return '输入扩展名后回车，如 .mkv'
     case 'regex':
       return '例如 \\.(mkv|mp4)$'
     default:
-      return '例如 电视剧'
+      return '输入名称后回车，如 电视剧'
   }
 }
 
@@ -889,8 +1012,13 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-wizard-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+}
+
+.backup-wizard-footer__prev {
+  margin-right: auto;
 }
 
 .backup-form-hint {
@@ -919,25 +1047,37 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 /* 筛选规则 */
+.backup-filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.backup-filter-toolbar__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .backup-filter-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 14px;
 }
 
 .backup-filter-row {
-  padding: 12px;
+  padding: 14px;
   border: 1px solid #edf2f7;
   border-radius: 12px;
   background: #fbfdff;
 }
 
-.backup-filter-row__main {
+.backup-filter-row__head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .backup-filter-row__type {
@@ -950,28 +1090,93 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   background: #eff6ff;
 }
 
-.backup-filter-row__value {
+.backup-filter-row__opts {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
+  gap: 6px;
 }
 
-.backup-filter-row__sep {
-  color: var(--el-text-color-secondary);
+.backup-filter-chip {
+  padding: 3px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #64748b;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.4;
 }
 
-.backup-filter-row__opts {
+.backup-filter-chip:hover {
+  border-color: #bcd4ff;
+  color: #2563eb;
+}
+
+.backup-filter-chip.is-active {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.backup-filter-row__remove {
+  flex: 0 0 auto;
+  color: #ef4444;
+  padding: 4px;
+}
+
+.backup-filter-row__body {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.backup-filter-row__remove {
-  margin-left: auto;
-  color: #ef4444;
+.backup-filter-row__sep {
+  color: var(--el-text-color-secondary);
+}
+
+.backup-filter-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.backup-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.backup-filter-tag__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: #2563eb;
+  background: transparent;
+  cursor: pointer;
+}
+
+.backup-filter-tag__remove:hover {
+  background: #dbeafe;
+}
+
+.backup-filter-tag-input {
+  flex: 1 1 160px;
+  min-width: 160px;
 }
 
 /* 状态详情 */

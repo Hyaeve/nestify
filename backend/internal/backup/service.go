@@ -664,19 +664,37 @@ func (m *filterMatcher) matches(rule model.BackupFilterRule, relativePath, name 
 		}
 		return true
 	default:
-		if value == "" {
-			return false
+		// 名称类型支持多候选：value 字段（单值）以及 extensions 数组（回车逐个添加的多值）。
+		if value != "" && nameMatches(value, name, relativePath) {
+			return true
 		}
-		if strings.ContainsAny(value, "*?") {
-			matched, err := path.Match(strings.ToLower(value), strings.ToLower(name))
-			if err == nil && matched {
+		for _, candidate := range rule.Extensions {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == "" {
+				continue
+			}
+			if nameMatches(candidate, name, relativePath) {
 				return true
 			}
-			matchedPath, pathErr := path.Match(strings.ToLower(value), strings.ToLower(filepath.ToSlash(relativePath)))
-			return pathErr == nil && matchedPath
 		}
-		return strings.Contains(strings.ToLower(name), strings.ToLower(value))
+		return false
 	}
+}
+
+func nameMatches(value, name, relativePath string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if strings.ContainsAny(value, "*?") {
+		matched, err := path.Match(strings.ToLower(value), strings.ToLower(name))
+		if err == nil && matched {
+			return true
+		}
+		matchedPath, pathErr := path.Match(strings.ToLower(value), strings.ToLower(filepath.ToSlash(relativePath)))
+		return pathErr == nil && matchedPath
+	}
+	return strings.Contains(strings.ToLower(name), strings.ToLower(value))
 }
 
 func extensionCandidates(rule model.BackupFilterRule, value string) []string {
