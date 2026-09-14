@@ -92,13 +92,15 @@ func (s *Store) ListRulesPage(page, pageSize int, ruleType string) ([]model.Rule
 func buildRuleTypeWhereClause(ruleType string) (string, []any) {
 	switch strings.TrimSpace(ruleType) {
 	case "archive":
-		return ` WHERE rule_type = ?`, []any{"archive"}
+		// 归档：archive_mode 不属于净化/链路/命名的其余规则一律归入归档，
+		// 兼容历史上 rule_type 尚未回填（为空或误标为 archive）的旧数据。
+		return ` WHERE COALESCE(archive_mode, '') NOT IN ('cleanup','transform','link','naming')`, nil
 	case "cleanup":
-		return ` WHERE rule_type = ?`, []any{"cleanup"}
+		return ` WHERE archive_mode IN ('cleanup','transform') OR rule_type = 'cleanup'`, nil
 	case "link":
-		return ` WHERE rule_type = ?`, []any{"link"}
+		return ` WHERE archive_mode = 'link' OR rule_type = 'link'`, nil
 	case "naming":
-		return ` WHERE rule_type = ?`, []any{"naming"}
+		return ` WHERE archive_mode = 'naming' OR rule_type = 'naming'`, nil
 	default:
 		return "", nil
 	}

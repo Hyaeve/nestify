@@ -1439,6 +1439,11 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
 }
 
 const activeTab = ref<TabKey>('rules')
+// 必须在 setup 顶层获取路由实例：inject 仅在组件 setup 作用域内可用，
+// 若在事件回调/生命周期回调里调用 useRoute()/useRouter() 会拿到 undefined 并抛错，
+// 从而中断后续的数据加载与 URL 同步。
+const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const archiveLoading = ref(false)
 const purifyLoading = ref(false)
@@ -2260,8 +2265,6 @@ async function loadHistory() {
 const TabKeys: TabKey[] = ['rules', 'purify', 'link', 'naming', 'backup', 'history']
 
 function syncTabToUrl(tab: TabKey) {
-  const route = useRoute()
-  const router = useRouter()
   if (route.query.tab !== tab) {
     void router.replace({ query: { ...route.query, tab } })
   }
@@ -2269,7 +2272,12 @@ function syncTabToUrl(tab: TabKey) {
 
 async function switchTab(tab: TabKey) {
   activeTab.value = tab
-  syncTabToUrl(tab)
+  // URL 同步失败不应阻断数据加载
+  try {
+    syncTabToUrl(tab)
+  } catch {
+    /* ignore */
+  }
 
   if (tab === 'rules') {
     await loadArchiveRules()
@@ -3059,12 +3067,12 @@ async function removeHistoryItem(id: string) {
 onMounted(() => {
   window.addEventListener('wheel', handleRulesTableWheel, { passive: false })
 
-  const route = useRoute()
   const initialTab = route.query.tab
   if (typeof initialTab === 'string' && (TabKeys as string[]).includes(initialTab)) {
     void switchTab(initialTab as TabKey)
   } else {
-    void loadArchiveRules()
+    // 默认归档规则也写入后缀，保证每个细分栏目都有专属浏览器后缀
+    void switchTab('rules')
   }
   loadAvailableNamingRuleSets()
 })

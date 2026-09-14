@@ -1332,6 +1332,10 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-form-hint {
+  /* el-form-item__content 默认是横向 flex，会把小字说明挤到标题右侧；
+     这里强制占满整行，使其显示在功能标题下方 */
+  flex: 0 0 100%;
+  width: 100%;
   margin-top: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);

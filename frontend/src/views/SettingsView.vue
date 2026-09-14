@@ -598,7 +598,8 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 324px;
+  /* 固定为恰好容纳 4 个挂载卡片的高度，超出上下滑动 */
+  max-height: calc(4 * 96px + 3 * 12px);
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -607,6 +608,7 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   align-items: center;
   gap: 14px;
+  height: 96px;
   padding: 14px 16px;
   border: 1px solid #edf2f7;
   border-radius: 16px;
@@ -658,6 +660,7 @@ async function handleBackupFileChange(file: UploadFile) {
   color: #1e293b;
   font-size: 14px;
   font-weight: 800;
+  line-height: 20px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -666,6 +669,7 @@ async function handleBackupFileChange(file: UploadFile) {
 .mount-card__meta {
   margin-top: 2px;
   font-size: 12px;
+  line-height: 16px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -678,6 +682,7 @@ async function handleBackupFileChange(file: UploadFile) {
   gap: 6px;
   margin-top: 6px;
   font-size: 12px;
+  line-height: 16px;
   color: var(--el-text-color-regular);
 }
 
@@ -813,6 +818,9 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .cache-form__hint {
+  /* 占满整行，确保小字说明显示在标题/控件下方而非右侧 */
+  flex: 0 0 100%;
+  width: 100%;
   margin-top: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
@@ -837,8 +845,9 @@ async function handleBackupFileChange(file: UploadFile) {
 
 .cache-ignore-tags {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   width: 100%;
 }
@@ -874,8 +883,10 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .cache-ignore-input {
-  width: 100%;
-  max-width: 46%;
+  flex: 0 1 200px;
+  width: auto;
+  min-width: 140px;
+  max-width: 240px;
 }
 
 /* 细浅隐藏的滚动条 */

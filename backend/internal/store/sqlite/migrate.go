@@ -613,12 +613,11 @@ func (s *Store) ensureRuleCompatibilityModeColumn() error {
 }
 
 func (s *Store) ensureRuleTypeColumn() error {
+	exists := false
 	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
 	if err != nil {
 		return fmt.Errorf("query rules schema: %w", err)
 	}
-	defer rows.Close()
-
 	for rows.Next() {
 		var cid int
 		var name string
@@ -627,17 +626,45 @@ func (s *Store) ensureRuleTypeColumn() error {
 		var defaultValue any
 		var pk int
 		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			rows.Close()
 			return fmt.Errorf("scan rules schema: %w", err)
 		}
 		if strings.EqualFold(name, "rule_type") {
-			return nil
+			exists = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate rules schema: %w", err)
+	}
+	rows.Close()
+
+	if !exists {
+		if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN rule_type TEXT NOT NULL DEFAULT 'archive';`); err != nil {
+			return fmt.Errorf("add rule_type column: %w", err)
 		}
 	}
 
-	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN rule_type TEXT NOT NULL DEFAULT 'archive';`); err != nil {
-		return fmt.Errorf("add rule_type column: %w", err)
-	}
+	// rule_type 是由 archive_mode 派生的冗余字段。历史上该列以默认值 'archive'
+	// 新增，会把既有的净化/链路/命名规则误标为归档，分页筛选后导致这些规则
+	// 在其栏目里“消失”。这里按 archive_mode 回填纠正，保证分类始终一致。
+	return s.normalizeRuleType()
+}
 
+// normalizeRuleType 依据 archive_mode 回填并纠正 rule_type。
+func (s *Store) normalizeRuleType() error {
+	const derived = `CASE
+			WHEN archive_mode IN ('cleanup','transform') THEN 'cleanup'
+			WHEN archive_mode = 'link' THEN 'link'
+			WHEN archive_mode = 'naming' THEN 'naming'
+			ELSE 'archive'
+		END`
+	query := `UPDATE rules SET rule_type = ` + derived + `
+		WHERE rule_type IS NULL OR rule_type = '' OR rule_type <> ` + derived
+	if _, err := s.db.Exec(query); err != nil {
+		return fmt.Errorf("normalize rule_type: %w", err)
+	}
 	return nil
 }
 
