@@ -22,7 +22,6 @@ const router = createRouter({
     {
       path: '/',
       component: AdminLayout,
-      redirect: '/dashboard',
       children: [
         {
           path: 'dashboard',
@@ -66,7 +65,7 @@ router.beforeEach(async (to) => {
   if (to.path === '/login') {
     if (authStore.isAuthenticated) {
       const settingsStore = useSettingsStore()
-      await settingsStore.ensureLoaded()
+      await settingsStore.ensureLoaded(true)
       return resolveStartupPath(settingsStore.defaultPage)
     }
 
@@ -75,6 +74,13 @@ router.beforeEach(async (to) => {
 
   if (!authStore.isAuthenticated) {
     return '/login'
+  }
+
+  // 根路径按「启动页面」设置跳转（不再硬编码到仪表盘）。
+  if (to.path === '/') {
+    const settingsStore = useSettingsStore()
+    await settingsStore.ensureLoaded()
+    return resolveStartupPath(settingsStore.defaultPage)
   }
 
   return true
