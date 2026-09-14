@@ -13,15 +13,15 @@
     <el-empty v-if="!loading && backups.length === 0" description="暂无备份规则，点击右上角「添加备份」创建" />
 
     <div v-else class="backup-grid" ref="backupGridRef">
-      <div v-for="task in backups" :key="task.id" class="backup-card" :class="{ 'backup-card--disabled': !task.enabled }">
+      <div v-for="task in backups" :key="task.id" class="backup-card" :class="{ 'backup-card--disabled': !task.enabled }" @click="handleBackupCardClick(task)">
         <div class="backup-card__head">
           <div class="backup-card__title-row">
-            <button type="button" class="backup-card__drag" aria-label="拖拽排序" title="拖拽排序">
+            <button type="button" class="backup-card__drag" aria-label="拖拽排序" title="拖拽排序" @click.stop>
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" /><circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" /></svg>
             </button>
             <div class="backup-card__name" :title="task.name">{{ task.name }}</div>
           </div>
-          <span class="backup-card__status-dot" :class="{ 'is-on': task.enabled }"></span>
+          <button type="button" class="backup-card__mode" title="查看实时备份状态" @click.stop="openStatusDialog(task)">备份</button>
         </div>
 
         <div class="backup-card__body">
@@ -35,6 +35,12 @@
             <div class="backup-card__meta-value" v-for="dst in visiblePaths(task.target_dirs)" :key="dst" :title="dst">{{ dst }}</div>
             <div v-if="task.target_dirs.length > 2" class="backup-card__meta-more">+{{ task.target_dirs.length - 2 }} 更多</div>
           </div>
+          <div class="backup-card__meta">
+            <div class="backup-card__meta-label">Cron</div>
+            <div class="backup-card__meta-value" :class="{ 'is-empty': !task.cron_expression }" :title="task.cron_expression || ''">
+              {{ task.cron_expression || '未设置计划' }}
+            </div>
+          </div>
 
           <div class="backup-card__tags">
             <span class="backup-card__tag" :class="{ 'is-on': task.monitor_enabled }">实时监控</span>
@@ -42,7 +48,6 @@
             <span class="backup-card__tag">{{ replaceRuleLabel(task.replace_rule) }}</span>
             <span v-if="task.force_full_scan" class="backup-card__tag">强制完整扫描</span>
             <span v-if="task.scan_interval_seconds > 0" class="backup-card__tag">间隔 {{ task.scan_interval_seconds }}s</span>
-            <span v-if="task.cron_expression" class="backup-card__tag">计划 {{ task.cron_expression }}</span>
             <span v-if="task.filter_rules.length" class="backup-card__tag">筛选 {{ task.filter_rules.length }} 条</span>
           </div>
 
@@ -53,30 +58,15 @@
         </div>
 
         <div class="backup-card__footer">
-          <el-switch
-            :model-value="task.enabled"
-            inline-prompt
-            active-text="启用"
-            inactive-text="禁用"
-            @change="toggleEnabled(task)"
+          <CardActionBar
+            :enabled="task.enabled"
+            :busy="updatingIds.has(task.id)"
+            execute-title="立即执行一次备份扫描"
+            @toggle="toggleEnabled(task)"
+            @execute="rescan(task)"
+            @edit="openEditWizard(task)"
+            @remove="removeTask(task)"
           />
-          <div class="backup-card__footer-actions">
-            <el-button class="backup-card__btn" :disabled="scanningIds.has(task.id)" @click="rescan(task)">
-              <svg viewBox="0 0 24 24" aria-hidden="true" class="backup-card__btn-icon"><path d="M4.5 12a7.5 7.5 0 0 1 13.2-4.7l2.05 2.2" /><path d="M19.75 5.5v4h-4" /><path d="M19.5 12a7.5 7.5 0 0 1-13.2 4.7l-2.05-2.2" /><path d="M4.25 18.5v-4h4" /></svg>
-              重新扫描
-            </el-button>
-            <el-button class="backup-card__btn" @click="openEditWizard(task)">
-              <el-icon class="backup-card__btn-icon"><Setting /></el-icon>
-              设置
-            </el-button>
-            <el-button class="backup-card__btn backup-card__btn--danger" @click="removeTask(task)">
-              <el-icon class="backup-card__btn-icon"><Delete /></el-icon>
-              移除
-            </el-button>
-            <el-button class="backup-card__btn backup-card__btn--icon" @click="openStatusDialog(task)">
-              <el-icon><InfoFilled /></el-icon>
-            </el-button>
-          </div>
         </div>
       </div>
     </div>
@@ -390,11 +380,12 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, InfoFilled, Setting } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from './DirectoryPickerDialog.vue'
+import CardActionBar from './CardActionBar.vue'
 import {
   createBackup,
   deleteBackup,
@@ -418,6 +409,8 @@ const props = defineProps<{ visible: boolean }>()
 const loading = ref(false)
 const backups = ref<BackupTask[]>([])
 const scanningIds = ref<Set<number>>(new Set())
+// 正在提交「启用 / 禁用」请求的任务：用于禁用按钮避免重复点击。
+const updatingIds = ref<Set<number>>(new Set())
 
 // —— 资源限制 ——
 const resourceLimitVisible = ref(false)
@@ -598,6 +591,14 @@ function visiblePaths(paths: string[]): string[] {
 }
 
 // —— 拖拽排序 ——
+// 记录最近一次拖拽结束时间：拖拽后浏览器会补一个 click，用它避免顺手弹出编辑向导。
+let lastBackupDragAt = 0
+
+function handleBackupCardClick(task: BackupTask) {
+  if (Date.now() - lastBackupDragAt < 260) return
+  openEditWizard(task)
+}
+
 function setupBackupSortable() {
   destroyBackupSortable()
   const grid = backupGridRef.value
@@ -609,7 +610,11 @@ function setupBackupSortable() {
     ghostClass: 'backup-card--ghost',
     chosenClass: 'backup-card--chosen',
     dragClass: 'backup-card--drag',
+    onStart: () => {
+      lastBackupDragAt = Date.now()
+    },
     onEnd: (event: SortableEvent) => {
+      lastBackupDragAt = Date.now()
       const oldIndex = event.oldIndex
       const newIndex = event.newIndex
       if (oldIndex == null || newIndex == null || oldIndex === newIndex || reordering.value) return
@@ -919,12 +924,17 @@ function filterValuePlaceholder(type: BackupFilterType) {
 
 // —— 卡片操作 ——
 async function toggleEnabled(task: BackupTask) {
+  updatingIds.value = new Set(updatingIds.value).add(task.id)
   try {
     await setBackupEnabled(task.id, !task.enabled)
     ElMessage.success(task.enabled ? '已禁用' : '已启用')
     await loadBackups()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '操作失败')
+  } finally {
+    const next = new Set(updatingIds.value)
+    next.delete(task.id)
+    updatingIds.value = next
   }
 }
 
@@ -1051,6 +1061,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border: 1px solid #edf2f7;
   border-radius: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  cursor: pointer;
   transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
@@ -1130,16 +1141,27 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   text-overflow: ellipsis;
 }
 
-.backup-card__status-dot {
+/* 右上角模式标识：与规则卡片保持一致的莫奈低饱和雾霾蓝。 */
+.backup-card__mode {
   flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #cbd5e1;
+  padding: 2px 10px;
+  border: 1px solid rgba(95, 127, 168, 0.28);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5f7fa8;
+  background: rgba(95, 127, 168, 0.12);
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease;
 }
 
-.backup-card__status-dot.is-on {
-  background: #22c55e;
+.backup-card__mode:hover {
+  color: #fff;
+  border-color: #5f7fa8;
+  background: #5f7fa8;
 }
 
 .backup-card__body {
@@ -1166,6 +1188,11 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.backup-card__meta-value.is-empty {
+  color: var(--el-text-color-placeholder);
+  font-style: italic;
 }
 
 .backup-card__meta-more {
@@ -1213,43 +1240,8 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-card__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.backup-card__footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.backup-card__btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  font-size: 12px;
-  border-radius: 8px;
-}
-
-.backup-card__btn-icon {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.backup-card__btn--danger {
-  color: #ef4444;
-}
-
-.backup-card__btn--icon {
-  padding: 5px 7px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color, #e2e8f0);
 }
 
 /* 向导（平等 tabs） */

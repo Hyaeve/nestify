@@ -40,8 +40,13 @@
             </el-icon>
             <span>运行日志</span>
           </el-menu-item>
+        </el-menu>
+      </div>
+
+      <div class="aside-footer">
+        <el-menu router :default-active="route.path" :collapse="isCollapsed" :collapse-transition="false" class="menu menu--footer">
           <el-menu-item index="/settings">
-            <el-icon><Setting /></el-icon>
+            <el-icon class="nav-icon nav-icon--settings"><Setting /></el-icon>
             <span>系统设置</span>
           </el-menu-item>
         </el-menu>
@@ -313,6 +318,27 @@ async function handleLogout() {
 .aside-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.26);
+}
+
+/* 侧栏底部固定区：系统设置收纳在这里，不随主导航滚动。 */
+.aside-footer {
+  flex: 0 0 auto;
+  padding: 8px 10px 14px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-sidebar);
+  transition: padding 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.aside-footer .el-menu-item:last-child {
+  margin-bottom: 0;
+}
+
+.admin-layout__aside.is-collapsed .aside-footer {
+  padding: 8px 0 14px;
+}
+
+.nav-icon--settings {
+  font-size: 20px;
 }
 
 .menu {

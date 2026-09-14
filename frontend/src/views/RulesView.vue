@@ -21,93 +21,26 @@
         </div>
       </template>
 
-      <div v-if="archiveRules.length" class="rules-table-scroll"><el-table ref="archiveTableRef" v-loading="archiveLoading" :data="archiveRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleArchiveRuleContextMenu">
-        <el-table-column label="规则名称" min-width="180">
-          <template #default="scope">
-            <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass(scope.row.compatibility_mode)" aria-label="拖拽排序" title="拖拽排序">
-                ⋮⋮
-              </button>
-              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="模式" width="110">
-          <template #default="scope">
-            <span class="custom-mode-tag" :class="scope.row.archive_mode === 'package' ? 'custom-mode-tag--package' : 'custom-mode-tag--collect'">{{ scope.row.archive_mode === 'package' ? '打包' : '收集' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
-        <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="Cron" width="140">
-          <template #default="scope">
-            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
-              <template v-if="isEditingCron(scope.row.id)">
-                <el-input
-                  v-model="cronEditingValue"
-                  size="small"
-                  placeholder="请输入 Cron 表达式"
-                  @click.stop
-                  @keyup.enter="saveInlineCron(scope.row)"
-                  @keyup.esc="cancelInlineCronEdit"
-                  @blur="saveInlineCron(scope.row)"
-                />
-              </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
-                <template #content>
-                  <div class="cron-preview-tooltip">
-                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
-                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
-                    <template v-else>
-                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
-                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
-                    </template>
-                  </div>
-                </template>
-                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="100" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              :loading="isRuleStatusUpdating(scope.row.id)"
-              @change="toggleRuleEnabled(scope.row)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="140" fixed="right" align="center">
-          <template #default="scope">
-            <div class="rule-actions">
-              <el-tooltip content="编辑" placement="top">
-                <el-button link class="rule-action rule-action--primary" @click="openEditDialog(scope.row.id)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="执行" placement="top">
-                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
-                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M5 4.5h11.5v4" />
-                    <path d="M8 7.5h11v12H8z" />
-                    <path d="M11 13.5h5.5" />
-                    <path d="m14.5 10.5 3 3-3 3" />
-                  </svg>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'archive')" aria-label="删除">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table></div>
+      <div v-if="archiveRules.length" ref="archiveGridRef" v-loading="archiveLoading" class="rule-card-grid">
+        <RuleCard
+          v-for="rule in archiveRules"
+          :key="rule.id"
+          :rule="rule"
+          :mode-label="rule.archive_mode === 'package' ? '打包' : '收集'"
+          :mode-class="rule.archive_mode === 'package' ? 'custom-mode-tag--package' : 'custom-mode-tag--collect'"
+          :paths="archiveRulePaths(rule)"
+          :busy="isRuleStatusUpdating(rule.id)"
+          :cron-items="getCronPreviewItems(rule.id)"
+          :cron-loading="cronPreviewLoadingRuleId === rule.id"
+          :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
+          @edit="openRuleCardEdit"
+          @execute="prepareExecution(rule.id)"
+          @remove="removeRule(rule.id, 'archive')"
+          @toggle="toggleRuleEnabled(rule)"
+          @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
+          @contextmenu="(item, event) => handleRuleContextMenu(item, 'archive', event)"
+        />
+      </div>
 
       <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
 
@@ -351,96 +284,26 @@
         </div>
       </template>
 
-      <div v-if="purifyRules.length" class="rules-table-scroll"><el-table ref="purifyTableRef" v-loading="purifyLoading" :data="purifyRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handlePurifyRuleContextMenu">
-        <el-table-column label="规则名称" min-width="180">
-          <template #default="scope">
-            <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass(scope.row.compatibility_mode)" aria-label="拖拽排序" title="拖拽排序">
-                ⋮⋮
-              </button>
-              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="模式" width="110">
-          <template #default="scope">
-            <span class="custom-mode-tag" :class="scope.row.archive_mode === 'transform' ? 'custom-mode-tag--transform' : 'custom-mode-tag--cleanup'">
-              {{ scope.row.archive_mode === 'transform' ? '转换' : '清理' }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="监控目录" min-width="240" show-overflow-tooltip>
-          <template #default="scope">{{ getRuleSourceDirsText(scope.row) }}</template>
-        </el-table-column>
-        <el-table-column label="Cron" width="140">
-          <template #default="scope">
-            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
-              <template v-if="isEditingCron(scope.row.id)">
-                <el-input
-                  v-model="cronEditingValue"
-                  size="small"
-                  placeholder="请输入 Cron 表达式"
-                  @click.stop
-                  @keyup.enter="saveInlineCron(scope.row)"
-                  @keyup.esc="cancelInlineCronEdit"
-                  @blur="saveInlineCron(scope.row)"
-                />
-              </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
-                <template #content>
-                  <div class="cron-preview-tooltip">
-                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
-                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
-                    <template v-else>
-                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
-                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
-                    </template>
-                  </div>
-                </template>
-                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="100" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              :loading="isRuleStatusUpdating(scope.row.id)"
-              @change="toggleRuleEnabled(scope.row)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="140" fixed="right" align="center">
-          <template #default="scope">
-            <div class="rule-actions">
-              <el-tooltip content="编辑" placement="top">
-                <el-button link class="rule-action rule-action--primary" @click="openEditPurifyDialog(scope.row.id)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="执行" placement="top">
-                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
-                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M5 4.5h11.5v4" />
-                    <path d="M8 7.5h11v12H8z" />
-                    <path d="M11 13.5h5.5" />
-                    <path d="m14.5 10.5 3 3-3 3" />
-                  </svg>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'cleanup')" aria-label="删除">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table></div>
+      <div v-if="purifyRules.length" ref="purifyGridRef" v-loading="purifyLoading" class="rule-card-grid">
+        <RuleCard
+          v-for="rule in purifyRules"
+          :key="rule.id"
+          :rule="rule"
+          :mode-label="rule.archive_mode === 'transform' ? '转换' : '清理'"
+          :mode-class="rule.archive_mode === 'transform' ? 'custom-mode-tag--transform' : 'custom-mode-tag--cleanup'"
+          :paths="purifyRulePaths(rule)"
+          :busy="isRuleStatusUpdating(rule.id)"
+          :cron-items="getCronPreviewItems(rule.id)"
+          :cron-loading="cronPreviewLoadingRuleId === rule.id"
+          :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
+          @edit="openRuleCardEdit"
+          @execute="prepareExecution(rule.id)"
+          @remove="removeRule(rule.id, 'cleanup')"
+          @toggle="toggleRuleEnabled(rule)"
+          @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
+          @contextmenu="(item, event) => handleRuleContextMenu(item, 'cleanup', event)"
+        />
+      </div>
 
       <div v-if="purifyRulesTotal > 0" class="history-pagination">
         <el-pagination
@@ -468,113 +331,28 @@
         </div>
       </template>
 
-      <div v-if="linkRules.length" class="rules-table-scroll"><el-table ref="linkTableRef" v-loading="linkLoading" :data="linkRules" row-key="id" class="rules-table rules-table--sortable rules-table--wide" table-layout="fixed" @row-contextmenu="handleLinkRuleContextMenu">
-        <el-table-column label="规则名称" min-width="180">
-          <template #default="scope">
-            <div class="rule-name-cell">
-              <button type="button" class="rule-drag-handle" :class="dragHandleModeClass('local')" aria-label="拖拽排序" title="拖拽排序">
-                ⋮⋮
-              </button>
-              <span class="rule-name-cell__text">{{ scope.row.name }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="模式" width="110">
-          <template #default="scope">
-            <span class="custom-mode-tag" :class="historyModeTagClass({ archive_mode: 'link', link_mode: scope.row.link_mode })">
-              {{ historyModeLabel({ archive_mode: 'link', link_mode: scope.row.link_mode }) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="source_dir" label="源路径" min-width="320" show-overflow-tooltip />
-        <el-table-column prop="target_dir" label="目标路径" min-width="320" show-overflow-tooltip />
-        <el-table-column label="Cron" width="140">
-          <template #default="scope">
-            <div class="editable-cron" @dblclick="openInlineCronEditor(scope.row)">
-              <template v-if="isEditingCron(scope.row.id)">
-                <el-input
-                  v-model="cronEditingValue"
-                  size="small"
-                  placeholder="请输入 Cron 表达式"
-                  @click.stop
-                  @keyup.enter="saveInlineCron(scope.row)"
-                  @keyup.esc="cancelInlineCronEdit"
-                  @blur="saveInlineCron(scope.row)"
-                />
-              </template>
-              <el-tooltip v-else placement="top" effect="light" :show-after="500" :disabled="!scope.row.cron_expression" @show="handleCronPreviewShow(scope.row.id, scope.row.cron_expression)">
-                <template #content>
-                  <div class="cron-preview-tooltip">
-                    <template v-if="cronPreviewLoadingRuleId === scope.row.id">加载中...</template>
-                    <template v-else-if="cronPreviewErrorRuleId === scope.row.id">{{ cronPreviewErrorMessage || '预览失败' }}</template>
-                    <template v-else>
-                      <div class="cron-preview-tooltip__title">最近三次执行时间</div>
-                      <div v-for="item in getCronPreviewItems(scope.row.id)" :key="item" class="cron-preview-tooltip__item">{{ formatDateTime(item) }}</div>
-                    </template>
-                  </div>
-                </template>
-                <span class="editable-cron__text" :class="{ 'is-empty': !scope.row.cron_expression }">{{ scope.row.cron_expression || '双击设置' }}</span>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" min-width="100" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="scope.row.enabled"
-              inline-prompt
-              active-text="启用"
-              inactive-text="停用"
-              :loading="isRuleStatusUpdating(scope.row.id)"
-              @change="toggleRuleEnabled(scope.row)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" min-width="140" fixed="right" align="center">
-          <template #default="scope">
-            <div class="rule-actions">
-              <el-tooltip content="编辑" placement="top">
-                <el-button link class="rule-action rule-action--primary" @click="openEditLinkDialog(scope.row.id)">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <template v-if="scope.row.link_mode === 'strm'">
-                <el-dropdown trigger="click" @command="(command: string) => handleStrmSyncCommand(scope.row.id, command)">
-                  <el-button link class="rule-action rule-action--success" aria-label="执行 Strm 同步">
-                    <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M5 4.5h11.5v4" />
-                      <path d="M8 7.5h11v12H8z" />
-                      <path d="M11 13.5h5.5" />
-                      <path d="m14.5 10.5 3 3-3 3" />
-                    </svg>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="incremental">增量同步</el-dropdown-item>
-                      <el-dropdown-item command="full">全量同步</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </template>
-              <el-tooltip v-else content="执行" placement="top">
-                <el-button link class="rule-action rule-action--success" aria-label="执行" @click="prepareExecution(scope.row.id)">
-                  <svg class="rule-action__execute-icon" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M5 4.5h11.5v4" />
-                    <path d="M8 7.5h11v12H8z" />
-                    <path d="M11 13.5h5.5" />
-                    <path d="m14.5 10.5 3 3-3 3" />
-                  </svg>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除" placement="top">
-                <el-button link class="rule-action rule-action--danger" @click="removeRule(scope.row.id, 'link')" aria-label="删除">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table></div>
+      <div v-if="linkRules.length" ref="linkGridRef" v-loading="linkLoading" class="rule-card-grid">
+        <RuleCard
+          v-for="rule in linkRules"
+          :key="rule.id"
+          :rule="rule"
+          :mode-label="historyModeLabel({ archive_mode: 'link', link_mode: rule.link_mode })"
+          :mode-class="historyModeTagClass({ archive_mode: 'link', link_mode: rule.link_mode })"
+          :paths="linkRulePaths(rule)"
+          :busy="isRuleStatusUpdating(rule.id)"
+          :cron-items="getCronPreviewItems(rule.id)"
+          :cron-loading="cronPreviewLoadingRuleId === rule.id"
+          :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
+          :strm-sync="rule.link_mode === 'strm'"
+          @edit="openRuleCardEdit"
+          @execute="prepareExecution(rule.id)"
+          @strm-sync="(item, command) => handleStrmSyncCommand(item.id, command)"
+          @remove="removeRule(rule.id, 'link')"
+          @toggle="toggleRuleEnabled(rule)"
+          @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
+          @contextmenu="(item, event) => handleRuleContextMenu(item, 'link', event)"
+        />
+      </div>
 
       <div v-if="linkRulesTotal > 0" class="history-pagination">
         <el-pagination
@@ -594,26 +372,32 @@
 
     <el-card v-show="activeTab === 'naming'" class="page-card rules-card naming-rules-card">
       <template #header><div class="rules-card__header"><div class="rules-card__title">命名规则</div><el-button class="naming-add-button" round @click="openCreateNamingDialog">+ 添加规则</el-button></div></template>
-      <div class="rules-table-scroll">
-        <el-table v-if="namingRules.length" v-loading="namingLoading" :data="namingRules" row-key="id" class="rules-table naming-rules-table" table-layout="fixed">
-          <el-table-column prop="name" label="规则名称" width="210" />
-          <el-table-column label="模式" width="110"><template #default><span class="custom-mode-tag custom-mode-tag--naming">命名</span></template></el-table-column>
-          <el-table-column prop="source_dir" label="监控路径" min-width="360" show-overflow-tooltip />
-          <el-table-column label="规则 / 规则集" min-width="240"><template #default="scope">{{ namingRuleSetName(scope.row) }}</template></el-table-column>
-          <el-table-column prop="cron_expression" label="计划表达式" width="180"><template #default="scope">{{ scope.row.cron_expression || '仅手动 / 监控' }}</template></el-table-column>
-          <el-table-column label="状态" width="100" align="center"><template #default="scope"><el-switch :model-value="scope.row.enabled" inline-prompt active-text="启用" inactive-text="停用" :loading="isRuleStatusUpdating(scope.row.id)" @change="toggleRuleEnabled(scope.row)" /></template></el-table-column>
-          <el-table-column label="操作" width="156" fixed="right" align="center"><template #default="scope"><div class="rule-actions rule-actions--nowrap">
-            <el-tooltip content="执行" placement="top"><el-button link class="rule-action rule-action--naming" aria-label="执行命名" @click="prepareExecution(scope.row.id)"><svg class="rule-action__execute-icon rule-action__execute-icon--naming" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11.5v4" /><path d="M8 7.5h11v12H8z" /><path d="M11 13.5h5.5" /><path d="m14.5 10.5 3 3-3 3" /></svg></el-button></el-tooltip>
-            <el-tooltip content="删除" placement="top"><el-button link class="rule-action rule-action--danger" aria-label="删除" @click="removeRule(scope.row.id, 'naming')"><el-icon><Delete /></el-icon></el-button></el-tooltip>
-          </div></template></el-table-column>
-        </el-table>
+      <div v-if="namingRules.length" ref="namingGridRef" v-loading="namingLoading" class="rule-card-grid">
+        <RuleCard
+          v-for="rule in namingRules"
+          :key="rule.id"
+          :rule="rule"
+          mode-label="命名"
+          mode-class="custom-mode-tag--naming"
+          :paths="namingRulePaths(rule)"
+          :extra-tags="[namingRuleSetName(rule)]"
+          :busy="isRuleStatusUpdating(rule.id)"
+          :cron-items="getCronPreviewItems(rule.id)"
+          :cron-loading="cronPreviewLoadingRuleId === rule.id"
+          :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
+          @edit="openRuleCardEdit"
+          @execute="prepareExecution(rule.id)"
+          @remove="removeRule(rule.id, 'naming')"
+          @toggle="toggleRuleEnabled(rule)"
+          @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
+        />
       </div>
       <el-empty v-if="!namingLoading && namingRules.length === 0" description="暂无命名规则，可选择命名工坊规则或规则集" />
     </el-card>
 
     <BackupRulesPanel :visible="activeTab === 'backup'" />
 
-    <el-dialog v-model="createNamingDialogVisible" title="新增命名规则" width="640px">
+    <el-dialog v-model="createNamingDialogVisible" :title="editingNamingRuleID ? '编辑命名规则' : '新增命名规则'" width="640px">
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
@@ -634,7 +418,7 @@
         <el-form-item v-if="createNamingForm.schedule_enabled" label="计划表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="例如：0 8 * * *" /></el-form-item>
         <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">创建</el-button></template>
+      <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
@@ -1099,6 +883,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
+import RuleCard from '../components/RuleCard.vue'
 import { fetchRun, prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
@@ -1454,10 +1239,6 @@ function formatHistorySize(sizeBytes?: number) {
 const RULES_WHEEL_SCROLLBAR_BAND = 10
 const rulesPageRef = ref<HTMLElement | null>(null)
 
-function dragHandleModeClass(mode?: string) {
-  return mode === 'compatibility' ? 'is-compatibility' : 'is-local'
-}
-
 function getActiveRulesTableScroll(): HTMLElement | null {
   const root = rulesPageRef.value
   if (!root) return null
@@ -1557,6 +1338,29 @@ function getRuleSourceDirsText(rule: RuleItem) {
   return getRuleSourceDirs(rule).join('  |  ')
 }
 
+// —— 规则卡片上展示的路径信息 ——
+function archiveRulePaths(rule: RuleItem) {
+  return [
+    { label: '源路径', value: rule.source_dir },
+    { label: '目标路径', value: rule.target_dir },
+  ]
+}
+
+function purifyRulePaths(rule: RuleItem) {
+  return [{ label: '监控目录', value: getRuleSourceDirsText(rule) }]
+}
+
+function linkRulePaths(rule: RuleItem) {
+  return [
+    { label: '源路径', value: rule.source_dir },
+    { label: '目标路径', value: rule.target_dir },
+  ]
+}
+
+function namingRulePaths(rule: RuleItem) {
+  return [{ label: '监控路径', value: rule.source_dir }]
+}
+
 function addPurifySourceDir(target: 'create' | 'edit', path: string) {
   const trimmed = path.trim()
   if (!trimmed) return
@@ -1633,14 +1437,12 @@ const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
-const savingCronRuleIds = ref(new Set<number>())
 const updatingRuleStatusIds = ref(new Set<number>())
-const archiveTableRef = ref()
-const purifyTableRef = ref()
-const linkTableRef = ref()
+const archiveGridRef = ref<HTMLElement | null>(null)
+const purifyGridRef = ref<HTMLElement | null>(null)
+const linkGridRef = ref<HTMLElement | null>(null)
+const namingGridRef = ref<HTMLElement | null>(null)
 const reorderingRuleType = ref<RuleListType | null>(null)
-const editingCronRuleId = ref<number | null>(null)
-const cronEditingValue = ref('')
 const cronPreviewLoadingRuleId = ref<number | null>(null)
 const cronPreviewErrorRuleId = ref<number | null>(null)
 const cronPreviewErrorMessage = ref('')
@@ -1728,6 +1530,7 @@ const purifyRulesTotal = ref(0)
 let archiveSortable: Sortable | null = null
 let purifySortable: Sortable | null = null
 let linkSortable: Sortable | null = null
+let namingSortable: Sortable | null = null
 
 const createForm = reactive({
   name: '',
@@ -1852,6 +1655,9 @@ const editLinkForm = reactive({
 })
 
 const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null, options: { naming_include_files: false, naming_include_dirs: false } })
+// 非空表示当前命名规则弹窗处于「编辑」状态。
+const editingNamingRuleID = ref<number | null>(null)
+const editingNamingRule = ref<RuleItem | null>(null)
 
 const createLinkStrmSuffixInput = ref('')
 const editLinkStrmSuffixInput = ref('')
@@ -2369,8 +2175,43 @@ function loadAvailableNamingRuleSets() {
 
 function openCreateNamingDialog() {
   loadAvailableNamingRuleSets()
+  editingNamingRuleID.value = null
+  editingNamingRule.value = null
   Object.assign(createNamingForm, { name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: availableNamingRuleSets.value[0]?.id ?? null, options: { naming_include_files: false, naming_include_dirs: false } })
   createNamingDialogVisible.value = true
+}
+
+// 通过卡片单击进入命名规则编辑：把已存配置回填进同一个弹窗，提交时走更新接口。
+async function openEditNamingDialog(id: number) {
+  loadAvailableNamingRuleSets()
+  errorMessage.value = ''
+  try {
+    const response = await fetchRule(id)
+    const rule = response.data
+    if (!rule) {
+      throw new Error('规则不存在')
+    }
+    const options = parseOptionJSON(rule.options_json, { naming_include_files: false, naming_include_dirs: false })
+    const matchedSet = availableNamingRuleSets.value.find((set) => set.name === rule.description)
+    editingNamingRuleID.value = id
+    editingNamingRule.value = rule
+    Object.assign(createNamingForm, {
+      name: rule.name,
+      enabled: rule.enabled,
+      monitor_enabled: rule.monitor_enabled,
+      schedule_enabled: rule.run_mode === 'cron' || Boolean(rule.cron_expression),
+      source_dir: rule.source_dir,
+      cron_expression: rule.cron_expression || '',
+      rule_set_id: matchedSet?.id ?? null,
+      options: {
+        naming_include_files: Boolean(options.naming_include_files),
+        naming_include_dirs: Boolean(options.naming_include_dirs),
+      },
+    })
+    createNamingDialogVisible.value = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '命名规则加载失败'
+  }
 }
 
 function namingRuleSetName(rule: RuleItem) {
@@ -2383,6 +2224,8 @@ async function loadNamingRules() {
   try {
     const response = await fetchRules({ page: 1, page_size: 50, rule_type: 'naming' })
     namingRules.value = response.data?.items ?? []
+    await nextTick()
+    setupRuleSortable('naming')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '命名规则加载失败'
   } finally {
@@ -2410,16 +2253,40 @@ function setRuleItemsByType(ruleType: RuleListType, items: RuleItem[]) {
   else namingRules.value = items
 }
 
-function getTableRefByType(ruleType: RuleListType) {
-  if (ruleType === 'archive') return archiveTableRef.value
-  if (ruleType === 'cleanup') return purifyTableRef.value
-  return linkTableRef.value
+// 记录最近一次拖拽结束时间：Sortable 拖完后浏览器仍会补一个 click，
+// 用它把这次「点击」吞掉，避免拖拽结束后顺手弹出编辑窗口。
+let lastRuleDragAt = 0
+
+function openRuleCardEdit(rule: RuleItem) {
+  if (Date.now() - lastRuleDragAt < 260) return
+  const ruleType = normalizeRuleType(rule)
+  if (ruleType === 'cleanup') {
+    void openEditPurifyDialog(rule.id)
+    return
+  }
+  if (ruleType === 'link') {
+    void openEditLinkDialog(rule.id)
+    return
+  }
+  if (ruleType === 'naming') {
+    void openEditNamingDialog(rule.id)
+    return
+  }
+  void openEditDialog(rule.id)
+}
+
+function getGridElementByType(ruleType: RuleListType) {
+  if (ruleType === 'archive') return archiveGridRef.value
+  if (ruleType === 'cleanup') return purifyGridRef.value
+  if (ruleType === 'link') return linkGridRef.value
+  return namingGridRef.value
 }
 
 function getSortableByType(ruleType: RuleListType) {
   if (ruleType === 'archive') return archiveSortable
   if (ruleType === 'cleanup') return purifySortable
-  return linkSortable
+  if (ruleType === 'link') return linkSortable
+  return namingSortable
 }
 
 function setSortableByType(ruleType: RuleListType, instance: Sortable | null) {
@@ -2431,28 +2298,35 @@ function setSortableByType(ruleType: RuleListType, instance: Sortable | null) {
     purifySortable = instance
     return
   }
-  linkSortable = instance
+  if (ruleType === 'link') {
+    linkSortable = instance
+    return
+  }
+  namingSortable = instance
 }
 
 function setupRuleSortable(ruleType: RuleListType) {
-  const tableRef = getTableRefByType(ruleType)
-  const tableElement = tableRef?.$el as HTMLElement | undefined
-  const tbody = tableElement?.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
-  if (!tbody) return
-
   const current = getSortableByType(ruleType)
   if (current) {
     current.destroy()
     setSortableByType(ruleType, null)
   }
 
-  const sortable = Sortable.create(tbody, {
+  const grid = getGridElementByType(ruleType)
+  if (!grid) return
+
+  const sortable = Sortable.create(grid, {
     animation: 180,
-    handle: '.rule-drag-handle',
+    // 拖拽手柄固定在卡片左上角：卡片其余区域留给「单击打开编辑」，两者互不干扰。
+    handle: '.rule-card__grip',
     ghostClass: 'rule-sortable-ghost',
     chosenClass: 'rule-sortable-chosen',
     dragClass: 'rule-sortable-drag',
+    onStart: () => {
+      lastRuleDragAt = Date.now()
+    },
     onEnd: (event: SortableEvent) => {
+      lastRuleDragAt = Date.now()
       void handleRuleReorder(ruleType, event.oldIndex ?? -1, event.newIndex ?? -1)
     },
   })
@@ -2476,7 +2350,8 @@ async function handleRuleReorder(ruleType: RuleListType, oldIndex: number, newIn
     ElMessage.success('规则顺序已更新')
     if (ruleType === 'archive') await loadArchiveRules()
     else if (ruleType === 'cleanup') await loadPurifyRules()
-    else await loadLinkRules()
+    else if (ruleType === 'link') await loadLinkRules()
+    else await loadNamingRules()
   } catch (error) {
     setRuleItemsByType(ruleType, previous)
     errorMessage.value = error instanceof Error ? error.message : '规则排序更新失败'
@@ -3099,28 +2974,51 @@ async function submitCreateNamingRule() {
   creating.value = true
   errorMessage.value = ''
   try {
-    await createRule({
-      name: createNamingForm.name,
-      description: selectedSet.name,
-      enabled: createNamingForm.enabled,
-      monitor_enabled: createNamingForm.monitor_enabled,
-      compatibility_mode: 'local',
-      archive_mode: 'naming',
-      rule_type: 'naming',
-      run_mode: resolveRunMode(createNamingForm.monitor_enabled, createNamingForm.schedule_enabled),
-      source_dir: createNamingForm.source_dir,
-      target_dir: '',
-      watch_debounce_ms: 2000,
-      cron_expression: createNamingForm.schedule_enabled ? createNamingForm.cron_expression : '',
-      run_on_start: false,
-      options: { ...createNamingForm.options },
-      transform_rules: selectedSet.rules.map((rule) => JSON.stringify(rule)),
-    })
-    createNamingDialogVisible.value = false
-    ElMessage.success('命名规则创建成功')
+    const transformRules = selectedSet.rules.map((rule) => JSON.stringify(rule))
+    const editingRule = editingNamingRuleID.value ? editingNamingRule.value : null
+
+    if (editingRule) {
+      await updateRule(editingRule.id, buildRuleUpdatePayload(editingRule, {
+        name: createNamingForm.name,
+        description: selectedSet.name,
+        enabled: createNamingForm.enabled,
+        monitor_enabled: createNamingForm.monitor_enabled,
+        run_mode: resolveRunMode(createNamingForm.monitor_enabled, createNamingForm.schedule_enabled),
+        source_dir: createNamingForm.source_dir,
+        source_dirs: [createNamingForm.source_dir],
+        target_dir: '',
+        cron_expression: createNamingForm.schedule_enabled ? createNamingForm.cron_expression : '',
+        options: { ...createNamingForm.options },
+        transform_rules: transformRules,
+      }))
+      createNamingDialogVisible.value = false
+      ElMessage.success('命名规则已更新')
+    } else {
+      await createRule({
+        name: createNamingForm.name,
+        description: selectedSet.name,
+        enabled: createNamingForm.enabled,
+        monitor_enabled: createNamingForm.monitor_enabled,
+        compatibility_mode: 'local',
+        archive_mode: 'naming',
+        rule_type: 'naming',
+        run_mode: resolveRunMode(createNamingForm.monitor_enabled, createNamingForm.schedule_enabled),
+        source_dir: createNamingForm.source_dir,
+        target_dir: '',
+        watch_debounce_ms: 2000,
+        cron_expression: createNamingForm.schedule_enabled ? createNamingForm.cron_expression : '',
+        run_on_start: false,
+        options: { ...createNamingForm.options },
+        transform_rules: transformRules,
+      })
+      createNamingDialogVisible.value = false
+      ElMessage.success('命名规则创建成功')
+    }
+    editingNamingRuleID.value = null
+    editingNamingRule.value = null
     await loadNamingRules()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '命名规则创建失败'
+    errorMessage.value = error instanceof Error ? error.message : '命名规则保存失败'
   } finally {
     creating.value = false
   }
@@ -3235,55 +3133,6 @@ async function refreshRuleList(type: RuleListType) {
 
   if (type === 'link') await loadLinkRules()
   else await loadNamingRules()
-}
-
-function isEditingCron(ruleId: number) {
-  return editingCronRuleId.value === ruleId
-}
-
-async function openInlineCronEditor(rule: RuleItem) {
-  editingCronRuleId.value = rule.id
-  cronEditingValue.value = rule.cron_expression || ''
-  await nextTick()
-}
-
-function cancelInlineCronEdit() {
-  editingCronRuleId.value = null
-  cronEditingValue.value = ''
-}
-
-async function saveInlineCron(rule: RuleItem) {
-  if (editingCronRuleId.value !== rule.id) return
-
-  const nextCronExpression = cronEditingValue.value.trim()
-  const ruleType = normalizeRuleType(rule)
-  const loadingSet = new Set(savingCronRuleIds.value)
-
-  if (nextCronExpression === (rule.cron_expression || '')) {
-    cancelInlineCronEdit()
-    return
-  }
-
-  loadingSet.add(rule.id)
-  savingCronRuleIds.value = loadingSet
-  errorMessage.value = ''
-
-  try {
-    await updateRule(rule.id, buildRuleUpdatePayload(rule, {
-      run_mode: nextCronExpression ? 'cron' : (rule.monitor_enabled ? 'watch' : 'once'),
-      cron_expression: nextCronExpression,
-    }))
-    ElMessage.success('Cron 已更新')
-    cancelInlineCronEdit()
-    await refreshRuleList(ruleType)
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : 'Cron 更新失败')
-    await refreshRuleList(ruleType)
-  } finally {
-    const nextLoadingSet = new Set(savingCronRuleIds.value)
-    nextLoadingSet.delete(rule.id)
-    savingCronRuleIds.value = nextLoadingSet
-  }
 }
 
 function isRuleStatusUpdating(ruleId: number) {
@@ -3488,6 +3337,25 @@ onBeforeUnmount(() => {
 
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
 .rule-actions--nowrap { width: 100%; flex-wrap: nowrap; gap: 18px; }
+
+/* 规则卡片网格：自适应列宽，整卡可拖拽排序（按钮区已被 Sortable 的 filter 排除）。 */
+.rule-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.rule-card-grid > .rule-card {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .rule-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .rules-table-scroll {
   width: 100%;
   overflow-x: auto;
@@ -3522,21 +3390,6 @@ onBeforeUnmount(() => {
 .custom-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); border-color: rgba(15, 159, 135, 0.28); }
 /* 备份：莫奈低饱和雾霾蓝，与运行日志页的模式色保持一致 */
 .custom-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); border-color: rgba(95, 127, 168, 0.28); }
-.rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }
-.rule-drag-handle.is-local { color: #8fce7a; }
-.rule-drag-handle.is-compatibility { color: #e3a257; }
-.rule-drag-handle:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
-.rule-drag-handle:active { cursor: grabbing; }
-.editable-cron { min-height: 32px; display: flex; align-items: center; cursor: pointer; }
-.editable-cron__text { display: inline-flex; align-items: center; min-height: 32px; padding: 0 4px; border-radius: 6px; transition: background-color 0.2s ease, color 0.2s ease; }
-.editable-cron:hover .editable-cron__text { background: var(--el-fill-color-light); }
-.editable-cron__text.is-empty { color: var(--el-text-color-placeholder); }
-.cron-preview-tooltip { min-width: 220px; }
-.cron-preview-tooltip__title { margin-bottom: 6px; font-weight: 600; color: var(--el-text-color-primary); }
-.cron-preview-tooltip__item { line-height: 1.7; color: var(--el-text-color-regular); }
-
 .rules-page :deep(.rules-table .el-switch) {
   flex-shrink: 0;
 }
@@ -3590,6 +3443,17 @@ onBeforeUnmount(() => {
 
 .rule-sortable-ghost {
   opacity: 0.45;
+}
+
+/* 卡片式规则列表的拖拽反馈（表格版用的是 td 背景色）。 */
+.rule-card-grid .rule-sortable-chosen {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 14px 30px rgba(91, 122, 110, 0.22);
+}
+
+.rule-card-grid .rule-sortable-drag {
+  transform: rotate(1.2deg);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
 }
 
 .rules-page :deep(.rule-sortable-chosen > td) {
