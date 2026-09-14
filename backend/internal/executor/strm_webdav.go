@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"nestify/backend/internal/model"
 	"nestify/backend/internal/webdav"
@@ -40,7 +41,7 @@ func parseWebdavSource(sourceDir string) (int64, string, error) {
 // executeWebdavStrmRule 针对 WebDAV 挂载源生成 http strm：
 // strm 内容 = 挂载的 http 根地址 + 直链端点（/d）+ WebDAV 内部文件路径。
 // 注意使用直链端点而非 WebDAV 端点（/dav），否则媒体服务器无法直接播放。
-// 所有远端请求都经由客户端节流，避免对网盘后端造成过高的请求频繁度。
+// 远端请求按「下载线程数」并发、每个线程遵守「API 请求间隔」，避免把网盘后端打限流。
 func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
 	extensions := normalizeStrmExtensions(req.Filters)
 	if len(extensions) == 0 {
@@ -71,6 +72,10 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	client := webdav.NewClient(credential.Mount, credential.Password)
 
 	overwrite := req.Options["strm_overwrite"]
+	interval := strmAPIInterval(req.OptionValues)
+	threads := strmDownloadThreads(req.OptionValues)
+	minVideoBytes := strmMinVideoBytes(req.OptionValues)
+	client.SetRequestInterval(interval)
 
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
@@ -78,9 +83,10 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 		}
 	}
 
-	s.appendLog(runID, "info", fmt.Sprintf("WebDAV 源：%s（%s）", credential.Mount.Name, credential.Mount.BaseURL))
+	s.appendLog(runID, "info", fmt.Sprintf("WebDAV 源：%s（%s）；请求间隔 %.1fs / 线程 %d；最小视频 %s",
+		credential.Mount.Name, credential.Mount.BaseURL, interval.Seconds(), threads, describeMinVideoSize(minVideoBytes)))
 
-	if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, internalPath, targetDir, extensions, matchers, overwrite, stats); err != nil {
+	if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, targetDir, extensions, matchers, overwrite, minVideoBytes, threads, stats); err != nil {
 		return *stats, err
 	}
 
@@ -109,41 +115,110 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	return *stats, nil
 }
 
+// walkWebdavStrm 并发遍历 WebDAV 目录树并生成 strm。
+// 待处理目录放进共享队列，由 threads 个工作线程消费；
+// 每个线程持有独立的客户端副本，使「API 请求间隔」按线程生效，而不是全局串行等待。
 func (s *Service) walkWebdavStrm(
 	ctx context.Context,
 	runID string,
 	client *webdav.Client,
 	rootInternal string,
-	currentInternal string,
 	targetRoot string,
 	extensions map[string]struct{},
 	matchers []fileNameMatcher,
 	overwrite bool,
+	minVideoBytes int64,
+	threads int,
 	stats *executionStats,
 ) error {
+	if threads < 1 {
+		threads = 1
+	}
+
+	queue := newStrmDirQueue(rootInternal)
+	var statsMu sync.Mutex
+
+	workers := make([]*webdav.Client, threads)
+	for index := range workers {
+		if index == 0 {
+			workers[index] = client
+		} else {
+			workers[index] = client.Fork()
+		}
+	}
+
+	var waitGroup sync.WaitGroup
+	for index := 0; index < threads; index++ {
+		waitGroup.Add(1)
+		go func(worker *webdav.Client) {
+			defer waitGroup.Done()
+			for {
+				dir, ok := queue.pop()
+				if !ok {
+					return
+				}
+				s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, extensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
+				queue.done()
+			}
+		}(workers[index])
+	}
+
+	waitGroup.Wait()
+	return nil
+}
+
+// processWebdavStrmDir 处理单个远端目录：列目录、过滤、为命中文件写 strm，
+// 并把子目录交回队列。stats 由 statsMu 保护后修改（多个线程会同时命中这里）。
+func (s *Service) processWebdavStrmDir(
+	ctx context.Context,
+	runID string,
+	client *webdav.Client,
+	currentInternal string,
+	rootInternal string,
+	targetRoot string,
+	extensions map[string]struct{},
+	matchers []fileNameMatcher,
+	overwrite bool,
+	minVideoBytes int64,
+	statsMu *sync.Mutex,
+	stats *executionStats,
+	queue *strmDirQueue,
+) {
 	entries, err := client.List(ctx, currentInternal)
 	if err != nil {
+		statsMu.Lock()
 		stats.FailureCount++
+		statsMu.Unlock()
 		s.appendLog(runID, "error", fmt.Sprintf("列出 WebDAV 目录 %s 失败：%v", currentInternal, err))
-		return nil
+		return
 	}
 
 	for _, entry := range entries {
 		if matchesFileName(entry.Name, entry.IsDir, matchers) {
+			statsMu.Lock()
 			stats.SkipCount++
+			statsMu.Unlock()
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
 			continue
 		}
 
 		if entry.IsDir {
-			if err := s.walkWebdavStrm(ctx, runID, client, rootInternal, entry.Path, targetRoot, extensions, matchers, overwrite, stats); err != nil {
-				return err
-			}
+			queue.push(entry.Path)
 			continue
 		}
 
 		if !matchesStrmExtension(entry.Name, extensions) {
+			statsMu.Lock()
 			stats.SkipCount++
+			statsMu.Unlock()
+			continue
+		}
+
+		if shouldSkipByMinVideoSize(entry.Name, entry.Size, minVideoBytes) {
+			statsMu.Lock()
+			stats.SkipCount++
+			statsMu.Unlock()
+			s.appendLog(runID, "info", fmt.Sprintf("skipped small video %s (%.1fMB)", entry.Path, float64(entry.Size)/(1024*1024)))
 			continue
 		}
 
@@ -158,27 +233,85 @@ func (s *Service) walkWebdavStrm(
 		if _, err := os.Lstat(targetPath); err == nil {
 			existed = true
 			if !overwrite {
+				statsMu.Lock()
 				stats.SkipCount++
+				statsMu.Unlock()
 				continue
 			}
 		}
 
 		if err := writeStrmContent(targetPath, client.BuildStrmURL(entry.Path)); err != nil {
+			statsMu.Lock()
 			stats.FailureCount++
+			statsMu.Unlock()
 			s.appendLog(runID, "error", fmt.Sprintf("create strm %s failed: %v", targetPath, err))
 			continue
 		}
 
+		statsMu.Lock()
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		statsMu.Unlock()
 		if existed {
 			s.appendLog(runID, "info", fmt.Sprintf("overwrote http strm %s", targetPath))
 		} else {
 			s.appendLog(runID, "info", fmt.Sprintf("created http strm %s", targetPath))
 		}
 	}
+}
 
-	return nil
+// strmDirQueue 是并发遍历用的「待处理目录」队列。
+// pending 记录尚未处理完的目录数：push 加一、done 减一、归零后所有阻塞的 pop 都会返回 false。
+type strmDirQueue struct {
+	mu      sync.Mutex
+	cond    *sync.Cond
+	items   []string
+	head    int
+	pending int
+}
+
+func newStrmDirQueue(root string) *strmDirQueue {
+	queue := &strmDirQueue{items: []string{root}, pending: 1}
+	queue.cond = sync.NewCond(&queue.mu)
+	return queue
+}
+
+func (q *strmDirQueue) push(dir string) {
+	q.mu.Lock()
+	q.items = append(q.items, dir)
+	q.pending++
+	q.mu.Unlock()
+	q.cond.Signal()
+}
+
+func (q *strmDirQueue) pop() (string, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	for q.head >= len(q.items) {
+		if q.pending == 0 {
+			return "", false
+		}
+		q.cond.Wait()
+	}
+
+	dir := q.items[q.head]
+	q.head++
+	if q.head >= len(q.items) {
+		q.items = q.items[:0]
+		q.head = 0
+	}
+	return dir, true
+}
+
+func (q *strmDirQueue) done() {
+	q.mu.Lock()
+	q.pending--
+	finished := q.pending == 0
+	q.mu.Unlock()
+	if finished {
+		q.cond.Broadcast()
+	}
 }
 
 func strmRelativePath(relative string) string {

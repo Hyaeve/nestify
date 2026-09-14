@@ -381,6 +381,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	matchers := buildFileNameMatchers(req.Whitelist)
 
 	overwrite := req.Options["strm_overwrite"]
+	minVideoBytes := strmMinVideoBytes(req.OptionValues)
 
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
@@ -388,7 +389,11 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		}
 	}
 
-	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, overwrite, stats); err != nil {
+	if minVideoBytes > 0 {
+		s.appendLog(runID, "info", fmt.Sprintf("最小视频：%s（小于该值的视频不生成 Strm）", describeMinVideoSize(minVideoBytes)))
+	}
+
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, overwrite, minVideoBytes, stats); err != nil {
 		return *stats, err
 	}
 
@@ -415,7 +420,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	return *stats, nil
 }
 
-func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, overwrite bool, stats *executionStats) error {
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, overwrite bool, minVideoBytes int64, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
@@ -431,7 +436,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
 				return nil
 			}
-			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, overwrite, stats)
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, overwrite, minVideoBytes, stats)
 		}
 
 		if matchesFileName(entry.Name(), false, matchers) {
@@ -443,6 +448,15 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		if !matchesStrmExtension(entry.Name(), extensions) {
 			stats.SkipCount++
 			return nil
+		}
+
+		// 小于「最小视频」阈值的视频不生成 strm（只判断视频类扩展名）。
+		if minVideoBytes > 0 && isStrmVideoFile(entry.Name()) {
+			if info, statErr := entry.Info(); statErr == nil && shouldSkipByMinVideoSize(entry.Name(), info.Size(), minVideoBytes) {
+				stats.SkipCount++
+				s.appendLog(runID, "info", fmt.Sprintf("skipped small video %s (%.1fMB)", sourcePath, float64(info.Size())/(1024*1024)))
+				return nil
+			}
 		}
 
 		targetPath, relErr := strmTargetPath(rootPath, sourcePath, targetRoot)

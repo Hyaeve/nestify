@@ -950,6 +950,26 @@
             <el-switch v-model="createLinkForm.strm_overwrite" />
             <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
           </el-form-item>
+          <el-row :gutter="16">
+            <el-col :span="8">
+              <el-form-item label="API 请求间隔">
+                <el-input-number v-model="createLinkForm.strm_api_interval_seconds" class="strm-option-number" :min="0.1" :max="60" :step="0.1" :precision="1" controls-position="right" />
+                <span class="strm-option-unit">秒</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="最小视频">
+                <el-input-number v-model="createLinkForm.strm_min_video_mb" class="strm-option-number" :min="0" :max="1048576" :step="1" controls-position="right" />
+                <span class="strm-option-unit">MB</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="下载线程数">
+                <el-input-number v-model="createLinkForm.strm_download_threads" class="strm-option-number" :min="1" :max="16" :step="1" controls-position="right" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <div class="strm-options-hint">API 请求间隔：每个线程对网盘接口的最小请求间隔；最小视频：小于该值的视频不生成 Strm（0 表示不限制）；下载线程数：并发请求数。</div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -1011,6 +1031,26 @@
             <el-switch v-model="editLinkForm.strm_overwrite" />
             <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
           </el-form-item>
+          <el-row :gutter="16">
+            <el-col :span="8">
+              <el-form-item label="API 请求间隔">
+                <el-input-number v-model="editLinkForm.strm_api_interval_seconds" class="strm-option-number" :min="0.1" :max="60" :step="0.1" :precision="1" controls-position="right" />
+                <span class="strm-option-unit">秒</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="最小视频">
+                <el-input-number v-model="editLinkForm.strm_min_video_mb" class="strm-option-number" :min="0" :max="1048576" :step="1" controls-position="right" />
+                <span class="strm-option-unit">MB</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="下载线程数">
+                <el-input-number v-model="editLinkForm.strm_download_threads" class="strm-option-number" :min="1" :max="16" :step="1" controls-position="right" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <div class="strm-options-hint">API 请求间隔：每个线程对网盘接口的最小请求间隔；最小视频：小于该值的视频不生成 Strm（0 表示不限制）；下载线程数：并发请求数。</div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -1266,6 +1306,77 @@ function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean) {
   return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite }
 }
 
+// Strm 规则的数值参数（存 rules.option_values_json）。
+// API 请求间隔后端存毫秒，界面上按「秒 / 步长 0.1」编辑。
+type StrmOptionValues = {
+  strm_api_interval_ms: number
+  strm_min_video_mb: number
+  strm_download_threads: number
+}
+
+const strmOptionValueDefaults: StrmOptionValues = {
+  strm_api_interval_ms: 2000,
+  strm_min_video_mb: 0,
+  strm_download_threads: 3,
+}
+
+function parseStrmOptionValues(raw?: string): StrmOptionValues {
+  return parseNumberOptionJSON(raw, strmOptionValueDefaults)
+}
+
+function parseStrmAPIIntervalSeconds(raw?: string) {
+  return parseStrmOptionValues(raw).strm_api_interval_ms / 1000
+}
+
+function parseStrmMinVideoMB(raw?: string) {
+  return parseStrmOptionValues(raw).strm_min_video_mb
+}
+
+function parseStrmDownloadThreads(raw?: string) {
+  return parseStrmOptionValues(raw).strm_download_threads
+}
+
+function createDefaultStrmAPIIntervalSeconds() {
+  return strmOptionValueDefaults.strm_api_interval_ms / 1000
+}
+
+function createDefaultStrmMinVideoMB() {
+  return strmOptionValueDefaults.strm_min_video_mb
+}
+
+function createDefaultStrmDownloadThreads() {
+  return strmOptionValueDefaults.strm_download_threads
+}
+
+function buildStrmOptionValues(form: { strm_api_interval_seconds: number; strm_min_video_mb: number; strm_download_threads: number }): StrmOptionValues {
+  const seconds = Number.isFinite(form.strm_api_interval_seconds) ? form.strm_api_interval_seconds : createDefaultStrmAPIIntervalSeconds()
+  const megabytes = Number.isFinite(form.strm_min_video_mb) ? form.strm_min_video_mb : 0
+  const threads = Number.isFinite(form.strm_download_threads) ? form.strm_download_threads : 3
+  return {
+    // 与后端 strmMinAPIIntervalMS 保持一致，最小 0.1 秒。
+    strm_api_interval_ms: Math.max(100, Math.round(seconds * 1000)),
+    strm_min_video_mb: Math.max(0, Math.round(megabytes)),
+    strm_download_threads: Math.min(16, Math.max(1, Math.round(threads))),
+  }
+}
+
+// 原样读出库里已存的数值参数（不补默认值）：
+// 用于「只切换启用状态」这类 PUT，避免凭空写入本不存在的参数。
+function parseStoredOptionValues(raw?: string): Record<string, number> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: Record<string, number> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof value === 'number' && Number.isFinite(value)) result[key] = value
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
 function parseFiltersJSON(raw?: string) {
   if (!raw) return ''
   try {
@@ -1465,6 +1576,8 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
     options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json), parseStrmOverwrite(rule.options_json)) : {}),
+    // 原样带回库里已有的数值参数：PUT 是整体覆盖，缺这个字段会把清理保留天数等一起清空。
+    option_values: parseStoredOptionValues(rule.option_values_json),
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
       ? normalizeFixedPackageOptions(parseOptionJSON(rule.package_options_json, createDefaultPackageOptions()))
       : {},
@@ -1670,6 +1783,9 @@ const createLinkForm = reactive({
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
   strm_overwrite: false,
+  strm_api_interval_seconds: createDefaultStrmAPIIntervalSeconds(),
+  strm_min_video_mb: createDefaultStrmMinVideoMB(),
+  strm_download_threads: createDefaultStrmDownloadThreads(),
   strm_suffixes: [] as string[],
   strm_metadata_suffixes: [] as string[],
   filters_text: '',
@@ -1688,6 +1804,9 @@ const editLinkForm = reactive({
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
   strm_overwrite: false,
+  strm_api_interval_seconds: createDefaultStrmAPIIntervalSeconds(),
+  strm_min_video_mb: createDefaultStrmMinVideoMB(),
+  strm_download_threads: createDefaultStrmDownloadThreads(),
   strm_suffixes: [] as string[],
   strm_metadata_suffixes: [] as string[],
   filters_text: '',
@@ -1791,6 +1910,9 @@ function resetCreateLinkForm() {
   createLinkForm.link_mode = 'soft'
   createLinkForm.strm_sync_mode = 'incremental'
   createLinkForm.strm_overwrite = false
+  createLinkForm.strm_api_interval_seconds = createDefaultStrmAPIIntervalSeconds()
+  createLinkForm.strm_min_video_mb = createDefaultStrmMinVideoMB()
+  createLinkForm.strm_download_threads = createDefaultStrmDownloadThreads()
   createLinkForm.strm_suffixes = []
   createLinkForm.strm_metadata_suffixes = []
   createLinkForm.filters_text = ''
@@ -1811,6 +1933,9 @@ function resetEditLinkForm() {
   editLinkForm.link_mode = 'soft'
   editLinkForm.strm_sync_mode = 'incremental'
   editLinkForm.strm_overwrite = false
+  editLinkForm.strm_api_interval_seconds = createDefaultStrmAPIIntervalSeconds()
+  editLinkForm.strm_min_video_mb = createDefaultStrmMinVideoMB()
+  editLinkForm.strm_download_threads = createDefaultStrmDownloadThreads()
   editLinkForm.strm_suffixes = []
   editLinkForm.strm_metadata_suffixes = []
   editLinkForm.filters_text = ''
@@ -2042,6 +2167,9 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.link_mode = normalizeLinkMode(rule.link_mode)
     editLinkForm.strm_sync_mode = parseStrmSyncMode(rule.options_json)
     editLinkForm.strm_overwrite = parseStrmOverwrite(rule.options_json)
+    editLinkForm.strm_api_interval_seconds = parseStrmAPIIntervalSeconds(rule.option_values_json)
+    editLinkForm.strm_min_video_mb = parseStrmMinVideoMB(rule.option_values_json)
+    editLinkForm.strm_download_threads = parseStrmDownloadThreads(rule.option_values_json)
     const strmSuffixGroups = splitStrmSuffixes(normalizeStrmSuffixes(parseFiltersArray(rule.filters_json)))
     editLinkForm.strm_suffixes = strmSuffixGroups.media
     editLinkForm.strm_metadata_suffixes = strmSuffixGroups.metadata
@@ -2862,6 +2990,7 @@ async function submitCreateLinkRule() {
       cron_expression: createLinkForm.schedule_enabled ? createLinkForm.cron_expression : '',
       run_on_start: createLinkForm.run_on_start,
       options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode, createLinkForm.strm_overwrite) : {},
+      option_values: createLinkForm.link_mode === 'strm' ? buildStrmOptionValues(createLinkForm) : {},
       package_options: {},
       collect_options: {},
       filters: createLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(createLinkForm.strm_suffixes, createLinkForm.strm_metadata_suffixes) : parseFiltersText(createLinkForm.filters_text),
@@ -2944,6 +3073,7 @@ async function submitUpdateLinkRule() {
       cron_expression: editLinkForm.schedule_enabled ? editLinkForm.cron_expression : '',
       run_on_start: editLinkForm.run_on_start,
       options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode, editLinkForm.strm_overwrite) : {},
+      option_values: editLinkForm.link_mode === 'strm' ? buildStrmOptionValues(editLinkForm) : {},
       package_options: {},
       collect_options: {},
       filters: editLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(editLinkForm.strm_suffixes, editLinkForm.strm_metadata_suffixes) : parseFiltersText(editLinkForm.filters_text),
@@ -3425,6 +3555,10 @@ onBeforeUnmount(() => {
 .strm-preset-button.is-active { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: 0 6px 14px rgba(47, 143, 157, 0.22); }
 /* 覆盖生成开关下方的小字说明：独占一行，避免与开关挤在同一行。 */
 .strm-overwrite-hint { flex: 0 0 100%; width: 100%; margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
+/* Strm 数值参数行（API 请求间隔 / 最小视频 / 下载线程数）：窄输入框 + 紧随其后的单位。 */
+.strm-option-number { width: 118px; }
+.strm-option-unit { margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary); }
+.strm-options-hint { margin: -4px 0 16px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
 
 /* —— 横栏（标题条）与其下方内容合并为同一个窗口 —— */
 /* 横栏后面紧跟输入区 / 折叠面板时：去掉下方圆角与下边框，交给下方内容自己那条上边框当分隔线。 */

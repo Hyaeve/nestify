@@ -19,9 +19,10 @@ import (
 	"nestify/backend/internal/model"
 )
 
-// minRequestInterval 是同一个挂载点两次请求之间的最小间隔，
+// defaultMinRequestInterval 是同一个挂载点两次请求之间的默认最小间隔，
 // 避免对网盘后端造成过高的请求频繁度。
-const minRequestInterval = 250 * time.Millisecond
+// Strm 规则里的「API 请求间隔」会通过 SetRequestInterval 覆盖它。
+const defaultMinRequestInterval = 250 * time.Millisecond
 
 type Entry struct {
 	Name       string
@@ -37,6 +38,9 @@ type Client struct {
 	username   string
 	password   string
 	httpClient *http.Client
+
+	// minInterval 为 0 表示不节流；每个 Client 实例各自维护节流状态。
+	minInterval time.Duration
 
 	mu          sync.Mutex
 	lastRequest time.Time
@@ -56,6 +60,34 @@ func NewClient(mount model.WebdavMount, password string) *Client {
 				MaxIdleConnsPerHost: 2,
 			},
 		},
+		minInterval: defaultMinRequestInterval,
+	}
+}
+
+// SetRequestInterval 覆盖两次请求之间的最小间隔（<=0 表示不节流）。
+func (c *Client) SetRequestInterval(interval time.Duration) {
+	if interval < 0 {
+		interval = 0
+	}
+	c.minInterval = interval
+}
+
+// RequestInterval 返回当前的请求最小间隔。
+func (c *Client) RequestInterval() time.Duration {
+	return c.minInterval
+}
+
+// Fork 返回一个共享同一份 http 连接池、但拥有独立节流状态的副本。
+// 并发工作线程各持有一份，可让「API 请求间隔」按线程生效，而不是全局串行等待。
+// 这里显式逐字段构造，避免复制内含 sync.Mutex 的结构体。
+func (c *Client) Fork() *Client {
+	return &Client{
+		baseURL:     c.baseURL,
+		basePath:    c.basePath,
+		username:    c.username,
+		password:    c.password,
+		httpClient:  c.httpClient,
+		minInterval: c.minInterval,
 	}
 }
 
@@ -267,7 +299,7 @@ func InternalPathFromParts(parts ...string) string {
 func (c *Client) Wait(ctx context.Context) error {
 	c.mu.Lock()
 	elapsed := time.Since(c.lastRequest)
-	wait := minRequestInterval - elapsed
+	wait := c.minInterval - elapsed
 	if wait < 0 {
 		wait = 0
 	}
