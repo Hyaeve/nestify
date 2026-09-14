@@ -158,60 +158,95 @@
         </div>
 
         <div class="path-row">
-          <!-- 「本地目录 / 远程挂载」合为一个下拉：本地列出各根路径，远程列出各自定义名称
-               （挂载的自定义名称就是该挂载的顶层目录）。选中即切换页面并写入 URL 后缀
-               （?source=local / ?source=mount），可常驻、可刷新、可收藏。 -->
+          <!-- 目录下拉分两级：一级选来源（本地目录 / 远程挂载），点开来源后才列出该来源下的具体根
+               —— 本地列各根路径，远程列**已挂载**的自定义名称（挂载名即该挂载的顶层目录）。
+               选中即切换页面并写入 URL 后缀（?source=local / ?source=mount），可常驻、可刷新、可收藏。 -->
           <div class="path-row__root-picker">
             <button
               type="button"
               class="path-source-root"
               :class="`is-${sourceMode}`"
-              :title="currentRoot ? `${currentRoot.name}（${currentRoot.path}）` : sourceEmptyHint"
+              :title="currentRoot ? `${sourceLabel} · ${currentRoot.name}（${currentRoot.path}）` : sourceEmptyHint"
               @click.stop="toggleRootMenu"
             >
               <el-icon class="path-source-root__icon">
                 <Monitor v-if="sourceMode === 'local'" />
                 <Cloudy v-else />
               </el-icon>
-              <span class="path-source-root__text">{{ currentRootLabel }}</span>
-              <el-icon class="path-source-root__caret"><ArrowDown /></el-icon>
+              <span class="path-source-root__text">
+                <span class="path-source-root__source">{{ sourceLabel }}</span>
+                <span class="path-source-root__sep">·</span>
+                <span class="path-source-root__name">{{ currentRootLabel }}</span>
+              </span>
+              <el-icon class="path-source-root__caret" :class="{ 'is-open': rootMenuVisible }"><ArrowDown /></el-icon>
             </button>
 
             <div v-if="rootMenuVisible" class="path-source-menu" @click.stop>
-              <div class="path-source-menu__group">
-                <el-icon><Monitor /></el-icon>
-                <span>本地目录</span>
-              </div>
+              <!-- 一级：来源。点击才展开该来源下的根，不直接把具体挂载铺在下拉里。 -->
               <button
-                v-for="root in localRoots"
-                :key="root.path"
                 type="button"
-                class="path-source-menu__item"
-                :class="{ 'is-active': sourceMode === 'local' && rootContainsCurrent(root) }"
-                :title="root.path"
-                @click="selectSourceRoot(root, 'local')"
+                class="path-source-menu__source"
+                :class="{ 'is-open': expandedSource === 'local' }"
+                @click="toggleSourceGroup('local')"
               >
-                <span class="path-source-menu__name">{{ root.name }}</span>
-                <span v-if="root.path !== root.name" class="path-source-menu__path">{{ root.path }}</span>
+                <el-icon class="path-source-menu__source-icon"><Monitor /></el-icon>
+                <span class="path-source-menu__source-text">本地目录</span>
+                <span v-if="sourceMode === 'local'" class="path-source-menu__source-badge">当前</span>
+                <span class="path-source-menu__source-count">{{ localRoots.length }}</span>
+                <el-icon class="path-source-menu__source-caret" :class="{ 'is-open': expandedSource === 'local' }">
+                  <ArrowDown />
+                </el-icon>
               </button>
-              <div v-if="!localRoots.length" class="path-source-menu__empty">未发现可用的本地目录</div>
 
-              <div class="path-source-menu__group path-source-menu__group--remote">
-                <el-icon><Cloudy /></el-icon>
-                <span>远程挂载</span>
+              <!-- 二级：本地目录下的各个根。 -->
+              <div v-if="expandedSource === 'local'" class="path-source-menu__list">
+                <button
+                  v-for="root in localRoots"
+                  :key="root.path"
+                  type="button"
+                  class="path-source-menu__item"
+                  :class="{ 'is-active': sourceMode === 'local' && rootContainsCurrent(root) }"
+                  :title="root.path"
+                  @click="selectSourceRoot(root, 'local')"
+                >
+                  <span class="path-source-menu__name">{{ root.name }}</span>
+                  <span v-if="root.path !== root.name" class="path-source-menu__path">{{ root.path }}</span>
+                </button>
+                <div v-if="!localRoots.length" class="path-source-menu__empty">未发现可用的本地目录</div>
               </div>
+
+              <div class="path-source-menu__divider" />
+
               <button
-                v-for="root in mountRoots"
-                :key="root.path"
                 type="button"
-                class="path-source-menu__item"
-                :class="{ 'is-active': sourceMode === 'mount' && rootContainsCurrent(root) }"
-                :title="root.path"
-                @click="selectSourceRoot(root, 'mount')"
+                class="path-source-menu__source"
+                :class="{ 'is-open': expandedSource === 'mount' }"
+                @click="toggleSourceGroup('mount')"
               >
-                <span class="path-source-menu__name">{{ root.name }}</span>
+                <el-icon class="path-source-menu__source-icon"><Cloudy /></el-icon>
+                <span class="path-source-menu__source-text">远程挂载</span>
+                <span v-if="sourceMode === 'mount'" class="path-source-menu__source-badge">当前</span>
+                <span class="path-source-menu__source-count">{{ mountRoots.length }}</span>
+                <el-icon class="path-source-menu__source-caret" :class="{ 'is-open': expandedSource === 'mount' }">
+                  <ArrowDown />
+                </el-icon>
               </button>
-              <div v-if="!mountRoots.length" class="path-source-menu__empty">尚未配置远程挂载目录</div>
+
+              <!-- 二级：已挂载的远程挂载（自定义名称即该挂载的顶层目录）。 -->
+              <div v-if="expandedSource === 'mount'" class="path-source-menu__list">
+                <button
+                  v-for="root in mountRoots"
+                  :key="root.path"
+                  type="button"
+                  class="path-source-menu__item"
+                  :class="{ 'is-active': sourceMode === 'mount' && rootContainsCurrent(root) }"
+                  :title="root.path"
+                  @click="selectSourceRoot(root, 'mount')"
+                >
+                  <span class="path-source-menu__name">{{ root.name }}</span>
+                </button>
+                <div v-if="!mountRoots.length" class="path-source-menu__empty">尚未配置远程挂载目录</div>
+              </div>
             </div>
           </div>
 
@@ -546,6 +581,8 @@ const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const rootMenuVisible = ref(false)
+/** 下拉里展开的「来源」分组：null = 两级都收起，只看到来源条目。 */
+const expandedSource = ref<SourceMode | null>(null)
 const selectedRows = ref<FileManagerEntry[]>([])
 const shiftPressed = ref(false)
 const lastAnchorPath = ref<string | null>(null)
@@ -626,6 +663,8 @@ const currentRoot = computed<BrowseRoot | null>(() => {
   return matched ?? activeRoots.value[0] ?? null
 })
 const currentRootLabel = computed(() => currentRoot.value?.name ?? '未选择根目录')
+/** 来源名称：目录下拉按钮上位于「」前的那个词（本地目录 / 远程挂载）。 */
+const sourceLabel = computed(() => (sourceMode.value === 'mount' ? '远程挂载' : '本地目录'))
 /** 「最近访问」只列当前页面的路径，避免两块页面互相串目录。 */
 const visibleRecentPaths = computed(() =>
   recentVisitedPaths.value.filter((path) => isMountPath(path) === (sourceMode.value === 'mount')),
@@ -776,18 +815,25 @@ function resolveSourceTargetPath(mode: SourceMode) {
   return sourceRoots[0]?.path ?? ''
 }
 
-/** 目录下拉里的「目录」：展开后可切换到任意来源的根（本地路径 / 远程挂载自定义名称）。 */
+/** 目录下拉：打开时两级都收起，先让用户选来源，再展开该来源下的具体根。 */
 function toggleRootMenu() {
   if (!localRoots.value.length && !mountRoots.value.length) {
     ElMessage.warning('尚未配置可用的目录')
     return
   }
   rootMenuVisible.value = !rootMenuVisible.value
+  expandedSource.value = null
+}
+
+/** 展开 / 收起某一个来源分组（点「本地目录」或「远程挂载」）。 */
+function toggleSourceGroup(mode: SourceMode) {
+  expandedSource.value = expandedSource.value === mode ? null : mode
 }
 
 /** 下拉里选中某个根：来源不同就先切页面（写入 URL 后缀），再进入该目录。 */
 function selectSourceRoot(root: BrowseRoot, mode: SourceMode) {
   rootMenuVisible.value = false
+  expandedSource.value = null
   if (mode !== sourceMode.value) {
     void switchSource(mode, root.path)
     return
@@ -830,6 +876,7 @@ function joinPath(base: string, segment: string) {
 function hideContextMenu() {
   contextMenu.value.visible = false
   rootMenuVisible.value = false
+  expandedSource.value = null
 }
 
 function handleWindowKeyDown(event: KeyboardEvent) {
@@ -1958,9 +2005,28 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.path-source-root__source {
+  font-weight: 800;
+}
+
+.path-source-root__sep {
+  margin: 0 5px;
+  opacity: 0.45;
+}
+
+.path-source-root__name {
+  font-weight: 600;
+  opacity: 0.92;
+}
+
 .path-source-root__caret {
   font-size: 12px;
   opacity: 0.7;
+  transition: transform 0.18s ease;
+}
+
+.path-source-root__caret.is-open {
+  transform: rotate(180deg);
 }
 
 .path-source-menu {
@@ -2000,20 +2066,80 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-.path-source-menu__group {
+/* 一级：来源（本地目录 / 远程挂载）。点击才展开该来源下的具体根。 */
+.path-source-menu__source {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px 4px;
-  color: #6b7280;
-  font-size: 12px;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #3f4a5a;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.path-source-menu__source:hover {
+  background: #f2f6fa;
+}
+
+.path-source-menu__source.is-open {
+  background: #f4f7fb;
+}
+
+.path-source-menu__source-icon {
+  font-size: 15px;
+  color: #64748b;
+}
+
+.path-source-menu__source-text {
+  font-size: 13px;
   font-weight: 800;
 }
 
-.path-source-menu__group--remote {
-  margin-top: 6px;
-  padding-top: 10px;
-  border-top: 1px dashed #e5e7eb;
+.path-source-menu__source-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef7f1;
+  color: #2f6f4f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.path-source-menu__source-count {
+  margin-left: auto;
+  color: #9aa4b2;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.path-source-menu__source-caret {
+  font-size: 12px;
+  color: #9aa4b2;
+  transform: rotate(-90deg);
+  transition: transform 0.18s ease;
+}
+
+.path-source-menu__source-caret.is-open {
+  transform: rotate(0deg);
+}
+
+.path-source-menu__divider {
+  margin: 4px 6px;
+  border-top: 1px dashed #e8ecf2;
+}
+
+/* 二级：该来源下的各个根。 */
+.path-source-menu__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 10px;
+  padding-left: 8px;
+  border-left: 2px solid #eef1f5;
 }
 
 .path-source-menu__item {
