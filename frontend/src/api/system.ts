@@ -23,6 +23,8 @@ export interface SettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
   history_view_mode: string
+  default_page: string
+  page_size: number
   cache_dir: string
   cache_persist_enabled: boolean
   ignored_extensions: string[]
@@ -37,6 +39,8 @@ export interface UpdateSettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
   history_view_mode: string
+  default_page: string
+  page_size: number
   cache_dir: string
   cache_persist_enabled: boolean
   ignored_extensions: string[]

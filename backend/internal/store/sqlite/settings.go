@@ -34,6 +34,7 @@ func (s *Store) ensureDefaultSettings() error {
 func (s *Store) GetSettings() (*model.Settings, error) {
 	row := s.db.QueryRow(`
 		SELECT id, timezone, log_level, log_retention_days, log_retention_max_records, history_view_mode,
+		       default_page, page_size,
 		       cache_dir, cache_persist_enabled, ignored_extensions_json,
 		       upload_queue_upper_limit, upload_queue_lower_limit, max_concurrent_scans,
 		       created_at, updated_at
@@ -52,6 +53,8 @@ func (s *Store) GetSettings() (*model.Settings, error) {
 		&item.LogRetentionDays,
 		&item.LogRetentionMaxRecords,
 		&item.HistoryViewMode,
+		&item.DefaultPage,
+		&item.PageSize,
 		&item.CacheDir,
 		&cachePersist,
 		&ignoredJSON,
@@ -89,11 +92,29 @@ func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings
 			LogRetentionDays:       5,
 			LogRetentionMaxRecords: 10000,
 			HistoryViewMode:        "flat",
+			DefaultPage:            "dashboard",
+			PageSize:               50,
 			CacheDir:               "/tmp",
 			CachePersistEnabled:    true,
 			UploadQueueUpperLimit:  10000,
 			MaxConcurrentScans:     1,
 		}
+	}
+
+	defaultPage := input.DefaultPage
+	if defaultPage == "" {
+		defaultPage = current.DefaultPage
+	}
+	if defaultPage == "" {
+		defaultPage = "dashboard"
+	}
+
+	pageSize := input.PageSize
+	if pageSize <= 0 {
+		pageSize = current.PageSize
+	}
+	if pageSize <= 0 {
+		pageSize = 50
 	}
 
 	cacheDir := input.CacheDir
@@ -138,6 +159,8 @@ func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings
 		SET log_retention_days = ?,
 		    log_retention_max_records = ?,
 		    history_view_mode = ?,
+		    default_page = ?,
+		    page_size = ?,
 		    cache_dir = ?,
 		    cache_persist_enabled = ?,
 		    ignored_extensions_json = ?,
@@ -150,6 +173,8 @@ func (s *Store) UpdateSettings(input model.UpdateSettingsInput) (*model.Settings
 		input.LogRetentionDays,
 		input.LogRetentionMaxRecords,
 		input.HistoryViewMode,
+		defaultPage,
+		pageSize,
 		cacheDir,
 		boolToInt(cachePersist),
 		string(ignoredJSON),

@@ -581,6 +581,8 @@ async function saveResourceLimit() {
       log_retention_days: current.data?.log_retention_days ?? 5,
       log_retention_max_records: current.data?.log_retention_max_records ?? 10000,
       history_view_mode: current.data?.history_view_mode ?? 'flat',
+      default_page: current.data?.default_page ?? 'dashboard',
+      page_size: current.data?.page_size ?? 50,
       cache_dir: current.data?.cache_dir ?? '/tmp',
       cache_persist_enabled: current.data?.cache_persist_enabled !== false,
       ignored_extensions: current.data?.ignored_extensions ?? [],

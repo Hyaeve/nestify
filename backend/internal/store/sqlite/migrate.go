@@ -55,6 +55,8 @@ func (s *Store) migrate() error {
 			log_retention_days INTEGER NOT NULL,
 			log_retention_max_records INTEGER NOT NULL,
 			history_view_mode TEXT NOT NULL DEFAULT 'flat',
+			default_page TEXT NOT NULL DEFAULT 'dashboard',
+			page_size INTEGER NOT NULL DEFAULT 50,
 			cache_dir TEXT NOT NULL DEFAULT '/tmp',
 			cache_persist_enabled INTEGER NOT NULL DEFAULT 1,
 			ignored_extensions_json TEXT NOT NULL DEFAULT '[]',
@@ -292,6 +294,8 @@ func (s *Store) ensureSettingsExtendedColumns() error {
 		name string
 		dcl  string
 	}{
+		{"default_page", `default_page TEXT NOT NULL DEFAULT 'dashboard'`},
+		{"page_size", `page_size INTEGER NOT NULL DEFAULT 50`},
 		{"cache_dir", `cache_dir TEXT NOT NULL DEFAULT '/tmp'`},
 		{"cache_persist_enabled", `cache_persist_enabled INTEGER NOT NULL DEFAULT 1`},
 		{"ignored_extensions_json", `ignored_extensions_json TEXT NOT NULL DEFAULT '[]'`},

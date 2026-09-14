@@ -41,9 +41,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 import { useAuthStore } from '../stores/auth'
+import { resolveStartupPath, useSettingsStore } from '../stores/settings'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 
 const username = ref('')
 const password = ref('')
@@ -56,8 +58,9 @@ async function handleLogin() {
 
   try {
     await authStore.login(username.value, password.value)
+    await settingsStore.ensureLoaded(true)
     ElMessage.success('登录成功')
-    await router.push('/dashboard')
+    await router.push(resolveStartupPath(settingsStore.defaultPage))
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '登录失败'
   } finally {

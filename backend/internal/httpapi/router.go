@@ -203,12 +203,24 @@ type updateSettingsRequest struct {
 	LogRetentionDays       int       `json:"log_retention_days"`
 	LogRetentionMaxRecords int       `json:"log_retention_max_records"`
 	HistoryViewMode        string    `json:"history_view_mode"`
+	DefaultPage            string    `json:"default_page"`
+	PageSize               int       `json:"page_size"`
 	CacheDir               string    `json:"cache_dir"`
 	CachePersistEnabled    *bool     `json:"cache_persist_enabled"`
 	IgnoredExtensions      []string  `json:"ignored_extensions"`
 	UploadQueueUpperLimit  int       `json:"upload_queue_upper_limit"`
 	UploadQueueLowerLimit  int       `json:"upload_queue_lower_limit"`
 	MaxConcurrentScans     int       `json:"max_concurrent_scans"`
+}
+
+// isValidStartupPage 校验启动页面标识，仅允许导航栏内的页面。
+func isValidStartupPage(page string) bool {
+	switch page {
+	case "dashboard", "rules", "manual-pack", "naming-workshop", "logs", "settings":
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *apiHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -1136,10 +1148,17 @@ func (a *apiHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defaultPage := input.DefaultPage
+	if defaultPage == "" || !isValidStartupPage(defaultPage) {
+		defaultPage = "dashboard"
+	}
+
 	settings, err := a.store.UpdateSettings(model.UpdateSettingsInput{
 		LogRetentionDays:       input.LogRetentionDays,
 		LogRetentionMaxRecords: input.LogRetentionMaxRecords,
 		HistoryViewMode:        historyViewMode,
+		DefaultPage:            defaultPage,
+		PageSize:               input.PageSize,
 		CacheDir:               input.CacheDir,
 		CachePersistEnabled:    input.CachePersistEnabled,
 		IgnoredExtensions:      input.IgnoredExtensions,

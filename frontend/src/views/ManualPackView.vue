@@ -428,6 +428,7 @@ import { Back, Clock, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOp
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
+import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
 import {
   browseAnyDirectory,
   browseDirectories,
@@ -555,8 +556,9 @@ const filteredEntries = computed(() => {
 	}
 	return source.filter((item) => item.lowerName.includes(keyword) || item.lowerPath.includes(keyword)).map((item) => item.entry)
 })
-const pageSizeOptions = [25, 50, 100]
-const pageSize = ref(25)
+const settingsStore = useSettingsStore()
+const pageSizeOptions = settingsPageSizeOptions
+const pageSize = ref(settingsStore.pageSize || 50)
 const currentPage = ref(1)
 const pagedEntries = computed(() => {
 	const start = (currentPage.value - 1) * pageSize.value
@@ -1410,12 +1412,22 @@ async function removeItems(entry?: FileManagerEntry) {
   }
 }
 
+async function applyPageSizeSetting() {
+  await settingsStore.ensureLoaded()
+  const size = settingsStore.pageSize || 50
+  if (pageSizeOptions.includes(size)) {
+    pageSize.value = size
+    currentPage.value = 1
+  }
+}
+
 onMounted(() => {
   loadStarredFolders()
   loadRecentVisitedPaths()
   window.addEventListener('keydown', handleWindowKeyDown)
   window.addEventListener('keyup', handleWindowKeyUp)
   window.addEventListener('scroll', hideContextMenu, true)
+  void applyPageSizeSetting()
   void initialize()
 })
 

@@ -36,6 +36,15 @@
           <el-form label-position="top" class="settings-basic-form">
             <div class="settings-field-card">
               <div class="settings-field-card__main">
+                <div class="settings-field-card__label">启动页面</div>
+              </div>
+              <el-select v-model="settingsForm.defaultPage" class="settings-field-card__select">
+                <el-option v-for="option in startupPageOptions" :key="option.value" :label="option.label" :value="option.value" />
+              </el-select>
+            </div>
+
+            <div class="settings-field-card">
+              <div class="settings-field-card__main">
                 <div class="settings-field-card__label">日志保留天数</div>
               </div>
               <el-input-number v-model="settingsForm.logRetentionDays" :min="1" :max="3650" />
@@ -46,6 +55,15 @@
                 <div class="settings-field-card__label">最大日志条数</div>
               </div>
               <el-input-number v-model="settingsForm.logRetentionMaxRecords" :min="1" :max="1000000" />
+            </div>
+
+            <div class="settings-field-card">
+              <div class="settings-field-card__main">
+                <div class="settings-field-card__label">每页文件数</div>
+              </div>
+              <el-select v-model="settingsForm.pageSize" class="settings-field-card__select">
+                <el-option v-for="size in pageSizeOptions" :key="size" :label="String(size)" :value="size" />
+              </el-select>
             </div>
 
             <div class="settings-field-card settings-field-card--mode">
@@ -256,10 +274,12 @@ import {
   type WebdavMount,
 } from '../api/mounts'
 import { useAuthStore } from '../stores/auth'
+import { pageSizeOptions, startupPageOptions, useSettingsStore } from '../stores/settings'
 import WebdavMountDialog from '../components/WebdavMountDialog.vue'
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 const submitting = ref(false)
 const settingsSubmitting = ref(false)
 const exportingRules = ref(false)
@@ -279,6 +299,8 @@ function normalizeHistoryViewMode(value?: string): HistoryViewMode {
 const settingsForm = reactive({
   logRetentionDays: 5,
   logRetentionMaxRecords: 10000,
+  defaultPage: 'dashboard',
+  pageSize: 50,
   historyViewMode: 'flat' as HistoryViewMode,
 })
 
@@ -320,6 +342,8 @@ async function loadSettings() {
       settingsForm.logRetentionDays = response.data.log_retention_days || 5
       settingsForm.logRetentionMaxRecords = response.data.log_retention_max_records || 10000
       settingsForm.historyViewMode = normalizeHistoryViewMode(response.data.history_view_mode)
+      settingsForm.defaultPage = response.data.default_page || 'dashboard'
+      settingsForm.pageSize = response.data.page_size || 50
       cacheForm.cacheDir = response.data.cache_dir || '/tmp'
       cacheForm.cachePersistEnabled = response.data.cache_persist_enabled !== false
       cacheForm.ignoredExtensions = response.data.ignored_extensions ?? []
@@ -336,6 +360,8 @@ async function submitSettings() {
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
       history_view_mode: settingsForm.historyViewMode,
+      default_page: settingsForm.defaultPage,
+      page_size: settingsForm.pageSize,
       cache_dir: cacheForm.cacheDir,
       cache_persist_enabled: cacheForm.cachePersistEnabled,
       ignored_extensions: cacheForm.ignoredExtensions,
@@ -343,6 +369,7 @@ async function submitSettings() {
       upload_queue_lower_limit: 0,
       max_concurrent_scans: 0,
     })
+    settingsStore.applyLocal(settingsForm.defaultPage, settingsForm.pageSize)
     ElMessage.success('系统设置已保存')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '系统设置保存失败')
@@ -383,6 +410,8 @@ async function persistCacheSettings() {
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
       history_view_mode: settingsForm.historyViewMode,
+      default_page: settingsForm.defaultPage,
+      page_size: settingsForm.pageSize,
       cache_dir: cacheForm.cacheDir,
       cache_persist_enabled: cacheForm.cachePersistEnabled,
       ignored_extensions: cacheForm.ignoredExtensions,
@@ -390,11 +419,11 @@ async function persistCacheSettings() {
       upload_queue_lower_limit: 0,
       max_concurrent_scans: 0,
     })
+    settingsStore.applyLocal(settingsForm.defaultPage, settingsForm.pageSize)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '缓存设置保存失败')
   }
 }
-
 async function submitAdminChange() {
   if (!adminForm.username.trim()) {
     ElMessage.error('账户不能为空')
@@ -768,17 +797,17 @@ async function handleBackupFileChange(file: UploadFile) {
 .settings-basic-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
 }
 
 .settings-field-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
+  gap: 12px;
+  padding: 9px 14px;
   border: 1px solid #edf2f7;
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
@@ -796,8 +825,13 @@ async function handleBackupFileChange(file: UploadFile) {
   flex: 0 0 auto;
 }
 
+.settings-field-card__select {
+  flex: 0 0 auto;
+  width: 148px;
+}
+
 .settings-field-card--mode {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .settings-submit-row {

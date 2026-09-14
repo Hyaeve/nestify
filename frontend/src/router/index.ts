@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { resolveStartupPath, useSettingsStore } from '../stores/settings'
 
 const AdminLayout = () => import('../layouts/AdminLayout.vue')
 const DashboardView = () => import('../views/DashboardView.vue')
@@ -64,7 +65,9 @@ router.beforeEach(async (to) => {
 
   if (to.path === '/login') {
     if (authStore.isAuthenticated) {
-      return '/dashboard'
+      const settingsStore = useSettingsStore()
+      await settingsStore.ensureLoaded()
+      return resolveStartupPath(settingsStore.defaultPage)
     }
 
     return true

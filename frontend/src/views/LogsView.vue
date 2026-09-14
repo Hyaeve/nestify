@@ -303,6 +303,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
+import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
 
 type LogsViewMode = 'flat' | 'tree'
 type LogTreeRow = RunHistoryItem & {
@@ -355,8 +356,9 @@ const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'>('all')
 const logsSortBy = ref<'name' | 'modified_at'>('modified_at')
 const logsSortOrder = ref<'asc' | 'desc'>('desc')
-const logsPageSizeOptions = [25, 50]
-const logsPageSize = ref(25)
+const settingsStore = useSettingsStore()
+const logsPageSizeOptions = settingsPageSizeOptions
+const logsPageSize = ref(settingsStore.pageSize || 50)
 const logsCurrentPage = ref(1)
 const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
@@ -618,7 +620,13 @@ watch(logsViewMode, (mode) => {
   void loadHistory()
 })
 
-onMounted(() => {
+onMounted(async () => {
+  await settingsStore.ensureLoaded()
+  const size = settingsStore.pageSize || 50
+  if (logsPageSizeOptions.includes(size)) {
+    logsPageSize.value = size
+    logsCurrentPage.value = 1
+  }
   void loadHistory()
 })
 </script>
