@@ -50,12 +50,6 @@
             <span class="backup-card__last-label">上次备份</span>
             <span class="backup-card__last-value">{{ formatTime(task.last_backup_at) }}</span>
           </div>
-
-          <div v-if="hasLastRun(task)" class="backup-card__last-stats">
-            <span>上传 {{ task.last_copied_files }}</span>
-            <span>跳过 {{ task.last_skipped_files }}</span>
-            <span v-if="task.last_deleted_files">删除 {{ task.last_deleted_files }}</span>
-          </div>
         </div>
 
         <div class="backup-card__footer">
@@ -601,11 +595,6 @@ async function saveResourceLimit() {
 
 function visiblePaths(paths: string[]): string[] {
   return paths.slice(0, 2)
-}
-
-// 判断任务是否有过至少一次备份记录（用于展示上次统计）。
-function hasLastRun(task: BackupTask): boolean {
-  return Boolean(task.last_backup_at)
 }
 
 // —— 拖拽排序 ——
@@ -1221,21 +1210,6 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 .backup-card__last-value {
   font-size: 12px;
   color: var(--el-text-color-regular);
-}
-
-.backup-card__last-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-top: 6px;
-}
-
-.backup-card__last-stats span {
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  color: #5b7a6e;
-  background: #eef3f1;
 }
 
 .backup-card__footer {

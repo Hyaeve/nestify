@@ -173,6 +173,7 @@
                 <el-option label="净化规则" value="cleanup" />
                 <el-option label="链路规则" value="link" />
                 <el-option label="命名规则" value="naming" />
+                <el-option label="备份规则" value="backup" />
               </el-select>
             </span>
           </div>
@@ -216,8 +217,9 @@
           <el-table-column label="大小" width="120">
             <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="90">
+          <el-table-column label="操作" width="130">
             <template #default="scope">
+              <el-button link type="primary" @click="openHistoryItemDetail(scope.row)">详情</el-button>
               <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
             </template>
           </el-table-column>
@@ -271,6 +273,20 @@
               <div class="detail-dialog-summary__tags">
                 <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
                 <span class="history-status" :class="`is-${selectedHistoryGroup.status}`">{{ historyStatusText(selectedHistoryGroup.status) }}</span>
+              </div>
+            </div>
+            <div v-if="selectedBackupDetailRows.length" class="detail-backup">
+              <div class="detail-backup__head">
+                <span class="detail-backup__title">备份详情</span>
+                <span v-if="!selectedBackupTask" class="detail-backup__hint">对应的备份规则卡片已不存在，仅展示本次执行记录</span>
+              </div>
+              <div class="detail-backup__grid">
+                <div v-for="row in selectedBackupDetailRows" :key="row.label" class="detail-backup__row">
+                  <span class="detail-backup__label">{{ row.label }}</span>
+                  <div class="detail-backup__values">
+                    <span v-for="(value, index) in row.values" :key="`${row.label}-${index}`" class="detail-backup__value" :title="value">{{ value }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <el-table :data="pagedHistoryDetailRows" class="rules-table detail-dialog-table" table-layout="auto" empty-text="暂无明细">
@@ -1094,6 +1110,8 @@ import {
   type RunHistorySummary,
 } from '../api/runHistory'
 import { fetchSettings } from '../api/system'
+import { fetchBackups, type BackupTask } from '../api/backups'
+import { backupTriggerLabel, buildBackupDetailRows, resolveBackupDeletedCount, type BackupDetailRow } from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
@@ -1665,10 +1683,11 @@ const historyKeyword = ref('')
 const historySortBy = ref<'name' | 'modified_at'>('modified_at')
 const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming'>('all')
+const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'>('all')
 const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
+const selectedBackupTask = ref<BackupTask | null>(null)
 const historyDetailPageSize = 25
 const historyDetailCurrentPage = ref(1)
 
@@ -1688,6 +1707,20 @@ const selectedHistoryGroupChildren = computed(() => selectedHistoryGroup.value?.
 const pagedHistoryDetailRows = computed(() => {
   const start = (historyDetailCurrentPage.value - 1) * historyDetailPageSize
   return selectedHistoryGroupChildren.value.slice(start, start + historyDetailPageSize)
+})
+// 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
+const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
+  const group = selectedHistoryGroup.value
+  if (!group || group.archive_mode !== 'backup') {
+    return []
+  }
+  return buildBackupDetailRows(selectedBackupTask.value, {
+    triggerMode: group.trigger_mode,
+    deletedCount: resolveBackupDeletedCount(group),
+    successCount: group.success_count,
+    skipCount: group.skip_count,
+    failureCount: group.failure_count,
+  })
 })
 
 const purifyRulesTotal = ref(0)
@@ -2616,7 +2649,7 @@ function buildHistoryChildRow(item: RunHistoryItem): HistoryTreeRow {
     ...item,
     id: `item-${item.id}`,
     title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
-    description: `${item.rule_name || '未知规则'} · ${triggerModeText(item.trigger_mode)} · ${formatDateTime(item.started_at)}`,
+    description: `${item.rule_name || '未知规则'} · ${historyTriggerText(item)} · ${formatDateTime(item.started_at)}`,
     is_group: false,
     source: item,
   }
@@ -2663,18 +2696,50 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
       size_bytes: sizeBytes,
       updated_at: updatedAt,
       title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
-      description: `${first.rule_name || '未知规则'} · ${triggerModeText(first.trigger_mode)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      description: `${first.rule_name || '未知规则'} · ${historyTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
       children: groupItems.map(buildHistoryChildRow),
     }
   })
 }
 
+// 备份任务的详情需要现场拉取对应的备份规则卡片信息（源/目标/删除策略等）。
+async function loadSelectedBackupTask(row: HistoryTreeRow) {
+  selectedBackupTask.value = null
+  if (row.archive_mode !== 'backup' || row.rule_id == null) {
+    return
+  }
+  try {
+    const payload = await fetchBackups()
+    const items = payload.data?.items ?? []
+    selectedBackupTask.value = items.find((task) => task.id === row.rule_id) ?? null
+  } catch {
+    selectedBackupTask.value = null
+  }
+}
+
 function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
+  selectedBackupTask.value = null
   historyDetailCurrentPage.value = 1
   historyDetailDialogVisible.value = true
+  if (row.archive_mode === 'backup') {
+    void loadSelectedBackupTask(row)
+  }
+}
+
+// 平铺视图里把单条记录包装成「只有一个明细」的任务分组，同样可以打开详情。
+function openHistoryItemDetail(item: RunHistoryItem) {
+  openHistoryDetailDialog({
+    ...item,
+    id: `single-${item.id}`,
+    title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
+    description: `${item.rule_name || '未知规则'} · ${historyTriggerText(item)}`,
+    is_group: true,
+    source: item,
+    children: [buildHistoryChildRow(item)],
+  })
 }
 
 async function removeHistoryDetailItem(row: HistoryTreeRow) {
@@ -2699,6 +2764,14 @@ function triggerModeText(mode?: string) {
   return '手动'
 }
 
+// 备份任务的触发方式用「实时监控 / 计划扫描 / 手动」表述，与其它规则区分。
+function historyTriggerText(item?: { archive_mode?: string; trigger_mode?: string }) {
+  if (item?.archive_mode === 'backup') {
+    return backupTriggerLabel(item.trigger_mode)
+  }
+  return triggerModeText(item?.trigger_mode)
+}
+
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
 	switch (item?.archive_mode) {
 	case 'package':
@@ -2714,6 +2787,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
 		return item?.link_mode === 'hard' ? '硬链' : '软链'
 	case 'naming':
 		return '命名'
+	case 'backup':
+		return '备份'
 	default:
 		return '—'
 	}
@@ -2734,6 +2809,8 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
 		return item?.link_mode === 'hard' ? 'custom-mode-tag--hardlink' : 'custom-mode-tag--softlink'
 	case 'naming':
 		return 'custom-mode-tag--naming'
+	case 'backup':
+		return 'custom-mode-tag--backup'
 	default:
 		return ''
 	}
@@ -3346,6 +3423,16 @@ onBeforeUnmount(() => {
 .detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .detail-dialog-table { margin-top: 8px; }
 .detail-dialog-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
+/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
+.detail-backup { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 16px; background: var(--el-bg-color); }
+.detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.detail-backup__title { font-size: 14px; font-weight: 800; color: #5b7a6e; }
+.detail-backup__hint { font-size: 12px; color: var(--el-text-color-secondary); }
+.detail-backup__grid { display: flex; flex-direction: column; gap: 8px; }
+.detail-backup__row { display: flex; align-items: flex-start; gap: 12px; }
+.detail-backup__label { flex: 0 0 88px; font-size: 13px; font-weight: 600; color: var(--el-text-color-secondary); }
+.detail-backup__values { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.detail-backup__value { font-size: 13px; line-height: 1.6; color: var(--el-text-color-primary); word-break: break-all; }
 .history-status { display: inline-flex; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; transform: rotate(-8deg); }
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
@@ -3433,6 +3520,8 @@ onBeforeUnmount(() => {
 .custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .custom-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
 .custom-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); border-color: rgba(15, 159, 135, 0.28); }
+/* 备份：莫奈低饱和雾霾蓝，与运行日志页的模式色保持一致 */
+.custom-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); border-color: rgba(95, 127, 168, 0.28); }
 .rule-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .rule-name-cell__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rule-drag-handle { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; color: var(--el-text-color-secondary); background: transparent; border: 0; border-radius: 6px; cursor: grab; font-size: 14px; line-height: 1; }

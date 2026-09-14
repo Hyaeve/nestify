@@ -554,6 +554,7 @@ func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status, s
 		SuccessCount:   stats.Copied,
 		SkipCount:      stats.Skipped,
 		FailureCount:   stats.Failed,
+		DeletedCount:   stats.Deleted,
 		Summary:        summary,
 		StartedAt:      startedAt,
 		UpdatedAt:      finishedAt,

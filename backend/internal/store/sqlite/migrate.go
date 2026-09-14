@@ -217,6 +217,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure run_history deleted_count column")
+	if err := s.ensureRunHistoryDeletedCountColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure run_history deleted_count column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure settings history_view_mode column")
 	if err := s.ensureSettingsHistoryViewModeColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure settings history_view_mode column failed: %v", err)
@@ -495,6 +501,37 @@ func (s *Store) ensureRunHistoryLinkModeColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
 		return fmt.Errorf("add run_history link_mode column: %w", err)
+	}
+
+	return nil
+}
+
+// ensureRunHistoryDeletedCountColumn 记录一次执行后实际删除的文件/文件夹数量
+// （备份任务的「完成后删除源件」「同步删除目标」等都会计入）。
+func (s *Store) ensureRunHistoryDeletedCountColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
+	if err != nil {
+		return fmt.Errorf("query run_history schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan run_history schema: %w", err)
+		}
+		if strings.EqualFold(name, "deleted_count") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN deleted_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
+		return fmt.Errorf("add run_history deleted_count column: %w", err)
 	}
 
 	return nil

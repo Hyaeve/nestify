@@ -10,6 +10,7 @@ export interface RunHistoryItem {
   success_count: number
   skip_count: number
   failure_count: number
+  deleted_count: number
   size_bytes: number
   summary: string
   started_at: string

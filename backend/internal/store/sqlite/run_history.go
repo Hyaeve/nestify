@@ -23,9 +23,9 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 	_, err := s.db.Exec(`
 		INSERT INTO run_history (
 			id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-			processed_files, success_count, skip_count, failure_count, size_bytes,
+			processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 			summary, started_at, updated_at, finished_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			rule_id = excluded.rule_id,
 			rule_name = excluded.rule_name,
@@ -37,6 +37,7 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 			success_count = excluded.success_count,
 			skip_count = excluded.skip_count,
 			failure_count = excluded.failure_count,
+			deleted_count = excluded.deleted_count,
 			size_bytes = excluded.size_bytes,
 			summary = excluded.summary,
 			started_at = excluded.started_at,
@@ -54,6 +55,7 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		item.SuccessCount,
 		item.SkipCount,
 		item.FailureCount,
+		item.DeletedCount,
 		item.SizeBytes,
 		item.Summary,
 		item.StartedAt.UTC().Format(time.RFC3339),
@@ -106,7 +108,7 @@ func (s *Store) applyRunHistoryRetentionPolicy() error {
 func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	rows, err := s.db.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, size_bytes,
+		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, started_at, updated_at, finished_at
 		FROM run_history
 		ORDER BY started_at DESC, id DESC
@@ -163,7 +165,7 @@ func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
 	rows, err := s.db.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, size_bytes,
+		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, started_at, updated_at, finished_at
 		FROM run_history`+whereClause+`
 		ORDER BY `+orderClause+`
@@ -239,7 +241,7 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 
 	rows, err := s.db.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, size_bytes,
+		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, started_at, updated_at, finished_at
 		FROM run_history
 		WHERE `+groupExpr+` IN (`+strings.Join(placeholders, ",")+`)
@@ -419,6 +421,7 @@ func scanRunHistory(s runHistoryScanner) (model.RunHistoryItem, error) {
 		&item.SuccessCount,
 		&item.SkipCount,
 		&item.FailureCount,
+		&item.DeletedCount,
 		&item.SizeBytes,
 		&item.Summary,
 		&startedAt,

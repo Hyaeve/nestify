@@ -181,13 +181,19 @@
                 </div>
                 <div class="logs-message__meta">
                   <span>{{ scope.row.rule_name || '手动任务' }}</span>
-                  <span>{{ triggerModeLabel(scope.row.trigger_mode) }}</span>
+                  <span>{{ logTriggerText(scope.row) }}</span>
                   <span>处理 {{ scope.row.processed_files }}</span>
                   <span>成功 {{ scope.row.success_count }}</span>
                   <span>警告 {{ scope.row.skip_count }}</span>
                   <span>错误 {{ scope.row.failure_count }}</span>
                 </div>
               </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column label="操作" width="90" align="center">
+            <template #default="scope">
+              <el-button link type="primary" @click="openLogItemDetail(scope.row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -242,6 +248,20 @@
             <div class="logs-detail-summary__tags">
               <el-tag class="logs-level-tag" :type="statusTagType(selectedLogGroup.status)" effect="light">{{ statusLabel(selectedLogGroup.status) }}</el-tag>
               <span class="logs-mode-tag" :class="historyModeTagClass(selectedLogGroup)">{{ historyModeLabel(selectedLogGroup) }}</span>
+            </div>
+          </div>
+          <div v-if="selectedBackupDetailRows.length" class="detail-backup">
+            <div class="detail-backup__head">
+              <span class="detail-backup__title">备份详情</span>
+              <span v-if="!selectedBackupTask" class="detail-backup__hint">对应的备份规则卡片已不存在，仅展示本次执行记录</span>
+            </div>
+            <div class="detail-backup__grid">
+              <div v-for="row in selectedBackupDetailRows" :key="row.label" class="detail-backup__row">
+                <span class="detail-backup__label">{{ row.label }}</span>
+                <div class="detail-backup__values">
+                  <span v-for="(value, index) in row.values" :key="`${row.label}-${index}`" class="detail-backup__value" :title="value">{{ value }}</span>
+                </div>
+              </div>
             </div>
           </div>
           <el-table :data="pagedLogDetailRows" class="logs-table logs-detail-table" empty-text="暂无明细">
@@ -301,7 +321,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import { fetchBackups, type BackupTask } from '../api/backups'
 import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+import { backupTriggerLabel, buildBackupDetailRows, resolveBackupDeletedCount, type BackupDetailRow } from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
 
@@ -363,6 +385,7 @@ const logsCurrentPage = ref(1)
 const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
+const selectedBackupTask = ref<BackupTask | null>(null)
 const logDetailPageSize = 25
 const logDetailCurrentPage = ref(1)
 
@@ -376,6 +399,20 @@ const selectedLogGroupChildren = computed(() => selectedLogGroup.value?.children
 const pagedLogDetailRows = computed(() => {
   const start = (logDetailCurrentPage.value - 1) * logDetailPageSize
   return selectedLogGroupChildren.value.slice(start, start + logDetailPageSize)
+})
+// 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
+const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
+  const group = selectedLogGroup.value
+  if (!group || group.archive_mode !== 'backup') {
+    return []
+  }
+  return buildBackupDetailRows(selectedBackupTask.value, {
+    triggerMode: group.trigger_mode,
+    deletedCount: resolveBackupDeletedCount(group),
+    successCount: group.success_count,
+    skipCount: group.skip_count,
+    failureCount: group.failure_count,
+  })
 })
 
 async function loadHistory() {
@@ -506,6 +543,14 @@ function triggerModeText(mode: string) {
   return '手动'
 }
 
+// 备份任务用「实时监控 / 计划扫描 / 手动」表述触发方式，与其它规则区分。
+function logTriggerText(item: { archive_mode?: string; trigger_mode: string }) {
+  if (item.archive_mode === 'backup') {
+    return backupTriggerLabel(item.trigger_mode)
+  }
+  return triggerModeText(item.trigger_mode)
+}
+
 function resolveLogGroupStatus(items: RunHistoryItem[]) {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'skip')) return 'skip'
@@ -517,7 +562,7 @@ function buildLogChildRow(item: RunHistoryItem): LogTreeRow {
     ...item,
     id: `item-${item.id}`,
     title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
-    description: `${item.rule_name || '手动任务'} · ${triggerModeText(item.trigger_mode)} · 成功 ${item.success_count} / 警告 ${item.skip_count} / 错误 ${item.failure_count}`,
+    description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)} · 成功 ${item.success_count} / 警告 ${item.skip_count} / 错误 ${item.failure_count}`,
     is_group: false,
   }
 }
@@ -550,18 +595,49 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
       skip_count: skipped,
       failure_count: failed,
       title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
-      description: `${first.rule_name || '手动任务'} · ${triggerModeText(first.trigger_mode)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      description: `${first.rule_name || '手动任务'} · ${logTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
       children: groupItems.map(buildLogChildRow),
     }
   })
 }
 
+// 备份任务的详情需要现场拉取对应的备份规则卡片信息（源/目标/删除策略等）。
+async function loadSelectedBackupTask(row: LogTreeRow) {
+  selectedBackupTask.value = null
+  if (row.archive_mode !== 'backup' || row.rule_id == null) {
+    return
+  }
+  try {
+    const payload = await fetchBackups()
+    const items = payload.data?.items ?? []
+    selectedBackupTask.value = items.find((task) => task.id === row.rule_id) ?? null
+  } catch {
+    selectedBackupTask.value = null
+  }
+}
+
 function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
+  selectedBackupTask.value = null
   logDetailCurrentPage.value = 1
   logDetailDialogVisible.value = true
+  if (row.archive_mode === 'backup') {
+    void loadSelectedBackupTask(row)
+  }
+}
+
+// 平铺视图里把单条记录包装成「只有一个明细」的任务分组，同样可以打开详情。
+function openLogItemDetail(item: RunHistoryItem) {
+  openLogDetailDialog({
+    ...item,
+    id: `single-${item.id}`,
+    title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
+    description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)}`,
+    is_group: true,
+    children: [buildLogChildRow(item)],
+  })
 }
 
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
@@ -579,6 +655,8 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
       return item?.link_mode === 'hard' ? '硬链' : '软链'
     case 'naming':
       return '命名'
+    case 'backup':
+      return '备份'
     default:
       return '未知'
   }
@@ -599,19 +677,11 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
       return item?.link_mode === 'hard' ? 'logs-mode-tag--hardlink' : 'logs-mode-tag--softlink'
     case 'naming':
       return 'logs-mode-tag--naming'
+    case 'backup':
+      return 'logs-mode-tag--backup'
     default:
       return ''
   }
-}
-
-function triggerModeLabel(mode: string) {
-  if (mode === 'cron') {
-    return '定时'
-  }
-  if (mode === 'watch') {
-    return '监听'
-  }
-  return '手动'
 }
 
 watch(logsViewMode, (mode) => {
@@ -1077,6 +1147,67 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
+.detail-backup {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+  background: var(--el-bg-color);
+}
+
+.detail-backup__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.detail-backup__title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #5b7a6e;
+}
+
+.detail-backup__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.detail-backup__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-backup__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.detail-backup__label {
+  flex: 0 0 88px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.detail-backup__values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detail-backup__value {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+  word-break: break-all;
 }
 
 .logs-message {
