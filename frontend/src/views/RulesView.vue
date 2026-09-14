@@ -222,6 +222,7 @@
                 </div>
               </div>
             </div>
+            <BackupFileList :manifest="selectedBackupManifest" />
             <el-table :data="pagedHistoryDetailRows" class="rules-table detail-dialog-table" table-layout="auto" empty-text="暂无明细">
               <el-table-column label="条目" min-width="360">
                 <template #default="scope">
@@ -883,6 +884,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
+import BackupFileList from '../components/BackupFileList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import { fetchRun, prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
@@ -891,12 +893,19 @@ import {
   deleteRunHistoryItem,
   emptyRunHistory,
   fetchRunHistory,
+  fetchRunHistoryDetail,
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
 import { fetchSettings } from '../api/system'
 import { fetchBackups, type BackupTask } from '../api/backups'
-import { backupTriggerLabel, buildBackupDetailRows, resolveBackupDeletedCount, type BackupDetailRow } from '../utils/backupDetail'
+import {
+  backupTriggerLabel,
+  buildBackupDetailRows,
+  parseBackupManifest,
+  resolveBackupDeletedCount,
+  type BackupDetailRow,
+} from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
@@ -1490,6 +1499,7 @@ const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
+const selectedBackupDetail = ref<RunHistoryItem | null>(null)
 const historyDetailPageSize = 25
 const historyDetailCurrentPage = ref(1)
 
@@ -1524,6 +1534,8 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
+// 备份文件明细：本次执行上传/跳过/失败/删除的具体文件清单（来自 detail_json）。
+const selectedBackupManifest = computed(() => parseBackupManifest(selectedBackupDetail.value ?? undefined))
 
 const purifyRulesTotal = ref(0)
 
@@ -2563,6 +2575,7 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
     return {
       ...first,
       id: `group-${key}`,
+      source: first,
       status: resolveHistoryGroupStatus(groupItems),
       processed_files: processed,
       success_count: success,
@@ -2597,10 +2610,27 @@ function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
   selectedBackupTask.value = null
+  selectedBackupDetail.value = null
   historyDetailCurrentPage.value = 1
   historyDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
+    void loadSelectedBackupDetail(row)
+  }
+}
+
+// 备份文件明细单独拉取：列表接口为避免响应过大不带 detail_json。
+async function loadSelectedBackupDetail(row: HistoryTreeRow) {
+  selectedBackupDetail.value = null
+  const historyID = row.source?.id
+  if (row.archive_mode !== 'backup' || !historyID) {
+    return
+  }
+  try {
+    const payload = await fetchRunHistoryDetail(historyID)
+    selectedBackupDetail.value = payload.data?.item ?? null
+  } catch {
+    selectedBackupDetail.value = null
   }
 }
 

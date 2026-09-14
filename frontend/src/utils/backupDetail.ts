@@ -45,6 +45,164 @@ export function resolveBackupDeletedCount(item?: { deleted_count?: number; summa
   return match ? Number(match[1]) : 0
 }
 
+// ---------------------------------------------------------------------------
+// 备份文件明细（run_history.detail_json）
+// ---------------------------------------------------------------------------
+
+export type BackupFileAction = 'upload' | 'skip' | 'fail' | 'delete'
+
+export type BackupFileFilter = 'all' | BackupFileAction
+
+export interface BackupFileEntry {
+  path: string
+  action: BackupFileAction
+  size?: number
+  target?: string
+  note?: string
+  dir?: boolean
+}
+
+export interface BackupFileManifest {
+  files: BackupFileEntry[]
+  counts: Record<BackupFileAction, number>
+  total: number
+  truncated: boolean
+}
+
+const emptyActionCounts = (): Record<BackupFileAction, number> => ({
+  upload: 0,
+  skip: 0,
+  fail: 0,
+  delete: 0,
+})
+
+function normalizeAction(value: unknown): BackupFileAction {
+  if (value === 'skip' || value === 'fail' || value === 'delete') {
+    return value
+  }
+  return 'upload'
+}
+
+// 解析备份执行的文件明细；无明细（其它模式或历史记录）时返回 null，调用方据此隐藏面板。
+export function parseBackupManifest(item?: { archive_mode?: string; detail_json?: string }): BackupFileManifest | null {
+  const raw = item?.detail_json?.trim()
+  if (!raw) {
+    return null
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return null
+  }
+
+  const payload = parsed as {
+    files?: unknown
+    counts?: unknown
+    files_total?: unknown
+    files_truncated?: unknown
+  }
+  const rawFiles = Array.isArray(payload.files) ? payload.files : []
+  const files: BackupFileEntry[] = []
+
+  for (const candidate of rawFiles) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue
+    }
+    const entry = candidate as Record<string, unknown>
+    const path = typeof entry.path === 'string' ? entry.path.trim() : ''
+    if (!path) {
+      continue
+    }
+    files.push({
+      path,
+      action: normalizeAction(entry.action),
+      size: typeof entry.size === 'number' ? entry.size : undefined,
+      target: typeof entry.target === 'string' ? entry.target : undefined,
+      note: typeof entry.note === 'string' ? entry.note : undefined,
+      dir: entry.dir === true,
+    })
+  }
+
+  if (files.length === 0) {
+    return null
+  }
+
+  const counts = emptyActionCounts()
+  const rawCounts = payload.counts
+  if (rawCounts && typeof rawCounts === 'object') {
+    for (const [key, value] of Object.entries(rawCounts as Record<string, unknown>)) {
+      const action = normalizeAction(key)
+      if (typeof value === 'number' && value > 0) {
+        counts[action] += value
+      }
+    }
+  } else {
+    for (const file of files) {
+      counts[file.action] += 1
+    }
+  }
+
+  const total = typeof payload.files_total === 'number' && payload.files_total > 0
+    ? payload.files_total
+    : files.length
+
+  return {
+    files,
+    counts,
+    total,
+    truncated: payload.files_truncated === true,
+  }
+}
+
+export function backupFileActionLabel(action: BackupFileAction): string {
+  switch (action) {
+    case 'skip':
+      return '跳过'
+    case 'fail':
+      return '失败'
+    case 'delete':
+      return '删除'
+    default:
+      return '上传'
+  }
+}
+
+export function backupFileActionClass(action: BackupFileAction): string {
+  switch (action) {
+    case 'skip':
+      return 'is-skip'
+    case 'fail':
+      return 'is-fail'
+    case 'delete':
+      return 'is-delete'
+    default:
+      return 'is-upload'
+  }
+}
+
+export function formatBackupFileSize(bytes?: number): string {
+  const value = Number(bytes || 0)
+  if (!Number.isFinite(value) || value <= 0) {
+    return '—'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = value
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  const digits = size >= 100 || unitIndex === 0 ? 0 : 1
+  return `${size.toFixed(digits)} ${units[unitIndex]}`
+}
+
 function describeScanPlan(task: BackupTask): string {
   const parts: string[] = []
   if (task.monitor_enabled) {

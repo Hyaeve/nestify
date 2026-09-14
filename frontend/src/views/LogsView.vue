@@ -264,6 +264,7 @@
               </div>
             </div>
           </div>
+          <BackupFileList :manifest="selectedBackupManifest" />
           <el-table :data="pagedLogDetailRows" class="logs-table logs-detail-table" empty-text="暂无明细">
             <el-table-column label="明细" min-width="520">
               <template #default="scope">
@@ -321,15 +322,24 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import BackupFileList from '../components/BackupFileList.vue'
 import { fetchBackups, type BackupTask } from '../api/backups'
-import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
-import { backupTriggerLabel, buildBackupDetailRows, resolveBackupDeletedCount, type BackupDetailRow } from '../utils/backupDetail'
+import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+import {
+  backupTriggerLabel,
+  buildBackupDetailRows,
+  parseBackupManifest,
+  resolveBackupDeletedCount,
+  type BackupDetailRow,
+} from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
 
 type LogsViewMode = 'flat' | 'tree'
 type LogTreeRow = RunHistoryItem & {
   id: string
+  // 原始运行日志 ID：分组行 / 平铺行的 id 都加了前缀，拉取明细时要用它。
+  historyId: string
   title: string
   description: string
   is_group: boolean
@@ -386,6 +396,7 @@ const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
+const selectedBackupDetail = ref<RunHistoryItem | null>(null)
 const logDetailPageSize = 25
 const logDetailCurrentPage = ref(1)
 
@@ -414,6 +425,9 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
+
+// 备份文件明细：本次执行上传/跳过/失败/删除的具体文件清单（来自 detail_json）。
+const selectedBackupManifest = computed(() => parseBackupManifest(selectedBackupDetail.value ?? undefined))
 
 async function loadHistory() {
   loading.value = true
@@ -560,6 +574,7 @@ function resolveLogGroupStatus(items: RunHistoryItem[]) {
 function buildLogChildRow(item: RunHistoryItem): LogTreeRow {
   return {
     ...item,
+    historyId: item.id,
     id: `item-${item.id}`,
     title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
     description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)} · 成功 ${item.success_count} / 警告 ${item.skip_count} / 错误 ${item.failure_count}`,
@@ -589,6 +604,7 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
     return {
       ...first,
       id: `group-${key}`,
+      historyId: first.id,
       status: resolveLogGroupStatus(groupItems),
       processed_files: processed,
       success_count: success,
@@ -617,14 +633,30 @@ async function loadSelectedBackupTask(row: LogTreeRow) {
   }
 }
 
+// 备份文件明细单独拉取：列表接口为避免响应过大不带 detail_json。
+async function loadSelectedBackupDetail(row: LogTreeRow) {
+  selectedBackupDetail.value = null
+  if (row.archive_mode !== 'backup' || !row.historyId) {
+    return
+  }
+  try {
+    const payload = await fetchRunHistoryDetail(row.historyId)
+    selectedBackupDetail.value = payload.data?.item ?? null
+  } catch {
+    selectedBackupDetail.value = null
+  }
+}
+
 function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
   selectedBackupTask.value = null
+  selectedBackupDetail.value = null
   logDetailCurrentPage.value = 1
   logDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
+    void loadSelectedBackupDetail(row)
   }
 }
 
@@ -633,6 +665,7 @@ function openLogItemDetail(item: RunHistoryItem) {
   openLogDetailDialog({
     ...item,
     id: `single-${item.id}`,
+    historyId: item.id,
     title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
     description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)}`,
     is_group: true,

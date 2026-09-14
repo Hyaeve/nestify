@@ -139,6 +139,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/executions/prepare-rule", api.handlePrepareRuleExecution)
 	mux.HandleFunc("/api/v1/runs/", api.handleRuns)
 	mux.HandleFunc("/api/v1/run-history", api.handleRunHistory)
+	mux.HandleFunc("/api/v1/run-history/detail", api.handleRunHistoryDetail)
 	mux.HandleFunc("/api/v1/settings", api.handleSettings)
 	mux.HandleFunc("/api/v1/settings/admin-account", api.handleUpdateAdminAccount)
 	mux.HandleFunc("/api/v1/settings/rules-backup", api.handleRulesBackup)
@@ -200,17 +201,17 @@ type updateAdminAccountRequest struct {
 }
 
 type updateSettingsRequest struct {
-	LogRetentionDays       int       `json:"log_retention_days"`
-	LogRetentionMaxRecords int       `json:"log_retention_max_records"`
-	HistoryViewMode        string    `json:"history_view_mode"`
-	DefaultPage            string    `json:"default_page"`
-	PageSize               int       `json:"page_size"`
-	CacheDir               string    `json:"cache_dir"`
-	CachePersistEnabled    *bool     `json:"cache_persist_enabled"`
-	IgnoredExtensions      []string  `json:"ignored_extensions"`
-	UploadQueueUpperLimit  int       `json:"upload_queue_upper_limit"`
-	UploadQueueLowerLimit  int       `json:"upload_queue_lower_limit"`
-	MaxConcurrentScans     int       `json:"max_concurrent_scans"`
+	LogRetentionDays       int      `json:"log_retention_days"`
+	LogRetentionMaxRecords int      `json:"log_retention_max_records"`
+	HistoryViewMode        string   `json:"history_view_mode"`
+	DefaultPage            string   `json:"default_page"`
+	PageSize               int      `json:"page_size"`
+	CacheDir               string   `json:"cache_dir"`
+	CachePersistEnabled    *bool    `json:"cache_persist_enabled"`
+	IgnoredExtensions      []string `json:"ignored_extensions"`
+	UploadQueueUpperLimit  int      `json:"upload_queue_upper_limit"`
+	UploadQueueLowerLimit  int      `json:"upload_queue_lower_limit"`
+	MaxConcurrentScans     int      `json:"max_concurrent_scans"`
 }
 
 // isValidStartupPage 校验启动页面标识，仅允许导航栏内的页面。
@@ -955,6 +956,9 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			// 列表不带明细（备份文件清单可能很大），详情弹窗按需走 /run-history/detail。
+			stripRunHistoryDetails(items)
+
 			summary, err := a.store.GetRunHistorySummary()
 			if err != nil {
 				writeInternalError(w, err)
@@ -1041,6 +1045,58 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeMethodNotAllowed(w)
 	}
+}
+
+// stripRunHistoryDetails 清空列表结果里的明细载荷：备份任务的文件清单可能上百 KB，
+// 列表一次返回几十条会显著拖慢运行日志页；详情弹窗改为按需拉取单条。
+func stripRunHistoryDetails(items []model.RunHistoryItem) {
+	for index := range items {
+		items[index].DetailJSON = ""
+	}
+}
+
+func (a *apiHandler) handleRunHistoryDetail(w http.ResponseWriter, r *http.Request) {
+	if !a.requireSession(w, r) {
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		writeMethodNotAllowed(w)
+		return
+	}
+
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{
+			Success: false,
+			Code:    "INVALID_ID",
+			Message: "run history id is required",
+		})
+		return
+	}
+
+	item, err := a.store.GetRunHistoryByID(id)
+	if err != nil {
+		if errors.Is(err, sqlite.ErrRunHistoryNotFound) {
+			writeJSON(w, http.StatusNotFound, jsonResponse{
+				Success: false,
+				Code:    "RUN_HISTORY_NOT_FOUND",
+				Message: "run history entry not found",
+			})
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{
+		Success: true,
+		Code:    "OK",
+		Message: "Run history detail loaded",
+		Data: map[string]any{
+			"item": item,
+		},
+	})
 }
 
 func registerStaticRoutes(mux *http.ServeMux, webDir string) {

@@ -223,6 +223,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure run_history detail_json column")
+	if err := s.ensureRunHistoryDetailJSONColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure run_history detail_json column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure settings history_view_mode column")
 	if err := s.ensureSettingsHistoryViewModeColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure settings history_view_mode column failed: %v", err)
@@ -532,6 +538,37 @@ func (s *Store) ensureRunHistoryDeletedCountColumn() error {
 
 	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN deleted_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
 		return fmt.Errorf("add run_history deleted_count column: %w", err)
+	}
+
+	return nil
+}
+
+// ensureRunHistoryDetailJSONColumn 保存一次执行的明细载荷（JSON 文本）。
+// 备份任务用它记录本次上传/跳过/失败/删除的具体文件清单。
+func (s *Store) ensureRunHistoryDetailJSONColumn() error {
+	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
+	if err != nil {
+		return fmt.Errorf("query run_history schema: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan run_history schema: %w", err)
+		}
+		if strings.EqualFold(name, "detail_json") {
+			return nil
+		}
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN detail_json TEXT NOT NULL DEFAULT '';`); err != nil {
+		return fmt.Errorf("add run_history detail_json column: %w", err)
 	}
 
 	return nil

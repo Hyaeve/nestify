@@ -13,6 +13,8 @@ export interface RunHistoryItem {
   deleted_count: number
   size_bytes: number
   summary: string
+  // 备份任务的文件明细载荷（JSON 文本），其它模式为空。
+  detail_json?: string
   started_at: string
   updated_at?: string
   finished_at?: string
@@ -96,6 +98,15 @@ function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {
 
 export function fetchRunHistory(params: FetchRunHistoryParams = {}) {
   return getJSON<RunHistoryPayload>(buildRunHistoryURL(params))
+}
+
+export interface RunHistoryDetailPayload {
+  item: RunHistoryItem
+}
+
+// 运行日志列表不带明细（备份文件清单可能很大），详情弹窗按需拉取单条。
+export function fetchRunHistoryDetail(id: string) {
+  return getJSON<RunHistoryDetailPayload>(`/api/v1/run-history/detail?id=${encodeURIComponent(id)}`)
 }
 
 export function clearRunHistory(status?: RunHistoryStatus) {

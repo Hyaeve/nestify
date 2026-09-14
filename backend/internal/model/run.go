@@ -68,9 +68,40 @@ type RunHistoryItem struct {
 	DeletedCount   int        `json:"deleted_count"`
 	SizeBytes      int64      `json:"size_bytes"`
 	Summary        string     `json:"summary"`
+	DetailJSON     string     `json:"detail_json,omitempty"`
 	StartedAt      time.Time  `json:"started_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	FinishedAt     *time.Time `json:"finished_at,omitempty"`
+}
+
+// 备份文件明细的动作标识：上传成功 / 跳过 / 失败 / 删除。
+const (
+	BackupFileActionUpload = "upload"
+	BackupFileActionSkip   = "skip"
+	BackupFileActionFail   = "fail"
+	BackupFileActionDelete = "delete"
+)
+
+// BackupFileEntry 记录备份执行中单个文件（或文件夹）的处理结果。
+// 写入 run_history.detail_json，供运行日志 / 归巢历史的详情展开查看「备份了什么」。
+type BackupFileEntry struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
+	Size   int64  `json:"size,omitempty"`
+	Target string `json:"target,omitempty"`
+	Note   string `json:"note,omitempty"`
+	Dir    bool   `json:"dir,omitempty"`
+}
+
+// BackupDetail 是备份任务的详情载荷（run_history.detail_json）。
+// Files 为明细列表（每个动作只保留有限条数，见 backup.maxFileEntriesPerAction）；
+// Counts / FilesTotal 是采集到的真实数量，不受截断影响。
+type BackupDetail struct {
+	Kind           string            `json:"kind"`
+	Files          []BackupFileEntry `json:"files"`
+	Counts         map[string]int    `json:"counts,omitempty"`
+	FilesTotal     int               `json:"files_total"`
+	FilesTruncated bool              `json:"files_truncated,omitempty"`
 }
 
 type RunHistorySummary struct {

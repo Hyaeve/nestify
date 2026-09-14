@@ -5,6 +5,7 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +28,9 @@ import (
 const (
 	monitorPollInterval = 5 * time.Second
 	maxRecentLogs       = 60
+	// maxFileEntriesPerAction 限制运行日志详情里每个动作（上传/跳过/失败/删除）
+	// 最多记录多少条文件明细，避免日志记录体积失控。
+	maxFileEntriesPerAction = 200
 )
 
 type taskState struct {
@@ -179,10 +183,10 @@ func (s *Service) pollLoop(ctx context.Context, taskID int64, interval time.Dura
 				lastFingerprint = fingerprint
 			}
 
-		if s.isRunning(taskID) {
-			continue
-		}
-		_ = s.runTask(taskID, false, model.TriggerModeWatch)
+			if s.isRunning(taskID) {
+				continue
+			}
+			_ = s.runTask(taskID, false, model.TriggerModeWatch)
 		}
 	}
 }
@@ -420,6 +424,12 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 			if matcher.excluded(relative, entry.Name(), false, fileInfo.Size()) {
 				stats.Skipped++
+				stats.recordFile(model.BackupFileEntry{
+					Path:   filepath.ToSlash(relative),
+					Action: model.BackupFileActionSkip,
+					Size:   fileInfo.Size(),
+					Note:   "未通过筛选规则",
+				})
 				return nil
 			}
 
@@ -487,12 +497,26 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 				if err := s.copyOneWebdav(task, target, item, fileInfo, stats); err != nil {
 					stats.Failed++
 					s.log(task.ID, "上传失败：%s（%v）", item.relative, err)
+					stats.recordFile(model.BackupFileEntry{
+						Path:   filepath.ToSlash(item.relative),
+						Action: model.BackupFileActionFail,
+						Size:   fileInfo.Size(),
+						Target: target.raw + webdav.InternalPathFromParts(target.internal, filepath.ToSlash(item.relative)),
+						Note:   err.Error(),
+					})
 				}
 			} else {
 				destination := filepath.Join(target.raw, item.relative)
-				if err := s.copyOne(task, item.absolute, destination, fileInfo, stats); err != nil {
+				if err := s.copyOne(task, item.relative, item.absolute, destination, fileInfo, stats); err != nil {
 					stats.Failed++
 					s.log(task.ID, "复制失败：%s（%v）", item.relative, err)
+					stats.recordFile(model.BackupFileEntry{
+						Path:   filepath.ToSlash(item.relative),
+						Action: model.BackupFileActionFail,
+						Size:   fileInfo.Size(),
+						Target: destination,
+						Note:   err.Error(),
+					})
 				}
 			}
 		}
@@ -500,6 +524,12 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		if (task.CompletionRule == model.BackupCompletionDeleteSource || task.CompletionRule == model.BackupCompletionDeleteSourceDirs) && len(targets) > 0 {
 			if err := os.Remove(item.absolute); err == nil {
 				stats.Deleted++
+				stats.recordFile(model.BackupFileEntry{
+					Path:   filepath.ToSlash(item.relative),
+					Action: model.BackupFileActionDelete,
+					Size:   fileInfo.Size(),
+					Note:   "按完成规则删除源文件",
+				})
 				delete(sourceIndex, item.relative)
 			}
 		}
@@ -556,6 +586,7 @@ func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status, s
 		FailureCount:   stats.Failed,
 		DeletedCount:   stats.Deleted,
 		Summary:        summary,
+		DetailJSON:     stats.buildBackupDetailJSON(),
 		StartedAt:      startedAt,
 		UpdatedAt:      finishedAt,
 		FinishedAt:     &finishedAt,
@@ -569,6 +600,52 @@ type runStats struct {
 	Skipped int
 	Deleted int
 	Failed  int
+
+	// 文件明细：写入 run_history.detail_json，供日志详情查看「备份了什么文件」。
+	Files      []model.BackupFileEntry
+	fileCounts map[string]int
+	fileTotal  int
+	truncated  bool
+}
+
+// recordFile 采集一条文件明细。每个动作最多保留 maxFileEntriesPerAction 条，
+// 但 fileCounts / fileTotal 始终按真实数量累加（详情面板用它显示准确条数）。
+func (s *runStats) recordFile(entry model.BackupFileEntry) {
+	if s == nil || strings.TrimSpace(entry.Path) == "" {
+		return
+	}
+
+	if s.fileCounts == nil {
+		s.fileCounts = make(map[string]int, 4)
+	}
+	s.fileCounts[entry.Action]++
+	s.fileTotal++
+
+	if s.fileCounts[entry.Action] > maxFileEntriesPerAction {
+		s.truncated = true
+		return
+	}
+	s.Files = append(s.Files, entry)
+}
+
+// buildBackupDetailJSON 把采集到的文件明细序列化成 run_history.detail_json。
+func (s *runStats) buildBackupDetailJSON() string {
+	if s == nil || (len(s.Files) == 0 && s.fileTotal == 0) {
+		return ""
+	}
+
+	encoded, err := json.Marshal(model.BackupDetail{
+		Kind:           "backup",
+		Files:          s.Files,
+		Counts:         s.fileCounts,
+		FilesTotal:     s.fileTotal,
+		FilesTruncated: s.truncated,
+	})
+	if err != nil {
+		return ""
+	}
+
+	return string(encoded)
 }
 
 // sourceItem 是一个待复制的源文件条目。
@@ -586,10 +663,17 @@ type targetDesc struct {
 	client   *webdav.Client
 }
 
-func (s *Service) copyOne(task model.BackupTask, sourcePath, destination string, info os.FileInfo, stats *runStats) error {
+func (s *Service) copyOne(task model.BackupTask, relative, sourcePath, destination string, info os.FileInfo, stats *runStats) error {
 	if _, err := os.Stat(destination); err == nil {
 		if task.ReplaceRule != model.BackupReplaceOverwrite {
 			stats.Skipped++
+			stats.recordFile(model.BackupFileEntry{
+				Path:   filepath.ToSlash(relative),
+				Action: model.BackupFileActionSkip,
+				Size:   info.Size(),
+				Target: destination,
+				Note:   "目标已存在同名文件，按「同名跳过」处理",
+			})
 			return nil
 		}
 	}
@@ -619,6 +703,12 @@ func (s *Service) copyOne(task model.BackupTask, sourcePath, destination string,
 
 	_ = os.Chtimes(destination, time.Now(), info.ModTime())
 	stats.Copied++
+	stats.recordFile(model.BackupFileEntry{
+		Path:   filepath.ToSlash(relative),
+		Action: model.BackupFileActionUpload,
+		Size:   info.Size(),
+		Target: destination,
+	})
 	s.log(task.ID, "已备份：%s", destination)
 	return nil
 }
@@ -636,6 +726,13 @@ func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item s
 	if exists, err := target.client.Exists(ctx, internalPath); err == nil && exists {
 		if task.ReplaceRule != model.BackupReplaceOverwrite {
 			stats.Skipped++
+			stats.recordFile(model.BackupFileEntry{
+				Path:   filepath.ToSlash(item.relative),
+				Action: model.BackupFileActionSkip,
+				Size:   info.Size(),
+				Target: target.raw + internalPath,
+				Note:   "远端已存在同名文件，按「同名跳过」处理",
+			})
 			return nil
 		}
 	} else if err != nil {
@@ -661,6 +758,12 @@ func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item s
 	}
 
 	stats.Copied++
+	stats.recordFile(model.BackupFileEntry{
+		Path:   filepath.ToSlash(item.relative),
+		Action: model.BackupFileActionUpload,
+		Size:   info.Size(),
+		Target: target.raw + internalPath,
+	})
 	s.log(task.ID, "已上传：%s", internalPath)
 	return nil
 }
@@ -706,9 +809,21 @@ func (s *Service) syncDeleteMissing(targetDir string, sourceIndex map[string]str
 
 		if err := os.Remove(currentPath); err != nil {
 			stats.Failed++
+			stats.recordFile(model.BackupFileEntry{
+				Path:   filepath.ToSlash(relative),
+				Action: model.BackupFileActionFail,
+				Target: currentPath,
+				Note:   "从目标同步删除失败：" + err.Error(),
+			})
 			return nil
 		}
 		stats.Deleted++
+		stats.recordFile(model.BackupFileEntry{
+			Path:   filepath.ToSlash(relative),
+			Action: model.BackupFileActionDelete,
+			Target: currentPath,
+			Note:   "源中已不存在，从目标同步删除",
+		})
 		return nil
 	})
 }
