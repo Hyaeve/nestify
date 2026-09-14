@@ -380,13 +380,15 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	}
 	matchers := buildFileNameMatchers(req.Whitelist)
 
+	overwrite := req.Options["strm_overwrite"]
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
 		}
 	}
 
-	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, stats); err != nil {
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, overwrite, stats); err != nil {
 		return *stats, err
 	}
 
@@ -398,7 +400,12 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		if req.Options["strm_full_sync"] {
 			syncLabel = "全量同步"
 		}
-		stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		if overwrite {
+			syncLabel += "·覆盖生成"
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成/覆盖 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		} else {
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		}
 	}
 
 	if stats.FailureCount > 0 {
@@ -408,7 +415,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	return *stats, nil
 }
 
-func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, stats *executionStats) error {
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, overwrite bool, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
@@ -424,7 +431,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
 				return nil
 			}
-			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, stats)
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, overwrite, stats)
 		}
 
 		if matchesFileName(entry.Name(), false, matchers) {
@@ -445,10 +452,14 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 			return nil
 		}
 
+		existed := false
 		if _, err := os.Lstat(targetPath); err == nil {
-			stats.SkipCount++
-			s.appendLog(runID, "info", fmt.Sprintf("skipped existing strm target %s", targetPath))
-			return nil
+			existed = true
+			if !overwrite {
+				stats.SkipCount++
+				s.appendLog(runID, "info", fmt.Sprintf("skipped existing strm target %s", targetPath))
+				return nil
+			}
 		} else if !os.IsNotExist(err) {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("inspect strm target %s failed: %v", targetPath, err))
@@ -463,7 +474,11 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
-		s.appendLog(runID, "info", fmt.Sprintf("created strm %s -> %s", targetPath, sourcePath))
+		if existed {
+			s.appendLog(runID, "info", fmt.Sprintf("overwrote strm %s -> %s", targetPath, sourcePath))
+		} else {
+			s.appendLog(runID, "info", fmt.Sprintf("created strm %s -> %s", targetPath, sourcePath))
+		}
 		return nil
 	})
 }

@@ -938,11 +938,18 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
-              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
-            <div class="strm-suffix-editor__hint">图片后缀（jpg、png、webp 等）与媒体数据后缀（ass、srt、ssa、nfo 等）</div>
+            <div class="strm-suffix-editor__tags">
+              <el-tag v-for="suffix in createLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeCreateMetadataSuffix(suffix)">{{ suffix }}</el-tag>
+              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateMetadataSuffix" />
+            </div>
           </div>
+          <el-form-item label="覆盖生成">
+            <el-switch v-model="createLinkForm.strm_overwrite" />
+            <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
+          </el-form-item>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -992,11 +999,18 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
-              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
-            <div class="strm-suffix-editor__hint">图片后缀（jpg、png、webp 等）与媒体数据后缀（ass、srt、ssa、nfo 等）</div>
+            <div class="strm-suffix-editor__tags">
+              <el-tag v-for="suffix in editLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeEditMetadataSuffix(suffix)">{{ suffix }}</el-tag>
+              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditMetadataSuffix" />
+            </div>
           </div>
+          <el-form-item label="覆盖生成">
+            <el-switch v-model="editLinkForm.strm_overwrite" />
+            <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
+          </el-form-item>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
@@ -1204,6 +1218,28 @@ function normalizeStrmSuffixes(values: string[]) {
   return suffixes
 }
 
+// Strm 规则实际保存的是「媒体 + 元数据」合并后的后缀列表；
+// 界面上两块分开编辑，保存时合并、载入时按预设类别拆回。
+function mergeStrmSuffixes(...groups: string[][]) {
+  return normalizeStrmSuffixes(groups.flat())
+}
+
+function splitStrmSuffixes(values: string[]) {
+  const metadataPreset = new Set(
+    normalizeStrmSuffixes([...strmPresetByType('image'), ...strmPresetByType('data')]),
+  )
+  const media: string[] = []
+  const metadata: string[] = []
+  for (const suffix of values) {
+    if (metadataPreset.has(suffix)) {
+      metadata.push(suffix)
+    } else {
+      media.push(suffix)
+    }
+  }
+  return { media, metadata }
+}
+
 function parseFiltersArray(raw?: string) {
   if (!raw) return []
   try {
@@ -1215,12 +1251,19 @@ function parseFiltersArray(raw?: string) {
   }
 }
 
+const strmOptionDefaults = { strm_full_sync: false, strm_overwrite: false }
+
 function parseStrmSyncMode(raw?: string): StrmSyncMode {
-  return parseOptionJSON(raw, { strm_full_sync: false }).strm_full_sync ? 'full' : 'incremental'
+  return parseOptionJSON(raw, strmOptionDefaults).strm_full_sync ? 'full' : 'incremental'
 }
 
-function buildStrmOptions(syncMode: StrmSyncMode) {
-  return { strm_full_sync: syncMode === 'full' }
+// 覆盖生成：目标目录里已存在的 Strm 会被重新写入，而不是跳过。
+function parseStrmOverwrite(raw?: string): boolean {
+  return parseOptionJSON(raw, strmOptionDefaults).strm_overwrite
+}
+
+function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean) {
+  return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite }
 }
 
 function parseFiltersJSON(raw?: string) {
@@ -1421,7 +1464,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
-    options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json)) : {}),
+    options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json), parseStrmOverwrite(rule.options_json)) : {}),
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
       ? normalizeFixedPackageOptions(parseOptionJSON(rule.package_options_json, createDefaultPackageOptions()))
       : {},
@@ -1626,7 +1669,9 @@ const createLinkForm = reactive({
   run_on_start: false,
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
+  strm_overwrite: false,
   strm_suffixes: [] as string[],
+  strm_metadata_suffixes: [] as string[],
   filters_text: '',
 })
 
@@ -1642,7 +1687,9 @@ const editLinkForm = reactive({
   run_on_start: false,
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
+  strm_overwrite: false,
   strm_suffixes: [] as string[],
+  strm_metadata_suffixes: [] as string[],
   filters_text: '',
 })
 
@@ -1650,6 +1697,8 @@ const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: tr
 
 const createLinkStrmSuffixInput = ref('')
 const editLinkStrmSuffixInput = ref('')
+const createLinkMetadataSuffixInput = ref('')
+const editLinkMetadataSuffixInput = ref('')
 
 function resetCreateForm() {
   createForm.name = ''
@@ -1741,9 +1790,12 @@ function resetCreateLinkForm() {
   createLinkForm.run_on_start = false
   createLinkForm.link_mode = 'soft'
   createLinkForm.strm_sync_mode = 'incremental'
+  createLinkForm.strm_overwrite = false
   createLinkForm.strm_suffixes = []
+  createLinkForm.strm_metadata_suffixes = []
   createLinkForm.filters_text = ''
   createLinkStrmSuffixInput.value = ''
+  createLinkMetadataSuffixInput.value = ''
 }
 
 function resetEditLinkForm() {
@@ -1758,9 +1810,12 @@ function resetEditLinkForm() {
   editLinkForm.run_on_start = false
   editLinkForm.link_mode = 'soft'
   editLinkForm.strm_sync_mode = 'incremental'
+  editLinkForm.strm_overwrite = false
   editLinkForm.strm_suffixes = []
+  editLinkForm.strm_metadata_suffixes = []
   editLinkForm.filters_text = ''
   editLinkStrmSuffixInput.value = ''
+  editLinkMetadataSuffixInput.value = ''
 }
 
 function addStrmSuffix(target: string[], value: string) {
@@ -1782,6 +1837,18 @@ function addEditStrmSuffix() {
   }
 }
 
+function addCreateMetadataSuffix() {
+  if (addStrmSuffix(createLinkForm.strm_metadata_suffixes, createLinkMetadataSuffixInput.value)) {
+    createLinkMetadataSuffixInput.value = ''
+  }
+}
+
+function addEditMetadataSuffix() {
+  if (addStrmSuffix(editLinkForm.strm_metadata_suffixes, editLinkMetadataSuffixInput.value)) {
+    editLinkMetadataSuffixInput.value = ''
+  }
+}
+
 function removeCreateStrmSuffix(suffix: string) {
   createLinkForm.strm_suffixes = createLinkForm.strm_suffixes.filter((item) => item !== suffix)
 }
@@ -1790,13 +1857,34 @@ function removeEditStrmSuffix(suffix: string) {
   editLinkForm.strm_suffixes = editLinkForm.strm_suffixes.filter((item) => item !== suffix)
 }
 
+function removeCreateMetadataSuffix(suffix: string) {
+  createLinkForm.strm_metadata_suffixes = createLinkForm.strm_metadata_suffixes.filter((item) => item !== suffix)
+}
+
+function removeEditMetadataSuffix(suffix: string) {
+  editLinkForm.strm_metadata_suffixes = editLinkForm.strm_metadata_suffixes.filter((item) => item !== suffix)
+}
+
+// 图片 / 数据属于元数据类后缀，单独放进「元数据文件」窗口，避免与媒体文件后缀混在一起。
+function isMetadataStrmPreset(type: 'video' | 'audio' | 'image' | 'data') {
+  return type === 'image' || type === 'data'
+}
+
 function fillCreateStrmPreset(type: 'video' | 'audio' | 'image' | 'data') {
   const preset = strmPresetByType(type)
+  if (isMetadataStrmPreset(type)) {
+    createLinkForm.strm_metadata_suffixes = toggleStrmPreset(createLinkForm.strm_metadata_suffixes, preset)
+    return
+  }
   createLinkForm.strm_suffixes = toggleStrmPreset(createLinkForm.strm_suffixes, preset)
 }
 
 function fillEditStrmPreset(type: 'video' | 'audio' | 'image' | 'data') {
   const preset = strmPresetByType(type)
+  if (isMetadataStrmPreset(type)) {
+    editLinkForm.strm_metadata_suffixes = toggleStrmPreset(editLinkForm.strm_metadata_suffixes, preset)
+    return
+  }
   editLinkForm.strm_suffixes = toggleStrmPreset(editLinkForm.strm_suffixes, preset)
 }
 
@@ -1953,7 +2041,10 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.run_on_start = rule.run_on_start
     editLinkForm.link_mode = normalizeLinkMode(rule.link_mode)
     editLinkForm.strm_sync_mode = parseStrmSyncMode(rule.options_json)
-    editLinkForm.strm_suffixes = normalizeStrmSuffixes(parseFiltersArray(rule.filters_json))
+    editLinkForm.strm_overwrite = parseStrmOverwrite(rule.options_json)
+    const strmSuffixGroups = splitStrmSuffixes(normalizeStrmSuffixes(parseFiltersArray(rule.filters_json)))
+    editLinkForm.strm_suffixes = strmSuffixGroups.media
+    editLinkForm.strm_metadata_suffixes = strmSuffixGroups.metadata
     editLinkForm.filters_text = editLinkForm.link_mode === 'strm' ? parseFiltersJSON(rule.whitelist_json) : parseFiltersJSON(rule.filters_json)
     editLinkStrmSuffixInput.value = ''
     editLinkDialogVisible.value = true
@@ -2747,7 +2838,7 @@ async function submitUpdatePurifyRule() {
 }
 
 async function submitCreateLinkRule() {
-  if (createLinkForm.link_mode === 'strm' && createLinkForm.strm_suffixes.length === 0) {
+  if (createLinkForm.link_mode === 'strm' && createLinkForm.strm_suffixes.length + createLinkForm.strm_metadata_suffixes.length === 0) {
     errorMessage.value = 'Strm 模式至少需要添加一个命中文件后缀'
     return
   }
@@ -2770,10 +2861,10 @@ async function submitCreateLinkRule() {
       watch_debounce_ms: createLinkForm.watch_debounce_ms,
       cron_expression: createLinkForm.schedule_enabled ? createLinkForm.cron_expression : '',
       run_on_start: createLinkForm.run_on_start,
-      options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode) : {},
+      options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode, createLinkForm.strm_overwrite) : {},
       package_options: {},
       collect_options: {},
-      filters: createLinkForm.link_mode === 'strm' ? [...createLinkForm.strm_suffixes] : parseFiltersText(createLinkForm.filters_text),
+      filters: createLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(createLinkForm.strm_suffixes, createLinkForm.strm_metadata_suffixes) : parseFiltersText(createLinkForm.filters_text),
       whitelist: createLinkForm.link_mode === 'strm' ? parseFiltersText(createLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则创建成功')
@@ -2829,7 +2920,7 @@ async function submitUpdateLinkRule() {
     return
   }
 
-  if (editLinkForm.link_mode === 'strm' && editLinkForm.strm_suffixes.length === 0) {
+  if (editLinkForm.link_mode === 'strm' && editLinkForm.strm_suffixes.length + editLinkForm.strm_metadata_suffixes.length === 0) {
     errorMessage.value = 'Strm 模式至少需要添加一个命中文件后缀'
     return
   }
@@ -2852,10 +2943,10 @@ async function submitUpdateLinkRule() {
       watch_debounce_ms: editLinkForm.watch_debounce_ms,
       cron_expression: editLinkForm.schedule_enabled ? editLinkForm.cron_expression : '',
       run_on_start: editLinkForm.run_on_start,
-      options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode) : {},
+      options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode, editLinkForm.strm_overwrite) : {},
       package_options: {},
       collect_options: {},
-      filters: editLinkForm.link_mode === 'strm' ? [...editLinkForm.strm_suffixes] : parseFiltersText(editLinkForm.filters_text),
+      filters: editLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(editLinkForm.strm_suffixes, editLinkForm.strm_metadata_suffixes) : parseFiltersText(editLinkForm.filters_text),
       whitelist: editLinkForm.link_mode === 'strm' ? parseFiltersText(editLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则更新成功')
@@ -3331,8 +3422,43 @@ onBeforeUnmount(() => {
 .strm-preset-button__icon { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
-.strm-suffix-editor__hint { font-size: 12px; color: var(--el-text-color-secondary); line-height: 1.6; }
 .strm-preset-button.is-active { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: 0 6px 14px rgba(47, 143, 157, 0.22); }
+/* 覆盖生成开关下方的小字说明：独占一行，避免与开关挤在同一行。 */
+.strm-overwrite-hint { flex: 0 0 100%; width: 100%; margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
+
+/* —— 横栏（标题条）与其下方内容合并为同一个窗口 —— */
+/* 横栏后面紧跟输入区 / 折叠面板时：去掉下方圆角与下边框，交给下方内容自己那条上边框当分隔线。 */
+.mode-config-toggle:has(+ .transform-section-input),
+.mode-config-toggle:has(+ .cleanup-retention-input),
+.mode-config-toggle:has(+ .strm-suffix-editor),
+.mode-config-toggle:has(+ .mode-config-panel:not([style*='display: none'])) {
+  margin-bottom: 0;
+  border-bottom-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* 下方内容：去掉上方圆角并顶到横栏上，与外框拼成一个完整的窗口。 */
+.transform-section-input,
+.cleanup-retention-input,
+.strm-suffix-editor {
+  margin-top: 0;
+}
+
+.transform-section-input :deep(.el-textarea__inner),
+.strm-suffix-editor,
+.mode-config-panel {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* 保留天数这类带表单标签的输入区：本身补上下半段外框，让标签也落在同一个窗口内。 */
+.cleanup-retention-input {
+  padding: 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 0 0 12px 12px;
+  background: var(--el-bg-color);
+}
 
 @media (max-width: 900px) {
   .history-toolbar { flex-direction: column; align-items: stretch; }

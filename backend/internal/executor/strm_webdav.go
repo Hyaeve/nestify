@@ -38,7 +38,8 @@ func parseWebdavSource(sourceDir string) (int64, string, error) {
 }
 
 // executeWebdavStrmRule 针对 WebDAV 挂载源生成 http strm：
-// strm 内容 = 挂载的 http 根地址 + WebDAV 内部文件路径。
+// strm 内容 = 挂载的 http 根地址 + 直链端点（/d）+ WebDAV 内部文件路径。
+// 注意使用直链端点而非 WebDAV 端点（/dav），否则媒体服务器无法直接播放。
 // 所有远端请求都经由客户端节流，避免对网盘后端造成过高的请求频繁度。
 func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
 	extensions := normalizeStrmExtensions(req.Filters)
@@ -69,6 +70,8 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 
 	client := webdav.NewClient(credential.Mount, credential.Password)
 
+	overwrite := req.Options["strm_overwrite"]
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
@@ -77,7 +80,7 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 
 	s.appendLog(runID, "info", fmt.Sprintf("WebDAV 源：%s（%s）", credential.Mount.Name, credential.Mount.BaseURL))
 
-	if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, internalPath, targetDir, extensions, matchers, stats); err != nil {
+	if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, internalPath, targetDir, extensions, matchers, overwrite, stats); err != nil {
 		return *stats, err
 	}
 
@@ -89,8 +92,14 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 		if req.Options["strm_full_sync"] {
 			syncLabel = "全量同步"
 		}
-		stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项",
-			syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		if overwrite {
+			syncLabel += "·覆盖生成"
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成/覆盖 %d 个 Strm，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		} else {
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		}
 	}
 
 	if stats.FailureCount > 0 {
@@ -109,6 +118,7 @@ func (s *Service) walkWebdavStrm(
 	targetRoot string,
 	extensions map[string]struct{},
 	matchers []fileNameMatcher,
+	overwrite bool,
 	stats *executionStats,
 ) error {
 	entries, err := client.List(ctx, currentInternal)
@@ -126,7 +136,7 @@ func (s *Service) walkWebdavStrm(
 		}
 
 		if entry.IsDir {
-			if err := s.walkWebdavStrm(ctx, runID, client, rootInternal, entry.Path, targetRoot, extensions, matchers, stats); err != nil {
+			if err := s.walkWebdavStrm(ctx, runID, client, rootInternal, entry.Path, targetRoot, extensions, matchers, overwrite, stats); err != nil {
 				return err
 			}
 			continue
@@ -144,12 +154,16 @@ func (s *Service) walkWebdavStrm(
 		}
 
 		targetPath := filepath.Join(targetRoot, strmRelativePath(relative))
+		existed := false
 		if _, err := os.Lstat(targetPath); err == nil {
-			stats.SkipCount++
-			continue
+			existed = true
+			if !overwrite {
+				stats.SkipCount++
+				continue
+			}
 		}
 
-		if err := writeStrmContent(targetPath, client.BuildFileURL(entry.Path)); err != nil {
+		if err := writeStrmContent(targetPath, client.BuildStrmURL(entry.Path)); err != nil {
 			stats.FailureCount++
 			s.appendLog(runID, "error", fmt.Sprintf("create strm %s failed: %v", targetPath, err))
 			continue
@@ -157,7 +171,11 @@ func (s *Service) walkWebdavStrm(
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
-		s.appendLog(runID, "info", fmt.Sprintf("created http strm %s", targetPath))
+		if existed {
+			s.appendLog(runID, "info", fmt.Sprintf("overwrote http strm %s", targetPath))
+		} else {
+			s.appendLog(runID, "info", fmt.Sprintf("created http strm %s", targetPath))
+		}
 	}
 
 	return nil
