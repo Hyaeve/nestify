@@ -86,17 +86,28 @@ export function fetchBrowseRoots() {
   return getJSON<BrowseRootsPayload>('/api/v1/paths/roots')
 }
 
-export function browseDirectories(path?: string) {
-  const query = path ? `?path=${encodeURIComponent(path)}` : ''
-  return getJSON<BrowseDirectoriesPayload>(`/api/v1/paths/browse${query}`)
+/**
+ * 浏览物理目录。
+ * source=local 时后端不再把 WebDAV 虚拟挂载追加进根目录列表，
+ * 与「文件管理」页「本地目录 / 远程挂载」两块独立页面保持一致。
+ */
+export function browseDirectories(path?: string, source?: string) {
+  const params: string[] = []
+  if (path) {
+    params.push(`path=${encodeURIComponent(path)}`)
+  }
+  if (source) {
+    params.push(`source=${encodeURIComponent(source)}`)
+  }
+  return getJSON<BrowseDirectoriesPayload>(`/api/v1/paths/browse${params.length ? `?${params.join('&')}` : ''}`)
 }
 
 /** 统一入口：物理目录走本地浏览接口，WebDAV 挂载目录走挂载浏览接口。 */
-export function browseAnyDirectory(path?: string) {
+export function browseAnyDirectory(path?: string, source?: string) {
   if (isMountPath(path)) {
     return getJSON<BrowseDirectoriesPayload>(`/api/v1/mounts/browse?path=${encodeURIComponent(path || '')}`)
   }
-  return browseDirectories(path)
+  return browseDirectories(path, source)
 }
 
 export function validateDirectory(path: string) {

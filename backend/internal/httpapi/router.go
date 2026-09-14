@@ -383,7 +383,7 @@ func (a *apiHandler) handlePathBrowse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	browsePath := r.URL.Query().Get("path")
-	data, err := a.pathBrowse.Browse(browsePath)
+	data, err := a.pathBrowse.Browse(browsePath, r.URL.Query().Get("source"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{
 			Success: false,

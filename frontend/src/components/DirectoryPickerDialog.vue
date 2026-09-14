@@ -271,6 +271,11 @@ function findRootPath(path: string) {
   return ''
 }
 
+/** 「全部来源」视图才允许本地根目录里出现远程挂载文件夹；限定本地时不再混入。 */
+function pickerBrowseSource() {
+  return sourceFilter.value === 'local' ? 'local' : undefined
+}
+
 async function populateRootLevel(path: string) {
   const rootPath = findRootPath(path)
   if (!rootPath) {
@@ -278,7 +283,7 @@ async function populateRootLevel(path: string) {
     return
   }
 
-  const response = await browseAnyDirectory(rootPath)
+  const response = await browseAnyDirectory(rootPath, pickerBrowseSource())
   treeData.value = mapDirectoryEntries(
     response.data?.entries ?? [],
     response.data?.current_path ?? rootPath,
@@ -299,7 +304,7 @@ async function openPath(path: string) {
 
   try {
     await populateRootLevel(targetPath)
-    const response = await browseAnyDirectory(targetPath)
+    const response = await browseAnyDirectory(targetPath, pickerBrowseSource())
     currentPath.value = response.data?.current_path ?? ''
     parentPath.value = response.data?.parent_path ?? ''
     pathInput.value = currentPath.value
@@ -325,7 +330,10 @@ async function loadNode(node: { level: number; data?: TreeNode }, resolve: (data
   }
 
   try {
-    const response = await browseAnyDirectory(currentNode.path)
+    const response = await browseAnyDirectory(
+      currentNode.path,
+      currentNode.isMount ? undefined : pickerBrowseSource(),
+    )
     const remote = Boolean(currentNode.isMount) || isMountPath(currentNode.path)
     const children = mapDirectoryEntries(
       response.data?.entries ?? [],

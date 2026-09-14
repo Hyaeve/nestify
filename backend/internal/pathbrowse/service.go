@@ -55,7 +55,10 @@ func (s *Service) Roots() []model.BrowseRoot {
 	return items
 }
 
-func (s *Service) Browse(path string) (*model.BrowseDirectoriesResponse, error) {
+// Browse 浏览物理目录。
+// source 为 "local" 时代表「本地目录」页面：不再把 WebDAV 虚拟挂载追加到根目录列表，
+// 使本地目录与远程挂载成为互不混显的两块独立页面。
+func (s *Service) Browse(path string, source string) (*model.BrowseDirectoriesResponse, error) {
 	resolved, root, err := s.resolvePath(path)
 	if err != nil {
 		return nil, err
@@ -107,7 +110,8 @@ func (s *Service) Browse(path string) (*model.BrowseDirectoriesResponse, error) 
 	}
 
 	// 在根目录下追加 WebDAV 虚拟挂载文件夹，方便在文件管理页直接查看与选择。
-	if samePath(resolved, root) {
+	// 但「本地目录」页面（source=local）不注入，避免远程挂载出现在本地目录里。
+	if samePath(resolved, root) && !strings.EqualFold(strings.TrimSpace(source), "local") {
 		for _, mount := range s.mounts {
 			items = append(items, model.DirectoryEntry{
 				Name:        mount.Name,

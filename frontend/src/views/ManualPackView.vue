@@ -29,13 +29,13 @@
             </el-button>
           </el-tooltip>
           <el-tooltip content="最近访问" placement="top" :show-after="500">
-            <el-dropdown trigger="click" :disabled="recentVisitedPaths.length === 0" @command="handleRecentVisitedCommand">
+            <el-dropdown trigger="click" :disabled="visibleRecentPaths.length === 0" @command="handleRecentVisitedCommand">
               <el-button class="toolbar-action toolbar-action--recent" circle aria-label="最近访问">
                 <el-icon><Clock /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-for="path in recentVisitedPaths" :key="path" :command="path">{{ path }}</el-dropdown-item>
+                  <el-dropdown-item v-for="path in visibleRecentPaths" :key="path" :command="path">{{ path }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -158,38 +158,51 @@
         </div>
 
         <div class="path-row">
-          <div class="path-row__breadcrumbs">
-            <el-popover
-              :visible="sourceMenuVisible"
-              placement="bottom-start"
-              :width="280"
-              trigger="manual"
-              popper-class="path-source-popper"
+          <!-- 「本地目录 / 远程挂载」是两块各自独立的页面：点击标签切换，
+               URL 后缀随之变化（?source=local / ?source=mount），并可常驻、可刷新、可收藏。 -->
+          <div class="path-row__source-switch" role="tablist" aria-label="目录来源">
+            <button
+              v-for="option in sourceOptions"
+              :key="option.value"
+              type="button"
+              role="tab"
+              class="path-source-tab"
+              :class="[`is-${option.value}`, { 'is-active': sourceMode === option.value }]"
+              :aria-selected="sourceMode === option.value"
+              @click.stop="switchSource(option.value)"
             >
-              <template #reference>
-                <button
-                  type="button"
-                  class="path-source-toggle"
-                  :class="`is-${pathSource}`"
-                  :title="pathSourceHint"
-                  @click.stop="handleSourceToggle"
-                >
-                  <el-icon class="path-source-toggle__icon">
-                    <Monitor v-if="pathSource === 'local'" />
+              <el-icon class="path-source-tab__icon"><component :is="option.icon" /></el-icon>
+              <span class="path-source-tab__text">{{ option.label }}</span>
+            </button>
+          </div>
+
+          <div class="path-row__breadcrumbs">
+            <div class="path-row__root-picker">
+              <button
+                type="button"
+                class="path-source-root"
+                :class="`is-${sourceMode}`"
+                :title="currentRoot ? `${currentRoot.name}（${currentRoot.path}）` : sourceEmptyHint"
+                @click.stop="toggleRootMenu"
+              >
+                <el-icon class="path-source-root__icon">
+                  <Monitor v-if="sourceMode === 'local'" />
+                  <Cloudy v-else />
+                </el-icon>
+                <span class="path-source-root__text">{{ currentRootLabel }}</span>
+                <el-icon class="path-source-root__caret"><ArrowDown /></el-icon>
+              </button>
+
+              <div v-if="rootMenuVisible" class="path-source-menu" @click.stop>
+                <div class="path-source-menu__group">
+                  <el-icon>
+                    <Monitor v-if="sourceMode === 'local'" />
                     <Cloudy v-else />
                   </el-icon>
-                  <span class="path-source-toggle__text">{{ pathSource === 'local' ? '本地目录' : '远程挂载' }}</span>
-                  <el-icon class="path-source-toggle__caret"><ArrowDown /></el-icon>
-                </button>
-              </template>
-
-              <div class="path-source-menu">
-                <div class="path-source-menu__group">
-                  <el-icon><Monitor /></el-icon>
-                  <span>本地目录</span>
+                  <span>{{ sourceMode === 'local' ? '本地目录根' : '远程挂载根' }}</span>
                 </div>
                 <button
-                  v-for="root in localRoots"
+                  v-for="root in activeRoots"
                   :key="root.path"
                   type="button"
                   class="path-source-menu__item"
@@ -200,27 +213,9 @@
                   <span class="path-source-menu__name">{{ root.name }}</span>
                   <span class="path-source-menu__path">{{ root.path }}</span>
                 </button>
-                <div v-if="!localRoots.length" class="path-source-menu__empty">未配置本地目录</div>
-
-                <div class="path-source-menu__group path-source-menu__group--remote">
-                  <el-icon><Cloudy /></el-icon>
-                  <span>远程挂载</span>
-                </div>
-                <button
-                  v-for="root in mountRoots"
-                  :key="root.path"
-                  type="button"
-                  class="path-source-menu__item"
-                  :class="{ 'is-active': rootContainsCurrent(root) }"
-                  :title="root.path"
-                  @click="selectSourceRoot(root)"
-                >
-                  <span class="path-source-menu__name">{{ root.name }}</span>
-                  <span class="path-source-menu__path">{{ root.path }}</span>
-                </button>
-                <div v-if="!mountRoots.length" class="path-source-menu__empty">尚未配置远程挂载</div>
+                <div v-if="!activeRoots.length" class="path-source-menu__empty">{{ sourceEmptyHint }}</div>
               </div>
-            </el-popover>
+            </div>
 
             <button
               v-for="(crumb, index) in breadcrumbItems"
@@ -258,6 +253,7 @@
           v-loading="loading"
           :data="pagedEntries"
           row-key="path"
+          :empty-text="tableEmptyText"
           :row-class-name="getRowClassName"
           @selection-change="handleSelectionChange"
           @select="handleSelectRow"
@@ -488,6 +484,7 @@
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowDown, Back, Clock, Cloudy, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, Monitor, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
@@ -533,6 +530,10 @@ type SortOrder = 'asc' | 'desc'
 
 const STARRED_FOLDERS_STORAGE_KEY = 'nestify:file-manager:starred-folders'
 const RECENT_VISITED_PATHS_STORAGE_KEY = 'nestify:file-manager:recent-visited-paths'
+/** 文件管理页的来源后缀：/manual-pack?source=local | /manual-pack?source=mount */
+const SOURCE_QUERY_KEY = 'source'
+/** 每个来源页面各自记住的「上次所在目录」，来回切换时原地恢复。 */
+const SOURCE_PATHS_STORAGE_KEY = 'nestify:file-manager:source-paths'
 
 const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
@@ -545,7 +546,7 @@ const errorMessage = ref('')
 const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
-const sourceMenuVisible = ref(false)
+const rootMenuVisible = ref(false)
 const selectedRows = ref<FileManagerEntry[]>([])
 const shiftPressed = ref(false)
 const lastAnchorPath = ref<string | null>(null)
@@ -554,6 +555,26 @@ const sortBy = ref<SortBy>('modified_at')
 const sortOrder = ref<SortOrder>('desc')
 const starredFolders = ref<string[]>([])
 const recentVisitedPaths = ref<string[]>([])
+
+/** 目录来源：本地目录 / 远程挂载，两块互相独立的页面。 */
+type SourceMode = 'local' | 'mount'
+
+const sourceOptions: Array<{ value: SourceMode; label: string; icon: unknown }> = [
+  { value: 'local', label: '本地目录', icon: Monitor },
+  { value: 'mount', label: '远程挂载', icon: Cloudy },
+]
+
+const route = useRoute()
+const router = useRouter()
+const sourceMode = ref<SourceMode>(resolveSourceFromQuery())
+/** 各来源页面各自记住的上次所在目录。 */
+const sourcePaths = ref<Record<SourceMode, string>>({ local: '', mount: '' })
+
+function resolveSourceFromQuery(): SourceMode {
+  const raw = route.query[SOURCE_QUERY_KEY]
+  const value = Array.isArray(raw) ? raw[0] : raw
+  return value === 'mount' ? 'mount' : 'local'
+}
 const tableRef = ref<any>(null)
 const uploadInputRef = ref<HTMLInputElement | null>(null)
 
@@ -597,13 +618,25 @@ const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) 
 const localRoots = computed(() => roots.value.filter((root) => !isMountPath(root.path)))
 /** WebDAV 远程挂载根。 */
 const mountRoots = computed(() => roots.value.filter((root) => isMountPath(root.path)))
-/** 当前所在目录属于哪一个来源：本地目录 or 远程挂载。 */
-const pathSource = computed<'local' | 'mount'>(() => (isMountPath(directoryPath.value) ? 'mount' : 'local'))
-const pathSourceHint = computed(() =>
-  pathSource.value === 'local'
-    ? '当前：本地目录 · 点击切换到远程挂载目录'
-    : '当前：远程挂载 · 点击切换到本地目录',
+/** 当前页面所展示的根列表（只含本来源，另一块页面的根不混显）。 */
+const activeRoots = computed(() => (sourceMode.value === 'mount' ? mountRoots.value : localRoots.value))
+const sourceEmptyHint = computed(() =>
+  sourceMode.value === 'mount' ? '尚未配置远程挂载目录' : '未发现可用的本地目录',
 )
+/** 当前所在的根（用于来源按钮上显示的名称）。 */
+const currentRoot = computed<BrowseRoot | null>(() => {
+  if (!directoryPath.value) {
+    return activeRoots.value[0] ?? null
+  }
+  const matched = sortRootsByDepth(activeRoots.value).find((root) => isPathWithin(root.path, directoryPath.value))
+  return matched ?? activeRoots.value[0] ?? null
+})
+const currentRootLabel = computed(() => currentRoot.value?.name ?? '未选择根目录')
+/** 「最近访问」只列当前页面的路径，避免两块页面互相串目录。 */
+const visibleRecentPaths = computed(() =>
+  recentVisitedPaths.value.filter((path) => isMountPath(path) === (sourceMode.value === 'mount')),
+)
+const tableEmptyText = computed(() => (activeRoots.value.length ? '当前目录没有内容' : sourceEmptyHint.value))
 const sortedEntries = computed(() => {
   const items: PreparedFileManagerEntry[] = entries.value.map((entry) => {
     const normalizedPath = normalizePath(entry.path)
@@ -658,11 +691,9 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
     return []
   }
 
-  // 只在同一来源的根里找匹配项：本地根（尤其 "/"）会匹配一切路径，
+  // 只在当前页面来源的根里找匹配项：本地根（尤其 "/"）会匹配一切路径，
   // 若不区分来源，WebDAV 虚拟路径会被本地根截断出错误的面包屑。
-  const candidates = sortRootsByDepth(
-    pathSource.value === 'mount' ? mountRoots.value : localRoots.value,
-  )
+  const candidates = sortRootsByDepth(activeRoots.value)
   const matchedRoot = candidates.find((root) => isPathWithin(root.path, directoryPath.value))
   if (!matchedRoot) {
     return [{ label: directoryPath.value, path: directoryPath.value }]
@@ -710,32 +741,81 @@ function rootContainsCurrent(root: BrowseRoot) {
 }
 
 /**
- * 根目录左侧图标：点击在「本地目录 / 远程挂载」之间切换。
- * 目标来源只有一个根时直接跳转；多于一个时展开菜单选择。
+ * 切换「本地目录 / 远程挂载」两块页面。
+ * 先把当前来源的目录记下来，再把来源写进 URL 后缀（可刷新、可收藏、可前进后退）。
  */
-function handleSourceToggle() {
-  if (sourceMenuVisible.value) {
-    sourceMenuVisible.value = false
+async function switchSource(next: SourceMode, explicitPath = '') {
+  if (next !== sourceMode.value) {
+    persistSourcePath(sourceMode.value, directoryPath.value)
+    sourceMode.value = next
+    await router
+      .push({ path: route.path, query: { ...route.query, [SOURCE_QUERY_KEY]: next } })
+      .catch(() => undefined)
+  }
+  await enterSource(next, explicitPath)
+}
+
+/** 进入某个来源页面：优先用显式路径，其次用该来源记住的路径，最后回落到第一个根。 */
+async function enterSource(mode: SourceMode, explicitPath = '') {
+  const target = explicitPath || resolveSourceTargetPath(mode)
+  if (!target) {
+    directoryPath.value = ''
+    parentPath.value = ''
+    entries.value = []
+    clearSelection()
     return
   }
+  await openPath(target)
+}
 
-  const targetRoots = pathSource.value === 'local' ? mountRoots.value : localRoots.value
-  if (!targetRoots.length) {
-    ElMessage.warning(pathSource.value === 'local' ? '尚未配置远程挂载目录' : '未发现可用的本地目录')
+function resolveSourceTargetPath(mode: SourceMode) {
+  const sourceRoots = mode === 'mount' ? mountRoots.value : localRoots.value
+  if (!sourceRoots.length) {
+    return ''
+  }
+  const remembered = sourcePaths.value[mode]
+  if (remembered && sourceRoots.some((root) => isPathWithin(root.path, remembered))) {
+    return remembered
+  }
+  return sourceRoots[0]?.path ?? ''
+}
+
+/** 根目录名称按钮：展开当前来源的根列表。 */
+function toggleRootMenu() {
+  if (!activeRoots.value.length) {
+    ElMessage.warning(sourceEmptyHint.value)
     return
   }
-
-  if (targetRoots.length === 1) {
-    void openPath(targetRoots[0].path)
-    return
-  }
-
-  sourceMenuVisible.value = true
+  rootMenuVisible.value = !rootMenuVisible.value
 }
 
 function selectSourceRoot(root: BrowseRoot) {
-  sourceMenuVisible.value = false
+  rootMenuVisible.value = false
   void openPath(root.path)
+}
+
+function loadSourcePaths() {
+  try {
+    const raw = window.localStorage.getItem(SOURCE_PATHS_STORAGE_KEY)
+    if (!raw) {
+      return
+    }
+    const parsed = JSON.parse(raw) as Partial<Record<SourceMode, string>>
+    sourcePaths.value = {
+      local: typeof parsed.local === 'string' && parsed.local.trim() ? normalizePath(parsed.local) : '',
+      mount: typeof parsed.mount === 'string' && parsed.mount.trim() ? normalizePath(parsed.mount) : '',
+    }
+  } catch {
+    sourcePaths.value = { local: '', mount: '' }
+  }
+}
+
+function persistSourcePath(mode: SourceMode, path: string) {
+  if (!path || !path.trim()) {
+    return
+  }
+  sourcePaths.value = { ...sourcePaths.value, [mode]: normalizePath(path) }
+  window.localStorage.setItem(SOURCE_PATHS_STORAGE_KEY, JSON.stringify(sourcePaths.value))
 }
 
 function joinPath(base: string, segment: string) {
@@ -748,7 +828,7 @@ function joinPath(base: string, segment: string) {
 
 function hideContextMenu() {
   contextMenu.value.visible = false
-  sourceMenuVisible.value = false
+  rootMenuVisible.value = false
 }
 
 function handleWindowKeyDown(event: KeyboardEvent) {
@@ -1006,10 +1086,17 @@ function handleDirectorySelected(path: string) {
     case 'pack':
       packOutputDir.value = path
       break
-    default:
+    default: {
       directoryPath.value = path
-      void openCurrentPath()
+      // 选择器内部允许跨来源浏览：选到另一来源的目录时顺势切到对应页面。
+      const nextSource: SourceMode = isMountPath(path) ? 'mount' : 'local'
+      if (nextSource !== sourceMode.value) {
+        void switchSource(nextSource, path)
+      } else {
+        void openCurrentPath()
+      }
       break
+    }
   }
 
   directoryPickerVisible.value = false
@@ -1022,14 +1109,8 @@ async function initialize() {
   try {
     const response = await fetchBrowseRoots()
     roots.value = response.data?.items ?? []
-
-    if (!directoryPath.value && roots.value[0]?.path) {
-      directoryPath.value = roots.value[0].path
-    }
-
-    if (directoryPath.value) {
-      await openCurrentPath()
-    }
+    // 只进入当前来源页面（本地目录 or 远程挂载），另一块页面的根不参与。
+    await enterSource(sourceMode.value)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '目录初始化失败'
   } finally {
@@ -1050,15 +1131,22 @@ async function openCurrentPath() {
 
   try {
     const previousPath = directoryPath.value
-    const response = await browseAnyDirectory(directoryPath.value)
+    // source=local 时后端不再把 WebDAV 虚拟挂载塞进本地根目录列表；
+    // 前端同时兜底过滤，保证「本地目录」页永远看不到远程挂载。
+    const response = await browseAnyDirectory(
+      directoryPath.value,
+      sourceMode.value === 'local' ? 'local' : undefined,
+    )
     directoryPath.value = response.data?.current_path ?? directoryPath.value
     parentPath.value = response.data?.parent_path ?? ''
-    entries.value = response.data?.entries ?? []
+    const rawEntries = response.data?.entries ?? []
+    entries.value = sourceMode.value === 'local' ? rawEntries.filter((entry) => !entry.is_mount) : rawEntries
     if (previousPath && previousPath !== directoryPath.value) {
       persistRecentVisitedPath(previousPath)
     }
     if (directoryPath.value) {
       persistRecentVisitedPath(directoryPath.value)
+      persistSourcePath(sourceMode.value, directoryPath.value)
     }
     currentPage.value = 1
     clearSelection()
@@ -1544,9 +1632,40 @@ async function applyPageSizeSetting() {
   }
 }
 
+// 浏览器前进 / 后退或直接改 URL 时同步页面：两块页面都能常驻、刷新、收藏。
+watch(
+  () => route.query[SOURCE_QUERY_KEY],
+  (value) => {
+    if (!route.path.startsWith('/manual-pack')) {
+      return
+    }
+    const raw = Array.isArray(value) ? value[0] : value
+    const next: SourceMode = raw === 'mount' ? 'mount' : 'local'
+    // 侧栏链接等未带后缀时补全，保证地址栏始终能区分两块页面。
+    if (raw !== next) {
+      void router
+        .replace({ path: route.path, query: { ...route.query, [SOURCE_QUERY_KEY]: next } })
+        .catch(() => undefined)
+    }
+    if (next === sourceMode.value) {
+      return
+    }
+    persistSourcePath(sourceMode.value, directoryPath.value)
+    sourceMode.value = next
+    void enterSource(next)
+  },
+)
+
 onMounted(() => {
   loadStarredFolders()
   loadRecentVisitedPaths()
+  loadSourcePaths()
+  // 首次进入或侧栏链接未带参数时补上来源后缀，保证两块页面各有独立 URL。
+  if (!route.query[SOURCE_QUERY_KEY]) {
+    void router
+      .replace({ path: route.path, query: { ...route.query, [SOURCE_QUERY_KEY]: sourceMode.value } })
+      .catch(() => undefined)
+  }
   window.addEventListener('keydown', handleWindowKeyDown)
   window.addEventListener('keyup', handleWindowKeyUp)
   window.addEventListener('scroll', hideContextMenu, true)
@@ -1777,7 +1896,8 @@ onBeforeUnmount(() => {
 .path-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px 12px;
   margin-bottom: 18px;
 }
 
@@ -1788,12 +1908,66 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-/* 根目录左侧的来源切换按钮：本地目录 / 远程挂载，各自独立图标。 */
-.path-source-toggle {
+/* 两块页面切换：本地目录 / 远程挂载，各自独立 URL 后缀（?source=）。 */
+.path-row__source-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: #f4f7fb;
+}
+
+.path-source-tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.path-source-tab__icon {
+  font-size: 16px;
+}
+
+.path-source-tab:hover {
+  color: #334155;
+}
+
+.path-source-tab.is-active.is-local {
+  color: #2f6f4f;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(47, 111, 79, 0.16);
+}
+
+.path-source-tab.is-active.is-mount {
+  color: #5f7fa8;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(95, 127, 168, 0.18);
+}
+
+/* 当前来源下的根目录选择（只列本来源的根）。 */
+.path-row__root-picker {
+  position: relative;
   flex: 0 0 auto;
+}
+
+.path-source-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
   padding: 4px 10px;
   border: 1px solid #dbe3ec;
   border-radius: 10px;
@@ -1802,40 +1976,56 @@ onBeforeUnmount(() => {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.4;
-  white-space: nowrap;
   cursor: pointer;
   transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.path-source-toggle__icon {
-  font-size: 16px;
-}
-
-.path-source-toggle__caret {
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.path-source-toggle.is-local {
+.path-source-root.is-local {
   color: #2f6f4f;
   border-color: #bfdccb;
   background: #eef7f1;
 }
 
-.path-source-toggle.is-mount {
+.path-source-root.is-mount {
   color: #5f7fa8;
   border-color: #c2d2e6;
   background: #eef3f9;
 }
 
-.path-source-toggle:hover {
+.path-source-root:hover {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
 }
 
+.path-source-root__icon {
+  font-size: 16px;
+}
+
+.path-source-root__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-source-root__caret {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 .path-source-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
 }
 
 .path-source-menu__group {
