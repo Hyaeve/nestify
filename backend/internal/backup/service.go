@@ -888,10 +888,7 @@ func (m *filterMatcher) excluded(relativePath, name string, isDir bool, size int
 	whitelistMatched := false
 
 	for _, rule := range m.rules {
-		if isDir && !rule.MatchDir {
-			continue
-		}
-		if !isDir && !rule.MatchFile {
+		if !ruleAppliesTo(rule, isDir) {
 			continue
 		}
 		if !m.matches(rule, relativePath, name, isDir, size) {
@@ -910,21 +907,33 @@ func (m *filterMatcher) excluded(relativePath, name string, isDir bool, size int
 		if !rule.Whitelist {
 			continue
 		}
-		if isDir && !rule.MatchDir {
-			continue
-		}
-		if !isDir && !rule.MatchFile {
+		if !ruleAppliesTo(rule, isDir) {
 			continue
 		}
 		hasWhitelist = true
 		break
 	}
 
+	// 存在适用于本条目的白名单规则却一条都没命中 → 排除。
+	// 扩展名白名单因此就是「允许清单」：只有命中的扩展名才会进入备份清单，其余文件直接被无视。
 	if hasWhitelist && !whitelistMatched {
 		return true
 	}
 
 	return false
+}
+
+// ruleAppliesTo 判断一条规则是否会作用于该条目：既看 match_dir / match_file 开关，
+// 也看规则类型本身。扩展名与体积只对文件有意义，所以即便勾了「文件夹」也不该剪目录，
+// 否则一条扩展名白名单会连带剪掉整棵目录树，最终一个文件都匹配不到。
+func ruleAppliesTo(rule model.BackupFilterRule, isDir bool) bool {
+	if !isDir {
+		return rule.MatchFile
+	}
+	if !rule.MatchDir {
+		return false
+	}
+	return rule.Type != model.BackupFilterExtension && rule.Type != model.BackupFilterSize
 }
 
 func (m *filterMatcher) matches(rule model.BackupFilterRule, relativePath, name string, isDir bool, size int64) bool {
@@ -1000,14 +1009,16 @@ func nameMatches(value, name, relativePath string) bool {
 func extensionCandidates(rule model.BackupFilterRule, value string) []string {
 	candidates := make([]string, 0, len(rule.Extensions)+1)
 	candidates = append(candidates, rule.Extensions...)
-	if value == "" {
-		return candidates
+	// 兼容旧的单值写法（value 里用逗号/分号/空格/竖线分隔多个扩展名）。
+	if value != "" {
+		for _, part := range strings.FieldsFunc(value, func(r rune) bool {
+			return r == ',' || r == ';' || r == ' ' || r == '|'
+		}) {
+			candidates = append(candidates, part)
+		}
 	}
-	for _, part := range strings.FieldsFunc(value, func(r rune) bool {
-		return r == ',' || r == ';' || r == ' ' || r == '|'
-	}) {
-		candidates = append(candidates, part)
-	}
+	// 归一必须在取值之后统一做：前端存的是「无点小写」（如 mp4），
+	// 这里补上前导点后配合 EqualFold 才能匹配到 .mp4 / .MP4。
 	for index, candidate := range candidates {
 		trimmed := strings.TrimSpace(candidate)
 		trimmed = strings.TrimPrefix(trimmed, "*")

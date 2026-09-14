@@ -215,6 +215,8 @@
                   type="button"
                   class="backup-filter-chip"
                   :class="{ 'is-active': rule.match_dir }"
+                  :disabled="!ruleSupportsDir(rule)"
+                  :title="ruleSupportsDir(rule) ? '匹配文件夹' : '扩展名 / 体积规则只作用于文件'"
                   @click="toggleMatch(rule, 'dir')"
                 >文件夹</button>
                 <button
@@ -711,7 +713,9 @@ function openEditWizard(task: BackupTask) {
         }
       }
     }
-    return { ...rule, extensions, draftValue: '' }
+    // 扩展名 / 体积规则只作用于文件：历史数据里若被勾上「文件夹」，载入时纠正回来。
+    const dirAllowed = rule.type !== 'extension' && rule.type !== 'size'
+    return { ...rule, extensions, draftValue: '', match_dir: dirAllowed && rule.match_dir, match_file: rule.match_file || !dirAllowed }
   })
   wizardStep.value = 0
   wizardVisible.value = true
@@ -871,9 +875,16 @@ function setListMode(rule: EditableFilterRule, mode: 'blacklist' | 'whitelist') 
   }
 }
 
+// 扩展名 / 体积只对文件有意义：这两类规则不能勾「文件夹」，
+// 否则一条扩展名白名单会把所有子目录都当成未命中而剪掉，导致一个文件都备份不了。
+function ruleSupportsDir(rule: EditableFilterRule): boolean {
+  return rule.type !== 'extension' && rule.type !== 'size'
+}
+
 // 文件夹 / 文件 至少选一个
 function toggleMatch(rule: EditableFilterRule, target: 'dir' | 'file') {
   if (target === 'dir') {
+    if (!ruleSupportsDir(rule)) return
     if (rule.match_dir && !rule.match_file) return
     rule.match_dir = !rule.match_dir
   } else {
@@ -1424,6 +1435,19 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 .backup-filter-chip:hover {
   border-color: #b6c9c1;
   color: #5b7a6e;
+}
+
+/* 扩展名 / 体积规则不作用于文件夹，禁用「文件夹」开关。 */
+.backup-filter-chip:disabled {
+  color: #cbd5e1;
+  background: #f8fafc;
+  border-color: #eef2f7;
+  cursor: not-allowed;
+}
+
+.backup-filter-chip:disabled:hover {
+  border-color: #eef2f7;
+  color: #cbd5e1;
 }
 
 .backup-filter-chip.is-active {
