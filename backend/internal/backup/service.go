@@ -139,7 +139,7 @@ func (s *Service) scheduleTask(task model.BackupTask) {
 	if strings.TrimSpace(task.CronExpression) != "" && s.cronRunner != nil {
 		taskID := task.ID
 		entryID, err := s.cronRunner.AddFunc(task.CronExpression, func() {
-			_ = s.RunTask(taskID, false)
+			_ = s.runTask(taskID, false, model.TriggerModeCron)
 		})
 		if err == nil {
 			s.mu.Lock()
@@ -179,10 +179,10 @@ func (s *Service) pollLoop(ctx context.Context, taskID int64, interval time.Dura
 				lastFingerprint = fingerprint
 			}
 
-			if s.isRunning(taskID) {
-				continue
-			}
-			_ = s.RunTask(taskID, false)
+		if s.isRunning(taskID) {
+			continue
+		}
+		_ = s.runTask(taskID, false, model.TriggerModeWatch)
 		}
 	}
 }
@@ -217,6 +217,12 @@ func parseWebdavTarget(p string) (int64, string, error) {
 
 // RunTask 触发一次备份。forceFull 为真时忽略增量判断，执行完整扫描。
 func (s *Service) RunTask(taskID int64, forceFull bool) error {
+	return s.runTask(taskID, forceFull, model.TriggerModeManual)
+}
+
+// runTask 与 RunTask 相同，但显式指定触发方式（手动 / 定时 / 监听），
+// 用于在运行日志里标记任务来源。
+func (s *Service) runTask(taskID int64, forceFull bool, triggerMode string) error {
 	task, err := s.store.GetBackup(taskID)
 	if err != nil {
 		return err
@@ -239,7 +245,7 @@ func (s *Service) RunTask(taskID int64, forceFull bool) error {
 	}
 	s.mu.Unlock()
 
-	go s.execute(*task, forceFull)
+	go s.execute(*task, forceFull, triggerMode)
 
 	return nil
 }
@@ -320,7 +326,7 @@ func (s *Service) log(taskID int64, format string, args ...any) {
 	}
 }
 
-func (s *Service) execute(task model.BackupTask, forceFull bool) {
+func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode string) {
 	startedAt := time.Now().UTC()
 	stats := &runStats{}
 
@@ -349,6 +355,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 
 		s.log(task.ID, "%s", summary)
 		_ = s.store.UpdateBackupRunResult(task.ID, status, summary, startedAt.Format(time.RFC3339), stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted)
+		s.recordRunHistory(task, triggerMode, status, summary, startedAt, stats)
 	}()
 
 	if len(task.SourceDirs) == 0 {
@@ -516,6 +523,43 @@ func (s *Service) execute(task model.BackupTask, forceFull bool) {
 	}
 
 	s.log(task.ID, "备份结束：上传 %d，跳过 %d，失败 %d", stats.Copied, stats.Skipped, stats.Failed)
+}
+
+// recordRunHistory 把一次备份执行写入运行日志（run_history），
+// 使用 archive_mode = "backup" 作为其专属模式标识，供日志页展示。
+func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status, summary string, startedAt time.Time, stats *runStats) {
+	if s.store == nil {
+		return
+	}
+
+	// 运行日志的状态语义：失败优先，其次全部跳过记 skip，否则 success。
+	historyStatus := status
+	if historyStatus != "failed" && stats.Copied == 0 && stats.Skipped > 0 {
+		historyStatus = "skip"
+	}
+	if strings.TrimSpace(triggerMode) == "" {
+		triggerMode = model.TriggerModeManual
+	}
+
+	finishedAt := time.Now().UTC()
+	ruleID := task.ID
+	item := model.RunHistoryItem{
+		ID:             fmt.Sprintf("backup-%d-%d", task.ID, startedAt.UnixNano()),
+		RuleID:         &ruleID,
+		RuleName:       task.Name,
+		TriggerMode:    triggerMode,
+		ArchiveMode:    "backup",
+		Status:         historyStatus,
+		ProcessedFiles: stats.Scanned,
+		SuccessCount:   stats.Copied,
+		SkipCount:      stats.Skipped,
+		FailureCount:   stats.Failed,
+		Summary:        summary,
+		StartedAt:      startedAt,
+		UpdatedAt:      finishedAt,
+		FinishedAt:     &finishedAt,
+	}
+	_ = s.store.UpsertRunHistory(item)
 }
 
 type runStats struct {

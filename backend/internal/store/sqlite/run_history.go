@@ -370,6 +370,8 @@ func buildRunHistoryWhereClause(keyword, status, archiveMode, ruleType string) (
 			clauses = append(clauses, `archive_mode = 'link'`)
 		case "naming":
 			clauses = append(clauses, `archive_mode = 'naming'`)
+		case "backup":
+			clauses = append(clauses, `archive_mode = 'backup'`)
 		}
 	}
 

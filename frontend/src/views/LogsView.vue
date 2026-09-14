@@ -1,54 +1,50 @@
 <template>
   <div class="logs-view">
     <section class="logs-hero">
-      <div>
+      <div class="logs-hero__intro">
         <div class="logs-hero__eyebrow">OBSERVABILITY</div>
         <h1 class="logs-hero__title">运行日志</h1>
         <p class="logs-hero__desc">实时查看任务执行、归档、清理与转换日志，快速检索关键事件和异常信息。</p>
       </div>
-      <div class="logs-hero__badge">
-        <span class="logs-hero__pulse"></span>
-        实时连接
+
+      <div class="logs-hero__stats">
+        <section class="metric-card">
+          <div class="metric-card__icon metric-card__icon--primary">▦</div>
+          <div class="metric-card__body">
+            <div class="metric-card__label">总日志数</div>
+            <div class="metric-card__value">{{ totalLogs }}</div>
+          </div>
+        </section>
+        <section class="metric-card">
+          <div class="metric-card__icon metric-card__icon--info">◷</div>
+          <div class="metric-card__body">
+            <div class="metric-card__label">今日日志</div>
+            <div class="metric-card__value">{{ todayLogs }}</div>
+          </div>
+        </section>
+        <section class="metric-card metric-card--success">
+          <div class="metric-card__icon metric-card__icon--success">✓</div>
+          <div class="metric-card__body">
+            <div class="metric-card__label">成功数</div>
+            <div class="metric-card__value">{{ successLogs }}</div>
+          </div>
+        </section>
+        <section class="metric-card metric-card--danger">
+          <div class="metric-card__icon metric-card__icon--danger">!</div>
+          <div class="metric-card__body">
+            <div class="metric-card__label">错误数</div>
+            <div class="metric-card__value">{{ failedLogs }}</div>
+          </div>
+        </section>
+        <section class="metric-card metric-card--warning">
+          <div class="metric-card__icon metric-card__icon--warning">⚠</div>
+          <div class="metric-card__body">
+            <div class="metric-card__label">警告数</div>
+            <div class="metric-card__value">{{ skippedLogs }}</div>
+          </div>
+        </section>
       </div>
     </section>
-
-    <div class="logs-overview">
-      <section class="metric-card">
-        <div class="metric-card__icon metric-card__icon--primary">▦</div>
-        <div class="metric-card__body">
-          <div class="metric-card__label">总日志数</div>
-          <div class="metric-card__value">{{ totalLogs }}</div>
-        </div>
-      </section>
-      <section class="metric-card">
-        <div class="metric-card__icon metric-card__icon--info">◷</div>
-        <div class="metric-card__body">
-          <div class="metric-card__label">今日日志</div>
-          <div class="metric-card__value">{{ todayLogs }}</div>
-        </div>
-      </section>
-      <section class="metric-card metric-card--success">
-        <div class="metric-card__icon metric-card__icon--success">✓</div>
-        <div class="metric-card__body">
-          <div class="metric-card__label">成功数</div>
-          <div class="metric-card__value">{{ successLogs }}</div>
-        </div>
-      </section>
-      <section class="metric-card metric-card--danger">
-        <div class="metric-card__icon metric-card__icon--danger">!</div>
-        <div class="metric-card__body">
-          <div class="metric-card__label">错误数</div>
-          <div class="metric-card__value">{{ failedLogs }}</div>
-        </div>
-      </section>
-      <section class="metric-card metric-card--warning">
-        <div class="metric-card__icon metric-card__icon--warning">⚠</div>
-        <div class="metric-card__body">
-          <div class="metric-card__label">警告数</div>
-          <div class="metric-card__value">{{ skippedLogs }}</div>
-        </div>
-      </section>
-    </div>
 
     <section class="logs-panel">
       <div class="logs-toolbar-panel">
@@ -66,6 +62,7 @@
             <el-option label="净化规则" value="cleanup" />
             <el-option label="链路规则" value="link" />
             <el-option label="命名规则" value="naming" />
+            <el-option label="备份规则" value="backup" />
           </el-select>
 
           <el-select v-model="logsSortBy" class="logs-toolbar__select logs-toolbar__select--sort" placeholder="排序" @change="handleFiltersChange">
@@ -355,7 +352,7 @@ const filteredTotal = ref(0)
 const keywordInput = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming'>('all')
+const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'>('all')
 const logsSortBy = ref<'name' | 'modified_at'>('modified_at')
 const logsSortOrder = ref<'asc' | 'desc'>('desc')
 const logsPageSizeOptions = [25, 50]
@@ -637,11 +634,10 @@ onMounted(() => {
 .logs-hero {
   position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 24px;
   overflow: hidden;
-  padding: 34px 36px;
+  padding: 30px 34px 32px;
   border-radius: 30px;
   border: 1px solid #d6e4de;
   color: #0f172a;
@@ -666,6 +662,12 @@ onMounted(() => {
   content: '';
 }
 
+.logs-hero__intro {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+}
+
 .logs-hero__eyebrow {
   margin-bottom: 8px;
   font-size: 12px;
@@ -676,7 +678,7 @@ onMounted(() => {
 
 .logs-hero__title {
   margin: 0;
-  font-size: 36px;
+  font-size: 34px;
   line-height: 1.15;
   font-weight: 800;
   color: #0f172a;
@@ -690,64 +692,42 @@ onMounted(() => {
   color: #475569;
 }
 
-.logs-hero__badge {
+.logs-hero__stats {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border: 1px solid rgba(91, 122, 110, 0.24);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.66);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  color: #5b7a6e;
-  font-size: 13px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.logs-hero__pulse {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #34d399;
-  box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.18);
-}
-
-.logs-overview {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 18px;
+  gap: 14px;
 }
 
 .metric-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 108px;
-  padding: 22px;
-  border: 1px solid #eef2f7;
-  border-radius: 24px;
-  background: #ffffff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+  gap: 12px;
+  min-height: 78px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 12px 26px rgba(91, 122, 110, 0.09);
+  backdrop-filter: blur(6px);
 }
 
 .metric-card__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   flex: 0 0 auto;
-  border-radius: 16px;
-  font-size: 20px;
+  border-radius: 13px;
+  font-size: 18px;
   font-weight: 800;
 }
 
 .metric-card__icon--primary {
-  color: #2563eb;
-  background: #dbeafe;
+  color: #5b7a6e;
+  background: #e6efeb;
 }
 
 .metric-card__icon--info {
@@ -775,14 +755,14 @@ onMounted(() => {
 }
 
 .metric-card__label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #64748b;
 }
 
 .metric-card__value {
-  margin-top: 8px;
-  font-size: 34px;
+  margin-top: 5px;
+  font-size: 26px;
   line-height: 1;
   font-weight: 800;
   color: #0f172a;
@@ -1012,6 +992,8 @@ onMounted(() => {
 .logs-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .logs-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
 .logs-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); }
+/* 备份：莫奈低饱和雾霾蓝，此前未被占用的色相 */
+.logs-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); }
 
 .logs-tree-table :deep(.el-table__row) { cursor: pointer; }
 
@@ -1124,18 +1106,17 @@ onMounted(() => {
 }
 
 @media (max-width: 1440px) {
-  .logs-overview {
+  .logs-hero__stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 960px) {
   .logs-hero {
-    flex-direction: column;
-    padding: 28px;
+    padding: 26px 24px 28px;
   }
 
-  .logs-overview {
+  .logs-hero__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1145,7 +1126,7 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .logs-overview {
+  .logs-hero__stats {
     grid-template-columns: 1fr;
   }
 

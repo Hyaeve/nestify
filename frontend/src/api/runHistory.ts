@@ -44,7 +44,7 @@ export interface FetchRunHistoryParams {
   keyword?: string
   status?: RunHistoryStatus
   archive_mode?: RunHistoryArchiveMode
-  rule_type?: 'archive' | 'cleanup' | 'link' | 'naming'
+  rule_type?: 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'
   sort_by?: 'name' | 'modified_at'
   sort_order?: 'asc' | 'desc'
   view_mode?: 'flat' | 'tree'

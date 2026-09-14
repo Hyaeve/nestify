@@ -598,8 +598,8 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  /* 固定为恰好容纳 4 个挂载卡片的高度，超出上下滑动 */
-  max-height: calc(4 * 96px + 3 * 12px);
+  /* 固定窗口高度：恰好容纳 4 个挂载横条，超出上下滑动 */
+  height: calc(4 * 80px + 3 * 12px);
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -608,10 +608,11 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 96px;
-  padding: 14px 16px;
+  flex: 0 0 auto;
+  height: 80px;
+  padding: 12px 16px;
   border: 1px solid #edf2f7;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   cursor: pointer;
   transition:
@@ -634,16 +635,16 @@ async function handleBackupFileChange(file: UploadFile) {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   color: #4f9d69;
   background: #eaf6ee;
 }
 
 .mount-card__icon svg {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
@@ -660,16 +661,16 @@ async function handleBackupFileChange(file: UploadFile) {
   color: #1e293b;
   font-size: 14px;
   font-weight: 800;
-  line-height: 20px;
+  line-height: 18px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .mount-card__meta {
-  margin-top: 2px;
+  margin-top: 1px;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 15px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -680,9 +681,9 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 15px;
   color: var(--el-text-color-regular);
 }
 
@@ -856,9 +857,11 @@ async function handleBackupFileChange(file: UploadFile) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px 3px 10px;
+  height: 20px;
+  padding: 0 8px 0 10px;
   border-radius: 999px;
   font-size: 12px;
+  line-height: 1;
   color: #5b7a6e;
   background: #eef3f1;
 }
@@ -867,11 +870,11 @@ async function handleBackupFileChange(file: UploadFile) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border: none;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
   color: #5b7a6e;
   background: transparent;
@@ -887,6 +890,16 @@ async function handleBackupFileChange(file: UploadFile) {
   width: auto;
   min-width: 140px;
   max-width: 240px;
+}
+
+.cache-ignore-input :deep(.el-input__wrapper) {
+  min-height: 28px;
+  padding: 1px 10px;
+}
+
+.cache-ignore-input :deep(.el-input__inner) {
+  height: 24px;
+  line-height: 24px;
 }
 
 /* 细浅隐藏的滚动条 */
