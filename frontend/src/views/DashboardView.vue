@@ -4,31 +4,7 @@
       <div class="dashboard-hero__content">
         <div class="dashboard-hero__eyebrow">DASHBOARD</div>
         <h1>运行总览</h1>
-        <p>集中查看规则状态、今日处理量、实时任务与系统资源，快速掌握 Nestify 当前运行情况。</p>
-      </div>
-      <div class="dashboard-hero__metrics">
-        <div class="hero-metric">
-          <div class="hero-metric__head">
-            <span class="hero-metric__icon">⚙</span>
-            <span class="hero-metric__label">CPU</span>
-            <span class="hero-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
-          </div>
-          <el-progress class="hero-metric__progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="6" color="#2563eb" />
-        </div>
-
-        <div class="hero-metric">
-          <div class="hero-metric__head">
-            <span class="hero-metric__icon">▣</span>
-            <span class="hero-metric__label">内存</span>
-            <span class="hero-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
-          </div>
-          <el-progress class="hero-metric__progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="6" color="#7c3aed" />
-        </div>
-
-        <div class="hero-metric hero-metric--highlight">
-          <span class="hero-metric__label">Nestify 内存</span>
-          <span class="hero-metric__value hero-metric__value--lg">{{ systemResource?.nestify_memory || '0 B' }}</span>
-        </div>
+        <p>集中查看规则状态、实时任务与执行摘要，快速掌握 Nestify 当前运行情况。</p>
       </div>
     </section>
 
@@ -41,7 +17,7 @@
     />
 
     <section class="dashboard-content">
-      <!-- 左侧大窗口：任务预览 -->
+      <!-- 左侧大窗口：任务预览（运行中优先，空闲时展示最近完成的任务） -->
       <div class="dashboard-panel task-preview-card">
         <div class="task-preview-card__header">
           <div>
@@ -49,31 +25,40 @@
             <h3 class="page-section-title">任务预览</h3>
           </div>
           <div class="task-preview-card__actions">
-            <el-tag :type="runningPreviewItems.length ? 'success' : 'info'" effect="light" size="small">
-              {{ runningPreviewItems.length ? `${runningPreviewItems.length} 个任务` : '暂无任务' }}
-            </el-tag>
-            <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshRunningPreview">刷新</el-button>
+            <el-tag :type="runningTasks.length ? 'success' : 'info'" effect="light" size="small">{{ previewBadgeText }}</el-tag>
+            <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshPreview">刷新</el-button>
           </div>
         </div>
 
-        <div v-if="runningPreviewItems.length" class="task-preview-list">
-          <div v-for="item in runningPreviewItems" :key="item.id" class="task-preview-item">
+        <div v-if="previewTasks.length" class="task-preview-list">
+          <div
+            v-for="item in previewTasks"
+            :key="item.id"
+            class="task-preview-item"
+            :class="{ 'is-running': item.status === 'running' }"
+          >
             <div class="task-preview-item__header">
-              <div>
+              <div class="task-preview-item__main">
                 <div class="task-preview-item__name">
-                  <span class="task-preview-item__kind" :class="`task-preview-item__kind--${item.kind}`">{{ item.kind === 'backup' ? '备份' : '规则' }}</span>
+                  <span class="task-preview-item__kind" :class="`task-preview-item__kind--${item.kind}`">{{ kindLabel(item.kind) }}</span>
                   {{ item.ruleName }}
                 </div>
                 <div class="task-preview-item__meta">{{ item.metaText }}</div>
-                <div class="task-preview-item__detail">{{ runDetailText(item) }}</div>
+                <div v-if="item.detailText" class="task-preview-item__detail">{{ item.detailText }}</div>
               </div>
               <div class="task-preview-item__badges">
-                <span v-if="item.kind === 'rule'" class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
-                <el-tag type="warning" effect="light" size="small">进行中</el-tag>
+                <span v-if="item.modeLabel" class="dashboard-mode-tag" :class="item.modeClass">{{ item.modeLabel }}</span>
+                <el-tag :type="statusTagType(item.status)" effect="light" size="small">{{ statusLabel(item.status) }}</el-tag>
               </div>
             </div>
 
-            <el-progress :percentage="item.progress" :stroke-width="8" :show-text="false" status="success" />
+            <el-progress
+              v-if="item.status === 'running'"
+              :percentage="item.progress"
+              :stroke-width="8"
+              :show-text="false"
+              status="success"
+            />
 
             <div class="task-preview-item__stats">
               <span>扫描 {{ item.scanned }}</span>
@@ -83,8 +68,14 @@
               <span>失败 {{ item.failure_count }}</span>
             </div>
 
-            <div class="task-preview-item__path" :title="item.sourceDir">{{ item.sourceDir || '未配置源路径' }}</div>
-            <div class="task-preview-item__logs">
+            <div v-if="item.pathLines.length" class="task-preview-item__paths">
+              <div v-for="line in item.pathLines" :key="line.label" class="task-preview-item__path">
+                <span class="task-preview-item__path-label">{{ line.label }}</span>
+                <span class="task-preview-item__path-value" :title="line.value">{{ line.value || '未设置' }}</span>
+              </div>
+            </div>
+
+            <div v-if="item.status === 'running'" class="task-preview-item__logs">
               <div v-if="item.logsLoading" class="task-preview-item__logs-loading">执行情况加载中...</div>
               <template v-else>
                 <div v-for="(log, logIndex) in item.logs" :key="logIndex" class="task-preview-item__log-line">
@@ -96,10 +87,10 @@
           </div>
         </div>
 
-        <el-empty v-else class="task-preview-empty" description="当前没有正在执行的任务" />
+        <el-empty v-else class="task-preview-empty" description="暂无任务记录" />
       </div>
 
-      <!-- 右侧：执行摘要（系统资源三项已移入顶栏右侧区域） -->
+      <!-- 右侧：执行摘要 -->
       <div class="dashboard-side-stack">
         <div class="dashboard-panel dashboard-panel--summary">
           <div class="dashboard-panel__header">
@@ -114,10 +105,10 @@
               <div class="summary-item__header">
                 <div class="summary-item__title">
                   <span class="summary-item__dot"></span>
-                  <span class="summary-item__name">{{ item.rule_name || '未知规则' }}</span>
+                  <span class="summary-item__name">{{ displayRuleName(item) }}</span>
                 </div>
                 <div class="summary-item__badges">
-                  <span class="dashboard-mode-tag" :class="dashboardModeTagClass(item.archive_mode)">{{ dashboardModeText(item.archive_mode) }}</span>
+                  <span v-if="modeLabelOf(item.archive_mode, item.link_mode)" class="dashboard-mode-tag" :class="modeClassOf(item.archive_mode, item.link_mode)">{{ modeLabelOf(item.archive_mode, item.link_mode) }}</span>
                   <el-tag :type="getStatusType(item.status)" effect="light" size="small">{{ getStatusText(item.status) }}</el-tag>
                 </div>
               </div>
@@ -135,29 +126,37 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
-import { fetchHealth, fetchSystemResource, type SystemResourcePayload } from '../api/system'
-import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
-import { formatRunHistorySummary } from '../utils/runHistorySummary'
-import { fetchRules, type RuleItem } from '../api/rules'
 import { fetchRunningBackups } from '../api/backups'
+import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
+import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
+import { fetchRules, type RuleItem } from '../api/rules'
+import { fetchHealth } from '../api/system'
+import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
-const healthError = ref('')
-const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
-const systemResource = ref<SystemResourcePayload | null>(null)
-const rules = ref<RuleItem[]>([])
-const runHistoryItems = ref<RunHistoryItem[]>(emptyRunHistory())
+// 任务预览最多同时展示的条目数（运行中优先，其余用最近完成补齐）。
+const PREVIEW_LIMIT = 6
 
-// 统一的任务预览条目（规则任务 + 备份任务）
+type PreviewKind = 'rule' | 'backup' | 'manual'
+type PreviewStatus = 'running' | 'success' | 'failed' | 'skipped'
+
+interface PreviewPathLine {
+  label: string
+  value: string
+}
+
+/** 统一的任务预览条目：规则执行、备份任务、手动解压/压缩/收集都归一到这个结构。 */
 interface PreviewTask {
   id: string
-  kind: 'rule' | 'backup'
+  kind: PreviewKind
   ruleName: string
+  modeLabel: string
+  modeClass: string
   metaText: string
-  archive_mode?: string
-  sourceDir: string
+  detailText: string
+  status: PreviewStatus
+  pathLines: PreviewPathLine[]
   progress: number
   scanned: number
   success_count: number
@@ -165,13 +164,34 @@ interface PreviewTask {
   failure_count: number
   logs: string[]
   logsLoading: boolean
-  detailText: string
 }
 
-const runningPreviewItems = ref<PreviewTask[]>([])
-const dashboardExecutionHints = ref<Record<number, string>>({})
+const healthError = ref('')
+const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
+const rules = ref<RuleItem[]>([])
+
+const runningTasks = ref<PreviewTask[]>([])
+const completedTasks = ref<PreviewTask[]>([])
 const previewRefreshing = ref(false)
 let previewPollTimer: number | null = null
+
+// 运行中的任务优先展示；没有运行中的任务时，用最近完成的任务补齐（避免面板一直空白）。
+const previewTasks = computed<PreviewTask[]>(() => {
+  if (runningTasks.value.length) {
+    return [...runningTasks.value, ...completedTasks.value].slice(0, PREVIEW_LIMIT)
+  }
+  return completedTasks.value.slice(0, PREVIEW_LIMIT)
+})
+
+const previewBadgeText = computed(() => {
+  if (runningTasks.value.length) {
+    return `${runningTasks.value.length} 个任务进行中`
+  }
+  if (completedTasks.value.length) {
+    return `最近 ${Math.min(completedTasks.value.length, PREVIEW_LIMIT)} 条已完成`
+  }
+  return '暂无任务记录'
+})
 
 function getStatusType(status: string) {
   if (status === 'success' || status === 'succeeded') return 'success'
@@ -185,49 +205,168 @@ function getStatusText(status: string) {
   return '失败'
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+function kindLabel(kind: PreviewKind) {
+  if (kind === 'backup') return '备份'
+  if (kind === 'manual') return '手动'
+  return '规则'
 }
 
-function formatPercentage(value?: number) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '0%'
+function statusLabel(status: PreviewStatus) {
+  if (status === 'running') return '进行中'
+  if (status === 'success') return '已完成'
+  if (status === 'failed') return '失败'
+  return '跳过'
+}
+
+function statusTagType(status: PreviewStatus): 'success' | 'warning' | 'danger' {
+  if (status === 'running') return 'warning'
+  if (status === 'success') return 'success'
+  if (status === 'failed') return 'danger'
+  return 'warning'
+}
+
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value || '—'
+  }
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+/** 预览里的时间更紧凑：只保留月-日 时:分，避免单行被撑开。 */
+function formatCompactTime(value?: string) {
+  if (!value) {
+    return '—'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+/** 触发方式：与规则卡片/运行日志的语义保持一致。 */
+function triggerLabel(mode?: string) {
+  if (mode === 'watch') return '实时监控'
+  if (mode === 'cron') return '计划扫描'
+  return '手动'
+}
+
+function modeLabelOf(archiveMode?: string, linkMode?: string) {
+  switch (archiveMode) {
+    case 'package':
+      return '打包'
+    case 'collect':
+      return '收集'
+    case 'cleanup':
+      return '清理'
+    case 'transform':
+      return '转换'
+    case 'link':
+      if (linkMode === 'strm') return 'Strm'
+      return linkMode === 'hard' ? '硬链' : '软链'
+    case 'naming':
+      return '命名'
+    case 'backup':
+      return '备份'
+    case 'extract':
+      return '解压'
+    default:
+      return ''
+  }
+}
+
+function modeClassOf(archiveMode?: string, linkMode?: string) {
+  switch (archiveMode) {
+    case 'package':
+      return 'dashboard-mode-tag--package'
+    case 'collect':
+      return 'dashboard-mode-tag--collect'
+    case 'cleanup':
+      return 'dashboard-mode-tag--cleanup'
+    case 'transform':
+      return 'dashboard-mode-tag--transform'
+    case 'link':
+      if (linkMode === 'strm') return 'dashboard-mode-tag--strm'
+      return linkMode === 'hard' ? 'dashboard-mode-tag--hardlink' : 'dashboard-mode-tag--softlink'
+    case 'naming':
+      return 'dashboard-mode-tag--naming'
+    case 'backup':
+      return 'dashboard-mode-tag--backup'
+    case 'extract':
+      return 'dashboard-mode-tag--extract'
+    default:
+      return ''
+  }
+}
+
+/** 运行日志里的手动任务名称不可读，这里统一映射成中文。 */
+function displayRuleName(item: RunHistoryItem) {
+  const name = (item.rule_name || '').trim()
+  if (name === 'manual-extract') return '手动解压'
+  if (name === 'manual-collect') return '手动收集'
+  if (name === 'manual-pack') return '手动压缩'
+  if (name) return name
+  if (item.archive_mode === 'backup') return '备份任务'
+  if (item.archive_mode === 'extract') return '手动解压'
+  return '手动任务'
+}
+
+function normalizeSourceDirs(rule: RuleItem) {
+  const list = (rule.source_dirs ?? []).map((dir) => dir.trim()).filter(Boolean)
+  if (list.length) {
+    return list
+  }
+  const single = (rule.source_dir || '').trim()
+  return single ? [single] : []
+}
+
+/**
+ * 规则任务的路径展示：净化（清理/转换）只有监控目录、命名只有监控路径，
+ * 不能再照搬「源路径 / 目标路径」，按模式适配。
+ */
+function rulePreviewPaths(rule: RuleItem | undefined, archiveMode?: string): PreviewPathLine[] {
+  if (!rule) {
+    return []
   }
 
-  return `${value.toFixed(1)}%`
+  const sourceDirs = normalizeSourceDirs(rule)
+  const mode = archiveMode || rule.archive_mode
+
+  if (mode === 'cleanup' || mode === 'transform') {
+    return [{ label: '监控目录', value: sourceDirs.join('  |  ') }]
+  }
+  if (mode === 'naming') {
+    return [{ label: '监控路径', value: sourceDirs.join('  |  ') }]
+  }
+
+  return [
+    { label: '源路径', value: sourceDirs.join('  |  ') },
+    { label: '目标路径', value: rule.target_dir },
+  ]
 }
 
-function dashboardModeText(mode?: string) {
-  if (mode === 'package') return '打包'
-  if (mode === 'collect') return '收集'
-  if (mode === 'cleanup') return '清理'
-  if (mode === 'transform') return '转换'
-  if (mode === 'link') return '链路'
-  if (mode === 'naming') return '命名'
-  return '未知'
+function estimateProgress(item: RunInstance) {
+  const total = item.success_count + item.skip_count + item.failure_count
+  if (total <= 0) {
+    return 12
+  }
+  return Math.min(92, Math.max(18, total % 100))
 }
 
-function dashboardModeTagClass(mode?: string) {
-  if (mode === 'package') return 'dashboard-mode-tag--package'
-  if (mode === 'collect') return 'dashboard-mode-tag--collect'
-  if (mode === 'cleanup') return 'dashboard-mode-tag--cleanup'
-  if (mode === 'transform') return 'dashboard-mode-tag--transform'
-  if (mode === 'link') return 'dashboard-mode-tag--hardlink'
-  if (mode === 'naming') return 'dashboard-mode-tag--naming'
-  return ''
+function historyStatusOf(status: string): PreviewStatus {
+  if (status === 'failed') return 'failed'
+  if (status === 'skip' || status === 'skipped') return 'skipped'
+  return 'success'
 }
 
-function runModeText(mode: RuleItem['run_mode']) {
-  if (mode === 'watch') return '监听模式'
-  if (mode === 'cron') return '定时模式'
-  return '手动模式'
-}
-
-function runDetailText(item: PreviewTask) {
-  return item.detailText
-}
-
-// 仅用于在后端不可达时给出提示条（顶栏不再展示「检查时间 / 已连接」）。
+// 仅用于在后端不可达时给出提示条。
 async function loadHealth() {
   healthError.value = ''
 
@@ -238,15 +377,45 @@ async function loadHealth() {
   }
 }
 
+/** 运行日志 → 执行摘要 + 任务预览的「最近完成」列表（一条数据源覆盖规则/备份/手动任务）。 */
+function buildCompletedTasks(items: RunHistoryItem[]): PreviewTask[] {
+  return items
+    .filter((item) => item.archive_mode !== 'manual')
+    .slice()
+    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+    .slice(0, PREVIEW_LIMIT)
+    .map((item) => {
+      const kind: PreviewKind = item.archive_mode === 'backup' ? 'backup' : item.rule_id ? 'rule' : 'manual'
+      return {
+        id: `history-${item.id}`,
+        kind,
+        ruleName: displayRuleName(item),
+        modeLabel: modeLabelOf(item.archive_mode, item.link_mode),
+        modeClass: modeClassOf(item.archive_mode, item.link_mode),
+        metaText: `${triggerLabel(item.trigger_mode)} · 完成于 ${formatCompactTime(item.finished_at || item.started_at)}`,
+        detailText: formatRunHistorySummary(item.summary) || '无摘要',
+        status: historyStatusOf(item.status),
+        pathLines: [],
+        progress: 100,
+        scanned: item.processed_files,
+        success_count: item.success_count,
+        skip_count: item.skip_count,
+        failure_count: item.failure_count,
+        logs: [],
+        logsLoading: false,
+      }
+    })
+}
+
 async function loadSummary() {
   try {
     const items = (await fetchRunHistory()).data?.items ?? []
-    runHistoryItems.value = items
-    // 执行摘要：最多可见 5 条，超出通过列表滚动展示。
+    // 执行摘要：最多可见 50 条，超出通过列表滚动展示。
     summaryItems.value = items.slice(0, 50)
+    completedTasks.value = buildCompletedTasks(items)
   } catch {
-    runHistoryItems.value = []
     summaryItems.value = []
+    completedTasks.value = []
   }
 }
 
@@ -258,82 +427,87 @@ async function loadRules() {
   }
 }
 
-// 拉取规则任务（running）
+// 拉取运行中的规则任务（含执行日志）。
 async function loadRuleRunningTasks(): Promise<PreviewTask[]> {
   try {
     const runs = (await fetchRuns()).data?.items ?? []
-    const runningRuleItems = rules.value.reduce<Record<number, RuleItem>>((map, item) => {
+    const ruleMap = rules.value.reduce<Record<number, RuleItem>>((map, item) => {
       map[item.id] = item
       return map
     }, {})
 
-    interface RuleTaskDraft extends PreviewTask {
+    interface RuleDraft {
+      task: PreviewTask
       rawRunId: string
     }
 
-    const running: RuleTaskDraft[] = runs
+    const drafts: RuleDraft[] = runs
       .filter((item) => item.status === 'running' && typeof item.rule_id === 'number')
       .map((item) => {
-        const rule = item.rule_id ? runningRuleItems[item.rule_id] : undefined
-        const triggerMode = rule ? runModeText(rule.run_mode) : (item.trigger_mode === 'cron' ? '定时模式' : item.trigger_mode === 'watch' ? '监听模式' : '手动模式')
-        const executionHint = item.rule_id ? dashboardExecutionHints.value[item.rule_id] : ''
-        const currentTarget = executionHint || item.current_volume_or_dir || item.current_series || '正在扫描源目录'
-        const draft: RuleTaskDraft = {
-          id: `rule-${item.id}`,
-          kind: 'rule',
-          ruleName: rule?.name || item.rule_name || '未知规则',
-          metaText: `${dashboardModeText(item.archive_mode)} · ${triggerMode}`,
-          archive_mode: item.archive_mode,
-          sourceDir: rule?.source_dir || '',
-          progress: estimateProgress(item),
-          scanned: item.processed_files ?? 0,
-          success_count: item.success_count,
-          skip_count: item.skip_count,
-          failure_count: item.failure_count,
-          logs: [],
-          logsLoading: true,
-          detailText: `当前执行：${currentTarget} · ${dashboardModeText(item.archive_mode)}`,
+        const rule = item.rule_id ? ruleMap[item.rule_id] : undefined
+        const currentTarget = item.current_volume_or_dir || item.current_series || '正在扫描源目录'
+        return {
           rawRunId: item.id,
+          task: {
+            id: `rule-${item.id}`,
+            kind: 'rule',
+            ruleName: rule?.name || item.rule_name || '未知规则',
+            modeLabel: modeLabelOf(item.archive_mode, item.link_mode),
+            modeClass: modeClassOf(item.archive_mode, item.link_mode),
+            metaText: `${triggerLabel(rule?.run_mode || item.trigger_mode)} · 开始于 ${formatCompactTime(item.started_at)}`,
+            detailText: `当前执行：${currentTarget}`,
+            status: 'running',
+            pathLines: rulePreviewPaths(rule, item.archive_mode),
+            progress: estimateProgress(item),
+            scanned: item.processed_files ?? 0,
+            success_count: item.success_count,
+            skip_count: item.skip_count,
+            failure_count: item.failure_count,
+            logs: [],
+            logsLoading: true,
+          },
         }
-        return draft
       })
 
-    // 加载日志
-    await Promise.all(running.map(async (item) => {
+    await Promise.all(drafts.map(async (entry) => {
       try {
-        const response = await fetchRunLogs(item.rawRunId)
-        item.logs = (response.data?.items ?? []).slice(-5).map((log: RunLogEntry) => {
+        const response = await fetchRunLogs(entry.rawRunId)
+        entry.task.logs = (response.data?.items ?? []).slice(-5).map((log: RunLogEntry) => {
           const time = new Date(log.created_at).toLocaleTimeString('zh-CN', { hour12: false })
           return `[${time}] ${log.message}`
         })
       } catch {
-        item.logs = []
+        entry.task.logs = []
       } finally {
-        item.logsLoading = false
+        entry.task.logsLoading = false
       }
     }))
 
-    return running.map(({ rawRunId: _rawRunId, ...rest }) => rest)
+    return drafts.map((entry) => entry.task)
   } catch {
     return []
   }
 }
 
-// 拉取备份任务（running）
+// 拉取运行中的备份任务。
 async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
   try {
     const response = await fetchRunningBackups()
     const items = response.data?.items ?? []
     return items.map((snapshot) => {
-      const triggerLabel = snapshot.phase || '备份中'
       const total = snapshot.scanned + snapshot.copied + snapshot.skipped + snapshot.deleted + snapshot.failed
       const progress = total <= 0 ? 12 : Math.min(92, Math.max(18, total % 100))
+      const phase = snapshot.progress || snapshot.phase || '备份中'
       return {
         id: `backup-${snapshot.task_id}`,
         kind: 'backup' as const,
         ruleName: snapshot.task_name || `备份任务 #${snapshot.task_id}`,
-        metaText: triggerLabel,
-        sourceDir: '',
+        modeLabel: '备份',
+        modeClass: 'dashboard-mode-tag--backup',
+        metaText: `备份中 · ${snapshot.phase || '扫描中'}`,
+        detailText: phase,
+        status: 'running' as const,
+        pathLines: [],
         progress,
         scanned: snapshot.scanned,
         success_count: snapshot.copied,
@@ -341,7 +515,6 @@ async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
         failure_count: snapshot.failed,
         logs: (snapshot.recent_logs ?? []).slice(-5),
         logsLoading: false,
-        detailText: snapshot.progress || snapshot.phase || '备份中',
       }
     })
   } catch {
@@ -349,15 +522,22 @@ async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
   }
 }
 
-async function refreshRunningPreview() {
+// 真正拉数据：运行中任务 + 执行摘要/最近完成，两者共用一条刷新链路。
+async function reloadPreview() {
+  await loadRules()
+  const [ruleTasks, backupTasks] = await Promise.all([
+    loadRuleRunningTasks(),
+    loadBackupRunningTasks(),
+  ])
+  runningTasks.value = [...ruleTasks, ...backupTasks]
+  await loadSummary()
+}
+
+// 手动刷新（按钮）：带 loading 态。
+async function refreshPreview() {
   previewRefreshing.value = true
   try {
-    await loadRules()
-    const [ruleTasks, backupTasks] = await Promise.all([
-      loadRuleRunningTasks(),
-      loadBackupRunningTasks(),
-    ])
-    runningPreviewItems.value = [...ruleTasks, ...backupTasks]
+    await reloadPreview()
   } finally {
     previewRefreshing.value = false
   }
@@ -365,8 +545,9 @@ async function refreshRunningPreview() {
 
 function startPreviewPolling() {
   stopPreviewPolling()
+  // 轮询静默刷新，不点亮按钮的 loading，避免每 5 秒闪一次。
   previewPollTimer = window.setInterval(() => {
-    void refreshRunningPreview()
+    void reloadPreview()
   }, 5000)
 }
 
@@ -377,29 +558,9 @@ function stopPreviewPolling() {
   }
 }
 
-async function loadSystemResource() {
-  try {
-    const response = await fetchSystemResource()
-    systemResource.value = response.data ?? null
-  } catch {
-    systemResource.value = null
-  }
-}
-
-function estimateProgress(item: RunInstance) {
-  const total = item.success_count + item.skip_count + item.failure_count
-  if (total <= 0) {
-    return 12
-  }
-  return Math.min(92, Math.max(18, total % 100))
-}
-
 onMounted(() => {
   void loadHealth()
-  void loadSummary()
-  void loadSystemResource()
-  void loadRules()
-  void refreshRunningPreview()
+  void refreshPreview()
   startPreviewPolling()
 })
 
@@ -448,8 +609,7 @@ onBeforeUnmount(() => {
   content: '';
 }
 
-.dashboard-hero__content,
-.dashboard-hero__metrics {
+.dashboard-hero__content {
   position: relative;
   z-index: 1;
 }
@@ -480,84 +640,6 @@ onBeforeUnmount(() => {
   color: #475569;
   font-size: 15px;
   line-height: 1.8;
-}
-
-/* 顶栏右侧：系统资源三项统计（替代原「检查时间 / 已连接」） */
-.dashboard-hero__metrics {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  flex: 0 0 auto;
-}
-
-.hero-metric {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 9px;
-  min-width: 158px;
-  padding: 12px 14px;
-  border: 1px solid #bfdbfe;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.74);
-  backdrop-filter: blur(10px);
-}
-
-.hero-metric__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.hero-metric__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.hero-metric__label {
-  color: #334155;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.hero-metric__value {
-  margin-left: auto;
-  color: #2563eb;
-  font-size: 16px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.hero-metric--highlight {
-  gap: 7px;
-  background: rgba(239, 246, 255, 0.86);
-}
-
-.hero-metric__value--lg {
-  margin-left: 0;
-  font-size: 20px;
-}
-
-.hero-metric__progress {
-  width: 100%;
-}
-
-.hero-metric__progress :deep(.el-progress-bar__outer) {
-  background-color: #dbeafe;
-  border-radius: 999px;
-}
-
-.hero-metric__progress :deep(.el-progress-bar__inner) {
-  border-radius: 999px;
 }
 
 .dashboard-content {
@@ -707,6 +789,10 @@ onBeforeUnmount(() => {
   font-weight: 900;
 }
 
+.task-preview-item__main {
+  min-width: 0;
+}
+
 .task-preview-item__name {
   display: inline-flex;
   align-items: center;
@@ -726,13 +812,18 @@ onBeforeUnmount(() => {
 }
 
 .task-preview-item__kind--backup {
-  color: #5b7a6e;
-  background: #eef3f1;
+  color: #5f7fa8;
+  background: rgba(95, 127, 168, 0.12);
 }
 
 .task-preview-item__kind--rule {
   color: #2563eb;
   background: #eff6ff;
+}
+
+.task-preview-item__kind--manual {
+  color: #5b7a6e;
+  background: #eef3f1;
 }
 
 .dashboard-mode-tag {
@@ -754,7 +845,11 @@ onBeforeUnmount(() => {
 .dashboard-mode-tag--cleanup { color: #5f9f45; background: rgba(95, 159, 69, 0.12); }
 .dashboard-mode-tag--transform { color: #64b9d8; background: rgba(100, 185, 216, 0.12); }
 .dashboard-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
+.dashboard-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
+.dashboard-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
 .dashboard-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); }
+.dashboard-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); }
+.dashboard-mode-tag--extract { color: #a4638a; background: rgba(164, 99, 138, 0.12); }
 
 .summary-item__meta {
   display: flex;
@@ -814,6 +909,13 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
 }
 
+/* 运行中的任务给一个左侧强调条，与「已完成」的历史记录区分开。 */
+.task-preview-item.is-running {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: linear-gradient(180deg, #f8fbff 0%, #f5f9ff 100%);
+  box-shadow: inset 3px 0 0 #60a5fa;
+}
+
 .task-preview-item__meta {
   margin-top: 5px;
   color: #64748b;
@@ -844,8 +946,30 @@ onBeforeUnmount(() => {
   background: #ffffff;
 }
 
-.task-preview-item__path {
+.task-preview-item__paths {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 10px;
+}
+
+.task-preview-item__path {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-preview-item__path-label {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-preview-item__path-value {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #64748b;
   font-size: 12px;
   line-height: 1.5;
@@ -887,22 +1011,6 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 顶栏一行放不下系统资源三张卡片时，让它们整行换到标题下方 */
-@media (max-width: 1180px) {
-  .dashboard-hero {
-    flex-wrap: wrap;
-  }
-
-  .dashboard-hero__metrics {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .hero-metric {
-    flex: 1 1 150px;
-  }
-}
-
 @media (max-width: 720px) {
   .dashboard-hero,
   .dashboard-panel__header,
@@ -921,4 +1029,3 @@ onBeforeUnmount(() => {
   border-radius: 999px;
 }
 </style>
-

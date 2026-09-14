@@ -75,3 +75,58 @@ func (s *Service) RecordManualCollectRun(sourcePaths []string, collectedPaths []
 		Summary:        fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)),
 	})
 }
+
+// RecordManualPackRun 记录一次手动打包（CBZ 压缩）任务。
+// 与手动解压 / 收集保持一致：写入内存运行列表 + 运行日志，供仪表盘「任务预览」
+// 与运行日志页展示手动压缩的执行记录。
+func (s *Service) RecordManualPackRun(sourcePaths []string, outputPaths []string, archiveName string) {
+	cleanSources := make([]string, 0, len(sourcePaths))
+	for _, path := range sourcePaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed != "" {
+			cleanSources = append(cleanSources, trimmed)
+		}
+	}
+
+	cleanOutputs := make([]string, 0, len(outputPaths))
+	for _, path := range outputPaths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed != "" {
+			cleanOutputs = append(cleanOutputs, trimmed)
+		}
+	}
+
+	run := s.newRun(model.TriggerModeManual, "package", "", nil, "手动压缩")
+	now := time.Now().UTC()
+
+	s.mu.Lock()
+	if currentRun, ok := s.runs[run.ID]; ok {
+		currentRun.Status = model.RunStatusSucceeded
+		currentRun.Stage = model.RunStageFinalizing
+		currentRun.ProcessedFiles = len(cleanSources)
+		currentRun.SuccessCount = len(cleanOutputs)
+		currentRun.SkipCount = 0
+		currentRun.FailureCount = 0
+		currentRun.UpdatedAt = now
+		currentRun.FinishedAt = &now
+	}
+	s.mu.Unlock()
+
+	s.appendLog(run.ID, "info", fmt.Sprintf("手动压缩任务已提交，共 %d 个来源文件夹", len(cleanSources)))
+	for _, path := range cleanSources {
+		s.appendLog(run.ID, "info", fmt.Sprintf("来源文件夹：%s", path))
+	}
+	if strings.TrimSpace(archiveName) != "" {
+		s.appendLog(run.ID, "info", fmt.Sprintf("压缩包名称：%s", archiveName))
+	}
+	for _, path := range cleanOutputs {
+		s.appendLog(run.ID, "info", fmt.Sprintf("已生成压缩包：%s", path))
+	}
+
+	summary := fmt.Sprintf("手动压缩完成：%d 个文件夹，输出 %d 个压缩包", len(cleanSources), len(cleanOutputs))
+	s.persistRunHistory(run.ID, summary, &executionStats{
+		ProcessedFiles: len(cleanSources),
+		SuccessCount:   len(cleanOutputs),
+		Summary:        summary,
+	})
+}

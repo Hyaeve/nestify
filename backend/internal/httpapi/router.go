@@ -603,6 +603,12 @@ func (a *apiHandler) handlePackCBZ(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	outputs := []string{}
+	if strings.TrimSpace(outputPath) != "" {
+		outputs = append(outputs, outputPath)
+	}
+	a.executor.RecordManualPackRun(input.Paths, outputs, input.ArchiveName)
+
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "CBZ archive created", Data: model.FileItemsMutationResponse{Total: len(input.Paths), OutputPath: outputPath}})
 }
 
@@ -627,6 +633,8 @@ func (a *apiHandler) handlePackFoldersCBZ(w http.ResponseWriter, r *http.Request
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "PACK_FOLDERS_CBZ_FAILED", Message: err.Error()})
 		return
 	}
+
+	a.executor.RecordManualPackRun(input.Paths, outputPaths, "")
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "CBZ archives created", Data: model.FileItemsMutationResponse{Items: outputPaths, Total: len(outputPaths)}})
 }

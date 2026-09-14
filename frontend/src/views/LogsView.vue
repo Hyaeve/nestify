@@ -108,6 +108,11 @@
               <path d="M18.5 7A8 8 0 0 1 5 13" />
             </svg>
           </el-button>
+          <div class="logs-summary">
+            <span>共 {{ filteredTotal }} 条结果</span>
+            <span v-if="searchKeyword">关键字：{{ searchKeyword }}</span>
+          </div>
+
           <div class="logs-view-toggle" role="group" aria-label="日志展示方式">
             <el-tooltip content="平铺" placement="top" :show-after="300">
               <button
@@ -145,11 +150,6 @@
               </button>
             </el-tooltip>
           </div>
-        </div>
-
-        <div class="logs-summary">
-          <span>共 {{ filteredTotal }} 条结果</span>
-          <span v-if="searchKeyword">关键字：{{ searchKeyword }}</span>
         </div>
       </div>
 
@@ -900,14 +900,11 @@ onMounted(async () => {
   color: #d97706;
 }
 
+/* 筛选栏与日志条目窗口合并为一个整体窗口：只有一条分隔线，不再是两张独立卡片。 */
 .logs-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.logs-toolbar-panel,
-.logs-table-shell {
+  overflow: hidden;
   border: 1px solid #eef2f7;
   border-radius: 26px;
   background: #ffffff;
@@ -917,8 +914,10 @@ onMounted(async () => {
 .logs-toolbar-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
 }
 
 .logs-toolbar {
@@ -952,7 +951,6 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   min-height: 42px;
-  margin-left: auto;
   padding: 4px;
   border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 16px;
@@ -1047,12 +1045,18 @@ onMounted(async () => {
   stroke-linejoin: round;
 }
 
+/* 结果统计并入筛选行右侧，用竖线与筛选区隔开，省掉一整行高度。 */
 .logs-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  padding-left: 14px;
+  border-left: 1px solid #e2e8f0;
   color: #64748b;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .logs-table-shell {

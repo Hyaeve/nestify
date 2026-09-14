@@ -6,6 +6,7 @@ export interface RunInstance {
   rule_name?: string
   trigger_mode: string
   archive_mode?: string
+  link_mode?: string
   status: string
   stage: string
   current_series?: string

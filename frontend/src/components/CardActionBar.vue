@@ -126,10 +126,11 @@ function handleStrmCommand(command: string) {
   cursor: not-allowed;
 }
 
+/* 「已启用」用更浅的低饱和青灰，避免深绿过于抢眼（禁用态保持不变）。 */
 .card-action-bar__toggle.is-on {
-  color: #2f6b57;
-  border-color: rgba(91, 122, 110, 0.42);
-  background: rgba(91, 122, 110, 0.13);
+  color: #5f9a86;
+  border-color: rgba(95, 154, 134, 0.34);
+  background: rgba(95, 154, 134, 0.1);
 }
 
 .card-action-bar__toggle.is-on:hover {
