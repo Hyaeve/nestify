@@ -78,7 +78,6 @@
           </div>
           <div class="task-preview-card__actions">
             <el-tag :type="runningTasks.length ? 'success' : 'info'" effect="light" size="small">{{ previewBadgeText }}</el-tag>
-            <el-button class="task-preview-card__refresh" text size="small" :loading="previewRefreshing" @click="refreshPreview">刷新</el-button>
           </div>
         </div>
 
@@ -139,7 +138,7 @@
           </div>
         </div>
 
-        <el-empty v-else class="task-preview-empty" description="暂无任务记录" />
+        <el-empty v-else class="task-preview-empty" description="暂无执行中的任务" />
       </div>
 
       <!-- 右侧：执行摘要 -->
@@ -224,28 +223,15 @@ const rules = ref<RuleItem[]>([])
 const systemResource = ref<SystemResourcePayload | null>(null)
 
 const runningTasks = ref<PreviewTask[]>([])
-const completedTasks = ref<PreviewTask[]>([])
-const previewRefreshing = ref(false)
 let previewPollTimer: number | null = null
 let resourceWarmTimer: number | null = null
 
-// 运行中的任务优先展示；没有运行中的任务时，用最近完成的任务补齐（避免面板一直空白）。
-const previewTasks = computed<PreviewTask[]>(() => {
-  if (runningTasks.value.length) {
-    return [...runningTasks.value, ...completedTasks.value].slice(0, PREVIEW_LIMIT)
-  }
-  return completedTasks.value.slice(0, PREVIEW_LIMIT)
-})
+// 任务预览只展示「正在执行」的任务；历史记录统一由右侧「执行摘要」承载。
+const previewTasks = computed<PreviewTask[]>(() => runningTasks.value.slice(0, PREVIEW_LIMIT))
 
-const previewBadgeText = computed(() => {
-  if (runningTasks.value.length) {
-    return `${runningTasks.value.length} 个任务进行中`
-  }
-  if (completedTasks.value.length) {
-    return `最近 ${Math.min(completedTasks.value.length, PREVIEW_LIMIT)} 条已完成`
-  }
-  return '暂无任务记录'
-})
+const previewBadgeText = computed(() =>
+  runningTasks.value.length ? `${runningTasks.value.length} 个任务进行中` : '当前没有执行中的任务',
+)
 
 function getStatusType(status: string) {
   if (status === 'success' || status === 'succeeded') return 'success'
@@ -432,12 +418,6 @@ function estimateProgress(item: RunInstance) {
   return Math.min(92, Math.max(18, total % 100))
 }
 
-function historyStatusOf(status: string): PreviewStatus {
-  if (status === 'failed') return 'failed'
-  if (status === 'skip' || status === 'skipped') return 'skipped'
-  return 'success'
-}
-
 // 仅用于在后端不可达时给出提示条。
 async function loadHealth() {
   healthError.value = ''
@@ -459,45 +439,14 @@ async function loadSystemResource() {
   }
 }
 
-/** 运行日志 → 执行摘要 + 任务预览的「最近完成」列表（一条数据源覆盖规则/备份/手动任务）。 */
-function buildCompletedTasks(items: RunHistoryItem[]): PreviewTask[] {
-  return items
-    .filter((item) => item.archive_mode !== 'manual')
-    .slice()
-    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-    .slice(0, PREVIEW_LIMIT)
-    .map((item) => {
-      const kind: PreviewKind = item.archive_mode === 'backup' ? 'backup' : item.rule_id ? 'rule' : 'manual'
-      return {
-        id: `history-${item.id}`,
-        kind,
-        ruleName: displayRuleName(item),
-        modeLabel: modeLabelOf(item.archive_mode, item.link_mode),
-        modeClass: modeClassOf(item.archive_mode, item.link_mode),
-        metaText: `${triggerLabel(item.trigger_mode)} · 完成于 ${formatCompactTime(item.finished_at || item.started_at)}`,
-        detailText: formatRunHistorySummary(item.summary) || '无摘要',
-        status: historyStatusOf(item.status),
-        pathLines: [],
-        progress: 100,
-        scanned: item.processed_files,
-        success_count: item.success_count,
-        skip_count: item.skip_count,
-        failure_count: item.failure_count,
-        logs: [],
-        logsLoading: false,
-      }
-    })
-}
-
+/** 执行摘要的数据源：运行日志（一条数据源覆盖规则 / 备份 / 手动任务）。 */
 async function loadSummary() {
   try {
     const items = (await fetchRunHistory()).data?.items ?? []
     // 执行摘要：最多可见 50 条，超出通过列表滚动展示。
     summaryItems.value = items.slice(0, 50)
-    completedTasks.value = buildCompletedTasks(items)
   } catch {
     summaryItems.value = []
-    completedTasks.value = []
   }
 }
 
@@ -604,7 +553,7 @@ async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
   }
 }
 
-// 真正拉数据：运行中任务 + 执行摘要/最近完成，两者共用一条刷新链路。
+// 真正拉数据：运行中任务 + 执行摘要，两者共用一条刷新链路。
 async function reloadPreview() {
   await loadRules()
   const [ruleTasks, backupTasks] = await Promise.all([
@@ -615,20 +564,9 @@ async function reloadPreview() {
   await loadSummary()
 }
 
-// 手动刷新（按钮）：带 loading 态。
-async function refreshPreview() {
-  previewRefreshing.value = true
-  try {
-    await reloadPreview()
-  } finally {
-    previewRefreshing.value = false
-  }
-}
-
 function startPreviewPolling() {
   stopPreviewPolling()
-  // 轮询静默刷新，不点亮按钮的 loading，避免每 5 秒闪一次。
-  // 顶栏资源统计与采样窗口（5s）对齐，同时刷新。
+  // 静默刷新（没有手动刷新按钮），顶栏资源统计与采样窗口（5s）对齐，同时刷新。
   previewPollTimer = window.setInterval(() => {
     void reloadPreview()
     void loadSystemResource()
@@ -662,7 +600,7 @@ function stopResourceWarmUp() {
 
 onMounted(() => {
   void loadHealth()
-  void refreshPreview()
+  void reloadPreview()
   void loadSystemResource()
   warmUpSystemResource()
   startPreviewPolling()
@@ -859,7 +797,8 @@ onBeforeUnmount(() => {
 
 .dashboard-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(340px, 0.6fr);
+  /* 任务预览只放执行中的任务，收窄一点；执行摘要因此更宽，长规则名/摘要更好读。 */
+  grid-template-columns: minmax(0, 1.2fr) minmax(380px, 0.8fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -1084,11 +1023,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.task-preview-card__refresh {
-  color: #2563eb;
-  font-weight: 900;
 }
 
 .task-preview-list {

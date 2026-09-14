@@ -128,9 +128,9 @@ function handleStrmCommand(command: string) {
 
 /* 「已启用」用更浅的低饱和青灰，避免深绿过于抢眼（禁用态保持不变）。 */
 .card-action-bar__toggle.is-on {
-  color: #5f9a86;
-  border-color: rgba(95, 154, 134, 0.34);
-  background: rgba(95, 154, 134, 0.1);
+  color: #7fb2a2;
+  border-color: rgba(127, 178, 162, 0.42);
+  background: rgba(127, 178, 162, 0.13);
 }
 
 .card-action-bar__toggle.is-on:hover {
