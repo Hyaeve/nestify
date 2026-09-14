@@ -730,7 +730,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateStrmSuffix" />
+              <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addCreateStrmSuffix" />
             </div>
           </div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
@@ -744,7 +744,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeCreateMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateMetadataSuffix" />
+              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addCreateMetadataSuffix" />
             </div>
           </div>
           <el-row :gutter="16">
@@ -811,7 +811,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditStrmSuffix" />
+              <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addEditStrmSuffix" />
             </div>
           </div>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
@@ -825,7 +825,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeEditMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditMetadataSuffix" />
+              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addEditMetadataSuffix" />
             </div>
           </div>
           <el-row :gutter="16">
@@ -1042,20 +1042,27 @@ function parseFiltersText(value: string) {
   return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
 }
 
-const strmVideoSuffixPreset = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.ts', '.m2ts', '.rmvb', '.rm', '.3gp', '.iso']
-const strmAudioSuffixPreset = ['.mp3', '.flac', '.wav', '.aac', '.m4a', '.ogg', '.wma', '.ape', '.alac', '.opus']
-const strmImageSuffixPreset = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tiff', '.avif']
-const strmDataSuffixPreset = ['.ass', '.srt', '.ssa', '.sub', '.nfo', '.vtt', '.idx']
+// Strm 后缀统一「无点 + 小写」写法（mp4 而不是 .mp4），后端 normalizeStrmExtensions 会自动补点并忽略大小写。
+const strmVideoSuffixPreset = ['mp4', 'mkv', 'avi', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'ts', 'm2ts', 'rmvb', 'rm', '3gp', 'iso']
+const strmAudioSuffixPreset = ['mp3', 'flac', 'wav', 'aac', 'm4a', 'ogg', 'wma', 'ape', 'alac', 'opus']
+const strmImageSuffixPreset = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tiff', 'avif']
+const strmDataSuffixPreset = ['ass', 'srt', 'ssa', 'sub', 'nfo', 'vtt', 'idx']
 
 function normalizeLinkMode(value?: string): LinkMode {
   if (value === 'hard' || value === 'strm') return value
   return 'soft'
 }
 
+// 后缀统一成「无点 + 小写」：输入 mp4 / .mp4 / MP4 都归一为 mp4，界面里不显示那个点。
 function normalizeStrmSuffix(value: string) {
-  const trimmed = value.trim().replace(/^['"]+|['"]+$/g, '').replace(/^\*+/, '')
+  const trimmed = value
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .replace(/^\*+/, '')
+    .replace(/^\.+/, '')
+    .trim()
   if (!trimmed) return ''
-  return (trimmed.startsWith('.') ? trimmed : `.${trimmed}`).toLowerCase()
+  return trimmed.toLowerCase()
 }
 
 function normalizeStrmSuffixes(values: string[]) {

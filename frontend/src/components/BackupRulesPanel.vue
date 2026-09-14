@@ -698,11 +698,14 @@ function openEditWizard(task: BackupTask) {
     // 兼容旧数据：name/extension 类型把 value 字段中逗号/分号/空格分隔的多个值拆入 extensions；
     // regex 保持单值 value 不变。
     const isMulti = rule.type === 'name' || rule.type === 'extension'
-    const extensions = [...(rule.extensions ?? [])]
+    // 扩展名类统一「无点 + 小写」，旧数据里的 .mkv 载入后显示为 mkv。
+    const normalize = (item: string) =>
+      rule.type === 'extension' ? normalizeExtensionCandidate(item) : item.trim()
+    const extensions = [...(rule.extensions ?? [])].map(normalize).filter(Boolean)
     const legacy = rule.value ?? ''
     if (isMulti && legacy.trim()) {
       for (const part of legacy.split(/[,;|\s]+/)) {
-        const trimmed = part.trim()
+        const trimmed = normalize(part)
         if (trimmed && !extensions.includes(trimmed)) {
           extensions.push(trimmed)
         }
@@ -758,8 +761,10 @@ async function applyWizard() {
     const filterRules: BackupFilterRule[] = wizardForm.filter_rules
       .map((rule) => {
         const { draftValue, ...rest } = rule
-        const extensions = [...(rest.extensions ?? [])]
-        const draft = draftValue.trim()
+        const normalize = (item: string) =>
+          rule.type === 'extension' ? normalizeExtensionCandidate(item) : item.trim()
+        const extensions = [...(rest.extensions ?? [])].map(normalize).filter(Boolean)
+        const draft = normalize(draftValue)
         if (draft && !extensions.includes(draft)) {
           extensions.push(draft)
         }
@@ -882,12 +887,27 @@ function ruleTags(rule: EditableFilterRule): string[] {
   return rule.extensions ?? []
 }
 
-// 回车把草稿值提交为一个候选
+// 扩展名候选统一成「无点 + 小写」：输入 mp4 / .mp4 / MP4 都归一为 mp4。
+// 后端 extensionCandidates 会自动补点匹配，且忽略大小写，所以这里去掉点即可。
+function normalizeExtensionCandidate(value: string): string {
+  return value
+    .trim()
+    .replace(/^['"]+|['"]+$/g, '')
+    .replace(/^\*+/, '')
+    .replace(/^\.+/, '')
+    .trim()
+    .toLowerCase()
+}
+
+// 回车把草稿值提交为一个候选（扩展名不区分大小写去重）
 function commitTag(rule: EditableFilterRule) {
-  const draft = rule.draftValue.trim()
+  const draft = rule.type === 'extension' ? normalizeExtensionCandidate(rule.draftValue) : rule.draftValue.trim()
   if (!draft) return
   if (!rule.extensions) rule.extensions = []
-  if (!rule.extensions.includes(draft)) {
+  const exists = rule.type === 'extension'
+    ? rule.extensions.some((item) => normalizeExtensionCandidate(item) === draft)
+    : rule.extensions.includes(draft)
+  if (!exists) {
     rule.extensions.push(draft)
   }
   rule.draftValue = ''
@@ -914,7 +934,7 @@ function filterTypeLabel(type: BackupFilterType) {
 function filterValuePlaceholder(type: BackupFilterType) {
   switch (type) {
     case 'extension':
-      return '输入扩展名后回车，如 .mkv'
+      return '输入扩展名后回车，如 mp4'
     case 'regex':
       return '例如 \\.(mkv|mp4)$'
     default:
