@@ -14,7 +14,7 @@ export const startupPageOptions: StartupPageOption[] = [
   { label: '规则管理', value: 'rules', path: '/rules' },
   { label: '文件管理', value: 'manual-pack', path: '/manual-pack' },
   { label: '命名工坊', value: 'naming-workshop', path: '/naming-workshop' },
-  { label: '任务日志', value: 'logs', path: '/logs' },
+  { label: '运行日志', value: 'logs', path: '/logs' },
   { label: '系统设置', value: 'settings', path: '/settings' },
 ]
 

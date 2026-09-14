@@ -154,7 +154,7 @@
       </div>
 
       <div class="logs-table-shell">
-        <el-table v-if="logsViewMode === 'flat'" v-loading="loading" :data="historyItems" class="logs-table" empty-text="暂无任务日志">
+        <el-table v-if="logsViewMode === 'flat'" v-loading="loading" :data="historyItems" class="logs-table" empty-text="暂无运行日志">
           <el-table-column label="时间" min-width="180">
             <template #default="scope">
               <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
@@ -192,7 +192,7 @@
           </el-table-column>
         </el-table>
 
-        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无任务日志" @row-click="openLogDetailDialog">
+        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无运行日志" @row-click="openLogDetailDialog">
           <el-table-column label="折叠任务" min-width="520">
             <template #default="scope">
               <button type="button" class="logs-detail-card" @click.stop="openLogDetailDialog(scope.row)">
@@ -395,7 +395,7 @@ async function loadHistory() {
     filteredTotal.value = response.data?.total ?? 0
     historySummary.value = response.data?.summary ?? createDefaultHistorySummary()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '任务日志加载失败')
+    ElMessage.error(error instanceof Error ? error.message : '运行日志加载失败')
   } finally {
     loading.value = false
   }
@@ -441,7 +441,7 @@ function handlePageSizeChange(pageSize: number) {
 
 async function handleClearHistory() {
   try {
-    await ElMessageBox.confirm('确认清空全部任务日志吗？此操作不可恢复。', '清空日志', {
+    await ElMessageBox.confirm('确认清空全部运行日志吗？此操作不可恢复。', '清空日志', {
       type: 'warning',
       confirmButtonText: '确认清空',
       cancelButtonText: '取消',
@@ -453,13 +453,13 @@ async function handleClearHistory() {
     historySummary.value = createDefaultHistorySummary()
     resetFilters()
     logsCurrentPage.value = 1
-    ElMessage.success('任务日志已清空')
+    ElMessage.success('运行日志已清空')
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
     }
 
-    ElMessage.error(error instanceof Error ? error.message : '清空任务日志失败')
+    ElMessage.error(error instanceof Error ? error.message : '清空运行日志失败')
   }
 }
 
@@ -642,11 +642,13 @@ onMounted(async () => {
 .logs-hero {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 28px;
   overflow: hidden;
-  padding: 30px 34px 32px;
-  border-radius: 30px;
+  padding: 20px 28px;
+  border-radius: 26px;
   border: 1px solid #d6e4de;
   color: #0f172a;
   background:
@@ -673,12 +675,14 @@ onMounted(async () => {
 .logs-hero__intro {
   position: relative;
   z-index: 1;
+  flex: 1 1 340px;
+  min-width: 0;
   max-width: 720px;
 }
 
 .logs-hero__eyebrow {
-  margin-bottom: 8px;
-  font-size: 12px;
+  margin-bottom: 6px;
+  font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.22em;
   color: #5b7a6e;
@@ -686,7 +690,7 @@ onMounted(async () => {
 
 .logs-hero__title {
   margin: 0;
-  font-size: 34px;
+  font-size: 26px;
   line-height: 1.15;
   font-weight: 800;
   color: #0f172a;
@@ -694,30 +698,33 @@ onMounted(async () => {
 
 .logs-hero__desc {
   max-width: 620px;
-  margin: 12px 0 0;
-  font-size: 15px;
-  line-height: 1.7;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
   color: #475569;
 }
 
+/* 统计栏目放在顶栏右侧区域，不额外转行占用窗口高度。 */
 .logs-hero__stats {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 1 auto;
 }
 
 .metric-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 78px;
-  padding: 14px 16px;
+  gap: 9px;
+  padding: 7px 13px;
   border: 1px solid rgba(255, 255, 255, 0.74);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 12px 26px rgba(91, 122, 110, 0.09);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 18px rgba(91, 122, 110, 0.08);
   backdrop-filter: blur(6px);
 }
 
@@ -725,11 +732,11 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
-  border-radius: 13px;
-  font-size: 18px;
+  border-radius: 9px;
+  font-size: 13px;
   font-weight: 800;
 }
 
@@ -760,18 +767,19 @@ onMounted(async () => {
 
 .metric-card__body {
   min-width: 0;
+  line-height: 1.2;
 }
 
 .metric-card__label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
 }
 
 .metric-card__value {
-  margin-top: 5px;
-  font-size: 26px;
-  line-height: 1;
+  margin-top: 1px;
+  font-size: 17px;
+  line-height: 1.1;
   font-weight: 800;
   color: #0f172a;
 }
@@ -1113,19 +1121,17 @@ onMounted(async () => {
   padding: 0 4px;
 }
 
-@media (max-width: 1440px) {
+@media (max-width: 1180px) {
+  /* 顶栏放不下时统计栏目整行换到下方，但仍在同一个顶栏窗口内。 */
   .logs-hero__stats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 960px) {
   .logs-hero {
-    padding: 26px 24px 28px;
-  }
-
-  .logs-hero__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 18px 20px;
   }
 
   .logs-toolbar__search {
@@ -1134,12 +1140,8 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
-  .logs-hero__stats {
-    grid-template-columns: 1fr;
-  }
-
   .logs-hero__title {
-    font-size: 30px;
+    font-size: 24px;
   }
 }
 </style>

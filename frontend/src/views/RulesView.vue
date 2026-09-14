@@ -946,10 +946,6 @@
               <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addCreateMetadataSuffix" />
             </div>
           </div>
-          <el-form-item label="覆盖生成">
-            <el-switch v-model="createLinkForm.strm_overwrite" />
-            <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
-          </el-form-item>
           <el-row :gutter="16">
             <el-col :span="8">
               <el-form-item label="API 请求间隔">
@@ -983,7 +979,11 @@
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16">
+          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col>
+          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col>
+          <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="createLinkForm.strm_overwrite" /></el-form-item></el-col>
+        </el-row>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
     </el-dialog>
@@ -1027,10 +1027,6 @@
               <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入后缀回车" @keyup.enter="addEditMetadataSuffix" />
             </div>
           </div>
-          <el-form-item label="覆盖生成">
-            <el-switch v-model="editLinkForm.strm_overwrite" />
-            <span class="strm-overwrite-hint">开启后，目标目录中已存在的 Strm 会被重新生成（内容覆盖），而不是跳过。</span>
-          </el-form-item>
           <el-row :gutter="16">
             <el-col :span="8">
               <el-form-item label="API 请求间隔">
@@ -1064,7 +1060,11 @@
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16">
+          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col>
+          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col>
+          <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="editLinkForm.strm_overwrite" /></el-form-item></el-col>
+        </el-row>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
     </el-dialog>
@@ -1304,6 +1304,12 @@ function parseStrmOverwrite(raw?: string): boolean {
 
 function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean) {
   return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite }
+}
+
+// 链路规则底部的开关行：Strm 模式下「启用规则 / 立即运行一次（启动后）/ 覆盖生成」三个开关并排（各 8 栅格），
+// 其它模式只有两个开关，保持各占一半。
+function linkSwitchSpan(showOverwrite: boolean) {
+  return showOverwrite ? 8 : 12
 }
 
 // Strm 规则的数值参数（存 rules.option_values_json）。
@@ -3553,8 +3559,6 @@ onBeforeUnmount(() => {
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
 .strm-preset-button.is-active { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: 0 6px 14px rgba(47, 143, 157, 0.22); }
-/* 覆盖生成开关下方的小字说明：独占一行，避免与开关挤在同一行。 */
-.strm-overwrite-hint { flex: 0 0 100%; width: 100%; margin-top: 6px; font-size: 12px; line-height: 1.6; color: var(--el-text-color-secondary); }
 /* Strm 数值参数行（API 请求间隔 / 最小视频 / 下载线程数）：窄输入框 + 紧随其后的单位。 */
 .strm-option-number { width: 118px; }
 .strm-option-unit { margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary); }

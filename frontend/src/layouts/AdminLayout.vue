@@ -38,7 +38,7 @@
             <el-icon class="nav-icon nav-icon--logs">
               <span class="nav-image-icon" :style="{ '--icon-image': `url(${logsIcon})` }" aria-hidden="true"></span>
             </el-icon>
-            <span>任务日志</span>
+            <span>运行日志</span>
           </el-menu-item>
           <el-menu-item index="/settings">
             <el-icon><Setting /></el-icon>
@@ -144,7 +144,7 @@ const currentSectionLabel = computed(() => {
     '/rules': '规则管理',
     '/manual-pack': '文件管理',
     '/naming-workshop': '命名工坊',
-    '/logs': '任务日志',
+    '/logs': '运行日志',
     '/settings': '系统设置',
   }
 
