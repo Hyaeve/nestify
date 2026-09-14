@@ -197,18 +197,18 @@ func (a *apiHandler) handleMountBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prefix := model.BuildMountVirtualPath(mountID)
 	response := model.BrowseDirectoriesResponse{
-		CurrentPath: prefix + internalPath,
+		CurrentPath: model.JoinMountVirtualPath(mountID, internalPath),
 		Entries:     make([]model.DirectoryEntry, 0, len(entries)),
 	}
-	if internalPath != "" {
-		parent := strings.TrimSuffix(internalPath, "/"+pathBase(internalPath))
-		response.ParentPath = prefix + parent
+	if normalized := strings.Trim(strings.TrimSpace(internalPath), "/"); normalized != "" {
+		// 用 path.Dir 求父级：webdav://12/移动云盘/电视剧 -> webdav://12/移动云盘，
+		// webdav://12/移动云盘 -> webdav://12（挂载根，parent_path 为空表示已在根）。
+		response.ParentPath = model.MountParentVirtualPath(mountID, normalized)
 	}
 
 	for _, entry := range entries {
-		childPath := prefix + entry.Path
+		childPath := model.JoinMountVirtualPath(mountID, entry.Path)
 		item := model.DirectoryEntry{
 			Name:       entry.Name,
 			Path:       childPath,
@@ -224,14 +224,6 @@ func (a *apiHandler) handleMountBrowse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "WebDAV 目录已加载", Data: response})
-}
-
-func pathBase(value string) string {
-	trimmed := strings.TrimRight(value, "/")
-	if index := strings.LastIndex(trimmed, "/"); index >= 0 {
-		return trimmed[index+1:]
-	}
-	return trimmed
 }
 
 // handleMountTest 用给定参数（无需保存）发起一次 PROPFIND，验证 WebDAV 连接是否可用。

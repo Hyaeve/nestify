@@ -717,8 +717,9 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 14px 28px;
   overflow: hidden;
-  padding: 20px 28px;
-  border-radius: 26px;
+  /* 与仪表盘顶栏（.dashboard-hero）保持同一高度与内边距。 */
+  padding: 30px 36px;
+  border-radius: 30px;
   border: 1px solid #d6e4de;
   color: #0f172a;
   background:
@@ -751,26 +752,26 @@ onMounted(async () => {
 }
 
 .logs-hero__eyebrow {
-  margin-bottom: 6px;
-  font-size: 11px;
+  margin-bottom: 10px;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.16em;
   color: #5b7a6e;
 }
 
 .logs-hero__title {
   margin: 0;
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 800;
+  font-size: 34px;
+  line-height: 1.18;
+  font-weight: 900;
   color: #0f172a;
 }
 
 .logs-hero__desc {
-  max-width: 620px;
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
+  max-width: 680px;
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 1.8;
   color: #475569;
 }
 
@@ -1262,7 +1263,7 @@ onMounted(async () => {
 
 @media (max-width: 960px) {
   .logs-hero {
-    padding: 18px 20px;
+    padding: 26px 24px;
   }
 
   .logs-toolbar__search {
@@ -1272,7 +1273,7 @@ onMounted(async () => {
 
 @media (max-width: 640px) {
   .logs-hero__title {
-    font-size: 24px;
+    font-size: 28px;
   }
 }
 </style>

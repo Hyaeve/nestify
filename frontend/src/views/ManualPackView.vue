@@ -159,7 +159,69 @@
 
         <div class="path-row">
           <div class="path-row__breadcrumbs">
-            <el-icon class="path-row__icon"><FolderOpened /></el-icon>
+            <el-popover
+              :visible="sourceMenuVisible"
+              placement="bottom-start"
+              :width="280"
+              trigger="manual"
+              popper-class="path-source-popper"
+            >
+              <template #reference>
+                <button
+                  type="button"
+                  class="path-source-toggle"
+                  :class="`is-${pathSource}`"
+                  :title="pathSourceHint"
+                  @click.stop="handleSourceToggle"
+                >
+                  <el-icon class="path-source-toggle__icon">
+                    <Monitor v-if="pathSource === 'local'" />
+                    <Cloudy v-else />
+                  </el-icon>
+                  <span class="path-source-toggle__text">{{ pathSource === 'local' ? '本地目录' : '远程挂载' }}</span>
+                  <el-icon class="path-source-toggle__caret"><ArrowDown /></el-icon>
+                </button>
+              </template>
+
+              <div class="path-source-menu">
+                <div class="path-source-menu__group">
+                  <el-icon><Monitor /></el-icon>
+                  <span>本地目录</span>
+                </div>
+                <button
+                  v-for="root in localRoots"
+                  :key="root.path"
+                  type="button"
+                  class="path-source-menu__item"
+                  :class="{ 'is-active': rootContainsCurrent(root) }"
+                  :title="root.path"
+                  @click="selectSourceRoot(root)"
+                >
+                  <span class="path-source-menu__name">{{ root.name }}</span>
+                  <span class="path-source-menu__path">{{ root.path }}</span>
+                </button>
+                <div v-if="!localRoots.length" class="path-source-menu__empty">未配置本地目录</div>
+
+                <div class="path-source-menu__group path-source-menu__group--remote">
+                  <el-icon><Cloudy /></el-icon>
+                  <span>远程挂载</span>
+                </div>
+                <button
+                  v-for="root in mountRoots"
+                  :key="root.path"
+                  type="button"
+                  class="path-source-menu__item"
+                  :class="{ 'is-active': rootContainsCurrent(root) }"
+                  :title="root.path"
+                  @click="selectSourceRoot(root)"
+                >
+                  <span class="path-source-menu__name">{{ root.name }}</span>
+                  <span class="path-source-menu__path">{{ root.path }}</span>
+                </button>
+                <div v-if="!mountRoots.length" class="path-source-menu__empty">尚未配置远程挂载</div>
+              </div>
+            </el-popover>
+
             <button
               v-for="(crumb, index) in breadcrumbItems"
               :key="crumb.path"
@@ -424,7 +486,7 @@
 
 <script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Back, Clock, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Back, Clock, Cloudy, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, Monitor, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
@@ -438,6 +500,7 @@ import {
   deleteItems,
   extractArchives,
   fetchBrowseRoots,
+  isMountPath,
   moveItems,
   packFoldersAsCBZ,
   packItemsAsCBZ,
@@ -482,6 +545,7 @@ const errorMessage = ref('')
 const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
+const sourceMenuVisible = ref(false)
 const selectedRows = ref<FileManagerEntry[]>([])
 const shiftPressed = ref(false)
 const lastAnchorPath = ref<string | null>(null)
@@ -528,7 +592,18 @@ const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 
 const canPackSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const starredFolderSet = computed(() => new Set(starredFolders.value.map((item) => normalizePath(item))))
-const sortedRootsByDepth = computed(() => [...roots.value].sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length))
+
+/** 本地物理目录根（不含 WebDAV 虚拟挂载）。 */
+const localRoots = computed(() => roots.value.filter((root) => !isMountPath(root.path)))
+/** WebDAV 远程挂载根。 */
+const mountRoots = computed(() => roots.value.filter((root) => isMountPath(root.path)))
+/** 当前所在目录属于哪一个来源：本地目录 or 远程挂载。 */
+const pathSource = computed<'local' | 'mount'>(() => (isMountPath(directoryPath.value) ? 'mount' : 'local'))
+const pathSourceHint = computed(() =>
+  pathSource.value === 'local'
+    ? '当前：本地目录 · 点击切换到远程挂载目录'
+    : '当前：远程挂载 · 点击切换到本地目录',
+)
 const sortedEntries = computed(() => {
   const items: PreparedFileManagerEntry[] = entries.value.map((entry) => {
     const normalizedPath = normalizePath(entry.path)
@@ -583,7 +658,12 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
     return []
   }
 
-  const matchedRoot = sortedRootsByDepth.value.find((root) => isPathWithin(root.path, directoryPath.value))
+  // 只在同一来源的根里找匹配项：本地根（尤其 "/"）会匹配一切路径，
+  // 若不区分来源，WebDAV 虚拟路径会被本地根截断出错误的面包屑。
+  const candidates = sortRootsByDepth(
+    pathSource.value === 'mount' ? mountRoots.value : localRoots.value,
+  )
+  const matchedRoot = candidates.find((root) => isPathWithin(root.path, directoryPath.value))
   if (!matchedRoot) {
     return [{ label: directoryPath.value, path: directoryPath.value }]
   }
@@ -616,6 +696,48 @@ function isPathWithin(root: string, target: string) {
   return targetPath === rootPath || targetPath.startsWith(`${rootPath}/`) || rootPath === '/'
 }
 
+/** 按路径深度倒序（更长的根优先），让子根先于父根参与匹配。 */
+function sortRootsByDepth(items: BrowseRoot[]) {
+  return [...items].sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length)
+}
+
+/** 当前目录是否落在某个根之下（用于在来源菜单里高亮）。 */
+function rootContainsCurrent(root: BrowseRoot) {
+  if (!directoryPath.value) {
+    return false
+  }
+  return isPathWithin(root.path, directoryPath.value)
+}
+
+/**
+ * 根目录左侧图标：点击在「本地目录 / 远程挂载」之间切换。
+ * 目标来源只有一个根时直接跳转；多于一个时展开菜单选择。
+ */
+function handleSourceToggle() {
+  if (sourceMenuVisible.value) {
+    sourceMenuVisible.value = false
+    return
+  }
+
+  const targetRoots = pathSource.value === 'local' ? mountRoots.value : localRoots.value
+  if (!targetRoots.length) {
+    ElMessage.warning(pathSource.value === 'local' ? '尚未配置远程挂载目录' : '未发现可用的本地目录')
+    return
+  }
+
+  if (targetRoots.length === 1) {
+    void openPath(targetRoots[0].path)
+    return
+  }
+
+  sourceMenuVisible.value = true
+}
+
+function selectSourceRoot(root: BrowseRoot) {
+  sourceMenuVisible.value = false
+  void openPath(root.path)
+}
+
 function joinPath(base: string, segment: string) {
   if (base.endsWith('/') || base.endsWith('\\')) {
     return `${base}${segment}`
@@ -626,6 +748,7 @@ function joinPath(base: string, segment: string) {
 
 function hideContextMenu() {
   contextMenu.value.visible = false
+  sourceMenuVisible.value = false
 }
 
 function handleWindowKeyDown(event: KeyboardEvent) {
@@ -1665,9 +1788,114 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.path-row__icon {
+/* 根目录左侧的来源切换按钮：本地目录 / 远程挂载，各自独立图标。 */
+.path-source-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #f7f9fc;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.path-source-toggle__icon {
+  font-size: 16px;
+}
+
+.path-source-toggle__caret {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.path-source-toggle.is-local {
+  color: #2f6f4f;
+  border-color: #bfdccb;
+  background: #eef7f1;
+}
+
+.path-source-toggle.is-mount {
+  color: #5f7fa8;
+  border-color: #c2d2e6;
+  background: #eef3f9;
+}
+
+.path-source-toggle:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.path-source-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.path-source-menu__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 4px;
   color: #6b7280;
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.path-source-menu__group--remote {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.path-source-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+}
+
+.path-source-menu__item:hover {
+  background: #f2f6fa;
+}
+
+.path-source-menu__item.is-active {
+  background: #eef3f9;
+}
+
+.path-source-menu__name {
+  color: #1f2d3d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.path-source-menu__path {
+  max-width: 100%;
+  color: #8a94a6;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-source-menu__empty {
+  padding: 6px 10px;
+  color: #a0a7b4;
+  font-size: 12px;
 }
 
 .path-row__crumb {

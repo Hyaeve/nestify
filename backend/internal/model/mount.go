@@ -1,6 +1,7 @@
 package model
 
 import (
+	"path"
 	"strings"
 	"time"
 )
@@ -120,6 +121,32 @@ func BuildMountBaseURL(mount WebdavMount) string {
 // BuildMountVirtualPath 生成挂载在文件系统视图中的虚拟根路径。
 func BuildMountVirtualPath(id int64) string {
 	return MountPathScheme + itoa64(id)
+}
+
+// JoinMountVirtualPath 拼接挂载虚拟路径：webdav://<id> 与内部相对路径（自动补分隔斜杠）。
+// internalPath 可带或不带前导 "/"，结果统一为 webdav://<id>[/a/b] 形式。
+func JoinMountVirtualPath(id int64, internalPath string) string {
+	base := BuildMountVirtualPath(id)
+	trimmed := strings.Trim(strings.TrimSpace(internalPath), "/")
+	if trimmed == "" {
+		return base
+	}
+	return base + "/" + trimmed
+}
+
+// MountParentVirtualPath 返回挂载内某相对路径的父级虚拟路径；
+// 已在挂载根（或无相对路径）时返回空字符串，表示没有更上一级。
+func MountParentVirtualPath(id int64, internalPath string) string {
+	normalized := strings.Trim(strings.TrimSpace(internalPath), "/")
+	if normalized == "" {
+		return ""
+	}
+
+	parent := path.Dir("/" + normalized)
+	if parent == "/" || parent == "." {
+		return ""
+	}
+	return JoinMountVirtualPath(id, parent)
 }
 
 func itoa(value int) string {
