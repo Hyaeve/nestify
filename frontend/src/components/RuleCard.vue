@@ -25,7 +25,11 @@
     <div class="rule-card__body">
       <div v-for="path in paths" :key="path.label" class="rule-card__row">
         <span class="rule-card__row-label">{{ path.label }}</span>
-        <span class="rule-card__row-value" :class="{ 'is-empty': !path.value }" :title="path.value">
+        <span
+          class="rule-card__row-value"
+          :class="{ 'is-empty': !path.value }"
+          @mouseenter="syncOverflowTitle($event, path.value)"
+        >
           {{ path.value || '未设置' }}
         </span>
       </div>
@@ -39,7 +43,7 @@
               <template v-else-if="cronError">{{ cronError }}</template>
               <template v-else>
                 <div class="rule-card__cron-tip-title">最近三次执行时间</div>
-                <div v-for="item in cronItems" :key="item" class="rule-card__cron-tip-item">{{ item }}</div>
+                <div v-for="item in cronDisplayItems" :key="item" class="rule-card__cron-tip-item">{{ item }}</div>
               </template>
             </div>
           </template>
@@ -71,7 +75,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import CardActionBar from './CardActionBar.vue'
+
+import { syncOverflowTitle } from '../utils/overflowTitle'
 
 import type { RuleItem } from '../api/rules'
 
@@ -109,6 +117,32 @@ const emit = defineEmits<{
   (e: 'cron-preview', rule: RuleItem): void
   (e: 'contextmenu', rule: RuleItem, event: MouseEvent): void
 }>()
+
+/**
+ * 后端 cron-preview 返回的是带时区偏移的 RFC3339（如 2026-09-15T08:00:00+08:00），
+ * 原样渲染会在执行时间后面拖一个「+08:00」。这里统一按中国上海时间格式化成
+ * 「2026-09-15 08:00:00」，直接给出执行时刻，且不受浏览者本机时区影响。
+ */
+function formatCronMoment(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(parsed)
+  const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''
+
+  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}:${pick('second')}`
+}
+
+const cronDisplayItems = computed(() => (props.cronItems ?? []).map(formatCronMoment))
 
 function handleCardClick() {
   emit('edit', props.rule)

@@ -27,17 +27,21 @@
         <div class="backup-card__body">
           <div class="backup-card__meta">
             <div class="backup-card__meta-label">源路径</div>
-            <div class="backup-card__meta-value" v-for="src in visiblePaths(task.source_dirs)" :key="src" :title="src">{{ src }}</div>
+            <div class="backup-card__meta-value" v-for="src in visiblePaths(task.source_dirs)" :key="src" @mouseenter="syncOverflowTitle($event, src)">{{ src }}</div>
             <div v-if="task.source_dirs.length > 2" class="backup-card__meta-more">+{{ task.source_dirs.length - 2 }} 更多</div>
           </div>
           <div class="backup-card__meta">
             <div class="backup-card__meta-label">目标路径</div>
-            <div class="backup-card__meta-value" v-for="dst in visiblePaths(task.target_dirs)" :key="dst" :title="dst">{{ dst }}</div>
+            <div class="backup-card__meta-value" v-for="dst in visiblePaths(task.target_dirs)" :key="dst" @mouseenter="syncOverflowTitle($event, dst)">{{ dst }}</div>
             <div v-if="task.target_dirs.length > 2" class="backup-card__meta-more">+{{ task.target_dirs.length - 2 }} 更多</div>
           </div>
           <div class="backup-card__meta">
             <div class="backup-card__meta-label">Cron</div>
-            <div class="backup-card__meta-value" :class="{ 'is-empty': !task.cron_expression }" :title="task.cron_expression || ''">
+            <div
+              class="backup-card__meta-value"
+              :class="{ 'is-empty': !task.cron_expression }"
+              @mouseenter="syncOverflowTitle($event, task.cron_expression)"
+            >
               {{ task.cron_expression || '未设置计划' }}
             </div>
           </div>
@@ -270,10 +274,17 @@
 
       <template #footer>
         <div class="backup-wizard-footer">
-          <el-button v-if="wizardStep === 0" class="backup-wizard-footer__prev" @click="cancelWizard">取消</el-button>
-          <el-button v-else class="backup-wizard-footer__prev" @click="prevStep">上一步</el-button>
-          <el-button v-if="wizardStep < 3" type="primary" @click="nextStep">下一步</el-button>
-          <el-button v-else type="primary" :loading="saving" @click="applyWizard">应用</el-button>
+          <!-- 编辑既有规则：底部固定「取消 / 应用」，靠点击上方栏目切换页面。 -->
+          <template v-if="wizardEditing">
+            <el-button class="backup-wizard-footer__prev" @click="cancelWizard">取消</el-button>
+            <el-button type="primary" :loading="saving" @click="applyWizard">应用</el-button>
+          </template>
+          <template v-else>
+            <el-button v-if="wizardStep === 0" class="backup-wizard-footer__prev" @click="cancelWizard">取消</el-button>
+            <el-button v-else class="backup-wizard-footer__prev" @click="prevStep">上一步</el-button>
+            <el-button v-if="wizardStep < wizardSteps.length - 1" type="primary" @click="nextStep">下一步</el-button>
+            <el-button v-else type="primary" :loading="saving" @click="applyWizard">应用</el-button>
+          </template>
         </div>
       </template>
     </el-dialog>
@@ -388,6 +399,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from './DirectoryPickerDialog.vue'
 import CardActionBar from './CardActionBar.vue'
+import { syncOverflowTitle } from '../utils/overflowTitle'
 import {
   createBackup,
   deleteBackup,
@@ -728,24 +740,26 @@ function resetWizard() {
   wizardStep.value = 0
 }
 
-function nextStep() {
-  if (wizardStep.value === 0) {
-    if (!wizardForm.name.trim()) {
-      ElMessage.error('请填写备份任务名称')
-      return
-    }
-    const hasSource = wizardForm.source_dirs.some((path) => path.trim())
-    const hasTarget = wizardForm.target_dirs.some((path) => path.trim())
-    if (!hasSource) {
-      ElMessage.error('请至少选择一个源路径')
-      return
-    }
-    if (!hasTarget) {
-      ElMessage.error('请至少添加一个目标路径')
-      return
-    }
+/** 必填项校验：返回第一个未满足项（含应跳转的栏目），全部满足时返回 null。 */
+function findWizardProblem(): { message: string; step: number } | null {
+  if (!wizardForm.name.trim()) {
+    return { message: '无法创建：请先填写备份任务名称', step: 0 }
   }
-  wizardStep.value += 1
+  if (!wizardForm.source_dirs.some((path) => path.trim())) {
+    return { message: '无法创建：请至少选择一个源路径', step: 0 }
+  }
+  if (!wizardForm.target_dirs.some((path) => path.trim())) {
+    return { message: '无法创建：请至少添加一个目标路径', step: 0 }
+  }
+  return null
+}
+
+// 步骤之间可以自由往返：这里只翻页，不做任何必填拦截，
+// 校验统一收口到「应用」时执行（前端补足 + 后端兜底）。
+function nextStep() {
+  if (wizardStep.value < wizardSteps.length - 1) {
+    wizardStep.value += 1
+  }
 }
 
 function prevStep() {
@@ -759,6 +773,14 @@ function cancelWizard() {
 }
 
 async function applyWizard() {
+  // 允许自由切换栏目的代价：应用时必须把必填项补齐。
+  const problem = findWizardProblem()
+  if (problem) {
+    wizardStep.value = problem.step
+    ElMessage.error(problem.message)
+    return
+  }
+
   saving.value = true
   try {
     // 提交前：把每条规则尚未回车确认的草稿值并入候选，并剥离 draftValue 字段。
