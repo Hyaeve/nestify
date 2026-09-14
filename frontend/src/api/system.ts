@@ -7,13 +7,24 @@ export interface HealthPayload {
 }
 
 export interface SystemResourcePayload {
+  // 整机资源
   cpu_usage: number
   cpu_model: string
   memory_usage: number
   memory_used: string
   memory_total: string
-  nestify_memory: string
   uptime: string
+  // 本项目（Nestify 进程）占用
+  nestify_cpu_percent: number
+  nestify_cpu_count: number
+  nestify_memory: string
+  nestify_memory_bytes: number
+  nestify_memory_percent: number
+  nestify_memory_limit: string
+  nestify_upload_speed: string
+  nestify_download_speed: string
+  nestify_upload_bps: number
+  nestify_download_bps: number
 }
 
 export interface SettingsPayload {

@@ -1,6 +1,9 @@
 # Frontend dependencies and build output
 frontend/node_modules/
 frontend/dist/
+# 本地构建校验产物（临时 outDir）
+frontend/dist_verify*/
+frontend/dist-check*/
 
 # Runtime data and local databases
 data/

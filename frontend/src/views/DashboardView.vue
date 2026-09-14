@@ -6,6 +6,58 @@
         <h1>运行总览</h1>
         <p>集中查看规则状态、实时任务与执行摘要，快速掌握 Nestify 当前运行情况。</p>
       </div>
+
+      <!-- 顶栏右侧：本项目（Nestify 进程）资源占用 -->
+      <div class="dashboard-hero__metrics">
+        <div class="hero-metric">
+          <div class="hero-metric__head">
+            <span class="hero-metric__icon">⚙</span>
+            <span class="hero-metric__label">CPU 使用率</span>
+            <span class="hero-metric__value">{{ formatPercentage(systemResource?.nestify_cpu_percent) }}</span>
+          </div>
+          <div class="hero-metric__hint">本项目占用</div>
+          <el-progress
+            class="hero-metric__progress"
+            :percentage="clampPercentage(systemResource?.nestify_cpu_percent)"
+            :show-text="false"
+            :stroke-width="6"
+            color="#2563eb"
+          />
+        </div>
+
+        <div class="hero-metric">
+          <div class="hero-metric__head">
+            <span class="hero-metric__icon">▣</span>
+            <span class="hero-metric__label">内存使用率</span>
+            <span class="hero-metric__value">{{ formatPercentage(systemResource?.nestify_memory_percent) }}</span>
+          </div>
+          <div class="hero-metric__hint">占用 {{ systemResource?.nestify_memory || '0 B' }}</div>
+          <el-progress
+            class="hero-metric__progress"
+            :percentage="clampPercentage(systemResource?.nestify_memory_percent)"
+            :show-text="false"
+            :stroke-width="6"
+            color="#7c3aed"
+          />
+        </div>
+
+        <div class="hero-metric hero-metric--net">
+          <div class="hero-metric__head">
+            <span class="hero-metric__icon">⇅</span>
+            <span class="hero-metric__label">上传 / 下载</span>
+          </div>
+          <div class="hero-metric__net">
+            <span class="hero-metric__net-row">
+              <span class="hero-metric__net-key">上传</span>
+              <span class="hero-metric__net-value">{{ systemResource?.nestify_upload_speed || '0 B/s' }}</span>
+            </span>
+            <span class="hero-metric__net-row">
+              <span class="hero-metric__net-key">下载</span>
+              <span class="hero-metric__net-value">{{ systemResource?.nestify_download_speed || '0 B/s' }}</span>
+            </span>
+          </div>
+        </div>
+      </div>
     </section>
 
     <el-alert
@@ -132,7 +184,7 @@ import { fetchRunningBackups } from '../api/backups'
 import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { fetchRules, type RuleItem } from '../api/rules'
-import { fetchHealth } from '../api/system'
+import { fetchHealth, fetchSystemResource, type SystemResourcePayload } from '../api/system'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 // 任务预览最多同时展示的条目数（运行中优先，其余用最近完成补齐）。
@@ -169,11 +221,13 @@ interface PreviewTask {
 const healthError = ref('')
 const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const rules = ref<RuleItem[]>([])
+const systemResource = ref<SystemResourcePayload | null>(null)
 
 const runningTasks = ref<PreviewTask[]>([])
 const completedTasks = ref<PreviewTask[]>([])
 const previewRefreshing = ref(false)
 let previewPollTimer: number | null = null
+let resourceWarmTimer: number | null = null
 
 // 运行中的任务优先展示；没有运行中的任务时，用最近完成的任务补齐（避免面板一直空白）。
 const previewTasks = computed<PreviewTask[]>(() => {
@@ -223,6 +277,24 @@ function statusTagType(status: PreviewStatus): 'success' | 'warning' | 'danger' 
   if (status === 'success') return 'success'
   if (status === 'failed') return 'danger'
   return 'warning'
+}
+
+function formatPercentage(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '—'
+  }
+  if (value > 0 && value < 0.1) {
+    return '<0.1%'
+  }
+  return `${value.toFixed(1)}%`
+}
+
+// el-progress 的 percentage 只接受 0~100，这里兜底避免异常数据把进度条撑破。
+function clampPercentage(value?: number) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 0
+  }
+  return Math.min(100, Math.max(0, value))
 }
 
 function formatDate(value: string) {
@@ -374,6 +446,16 @@ async function loadHealth() {
     await fetchHealth()
   } catch (error) {
     healthError.value = error instanceof Error ? error.message : '后端连接失败'
+  }
+}
+
+// 顶栏右侧：本项目进程的 CPU / 内存 / 网络占用（失败时保留上一次的值，避免闪烁成空）。
+async function loadSystemResource() {
+  try {
+    const response = await fetchSystemResource()
+    systemResource.value = response.data ?? null
+  } catch {
+    // 静默失败：轮询会持续重试，不打断仪表盘其它区域。
   }
 }
 
@@ -546,8 +628,10 @@ async function refreshPreview() {
 function startPreviewPolling() {
   stopPreviewPolling()
   // 轮询静默刷新，不点亮按钮的 loading，避免每 5 秒闪一次。
+  // 顶栏资源统计与采样窗口（5s）对齐，同时刷新。
   previewPollTimer = window.setInterval(() => {
     void reloadPreview()
+    void loadSystemResource()
   }, 5000)
 }
 
@@ -558,14 +642,35 @@ function stopPreviewPolling() {
   }
 }
 
+// 首帧只能用来建立采样基准（速率为 0），稍后再取一次得到真实读数，避免顶栏长时间显示 0。
+function warmUpSystemResource() {
+  if (resourceWarmTimer !== null) {
+    window.clearTimeout(resourceWarmTimer)
+  }
+  resourceWarmTimer = window.setTimeout(() => {
+    resourceWarmTimer = null
+    void loadSystemResource()
+  }, 1500)
+}
+
+function stopResourceWarmUp() {
+  if (resourceWarmTimer !== null) {
+    window.clearTimeout(resourceWarmTimer)
+    resourceWarmTimer = null
+  }
+}
+
 onMounted(() => {
   void loadHealth()
   void refreshPreview()
+  void loadSystemResource()
+  warmUpSystemResource()
   startPreviewPolling()
 })
 
 onBeforeUnmount(() => {
   stopPreviewPolling()
+  stopResourceWarmUp()
 })
 </script>
 
@@ -612,6 +717,7 @@ onBeforeUnmount(() => {
 .dashboard-hero__content {
   position: relative;
   z-index: 1;
+  min-width: 0;
 }
 
 .dashboard-hero__eyebrow,
@@ -640,6 +746,115 @@ onBeforeUnmount(() => {
   color: #475569;
   font-size: 15px;
   line-height: 1.8;
+}
+
+/* 顶栏右侧：本项目（Nestify 进程）占用统计，三栏等宽 */
+.dashboard-hero__metrics {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.hero-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 164px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.hero-metric__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-metric__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.hero-metric__label {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hero-metric__value {
+  margin-left: auto;
+  color: #2563eb;
+  font-size: 16px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.hero-metric__hint {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hero-metric__progress {
+  width: 100%;
+}
+
+.hero-metric__progress :deep(.el-progress-bar__outer) {
+  background-color: #dbeafe;
+  border-radius: 999px;
+}
+
+.hero-metric__progress :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
+}
+
+/* 网络吞吐：上下两行展示上传/下载速率 */
+.hero-metric--net {
+  gap: 6px;
+}
+
+.hero-metric__net {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hero-metric__net-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hero-metric__net-key {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hero-metric__net-value {
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .dashboard-content {
@@ -1003,6 +1218,22 @@ onBeforeUnmount(() => {
 
 .task-preview-empty {
   min-height: 120px;
+}
+
+/* 顶栏一行放不下三张统计卡时，让它们整行换到标题下方 */
+@media (max-width: 1180px) {
+  .dashboard-hero {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-hero__metrics {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .hero-metric {
+    flex: 1 1 160px;
+  }
 }
 
 @media (max-width: 1280px) {
