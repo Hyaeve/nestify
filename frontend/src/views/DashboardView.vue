@@ -6,16 +6,39 @@
         <h1>运行总览</h1>
         <p>集中查看规则状态、今日处理量、实时任务与系统资源，快速掌握 Nestify 当前运行情况。</p>
       </div>
-      <div class="dashboard-hero__top-right">
-        <div class="dashboard-hero__meta">
-          <span>检查时间：{{ healthTime }}</span>
+      <div class="dashboard-hero__metrics">
+        <div class="hero-metric">
+          <div class="hero-metric__head">
+            <span class="hero-metric__icon">⚙</span>
+            <span class="hero-metric__label">CPU</span>
+            <span class="hero-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
+          </div>
+          <el-progress class="hero-metric__progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="6" color="#2563eb" />
         </div>
-        <div class="dashboard-hero__status">
-          <span class="dashboard-live-dot"></span>
-          <span>{{ healthStatus }}</span>
+
+        <div class="hero-metric">
+          <div class="hero-metric__head">
+            <span class="hero-metric__icon">▣</span>
+            <span class="hero-metric__label">内存</span>
+            <span class="hero-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
+          </div>
+          <el-progress class="hero-metric__progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="6" color="#7c3aed" />
+        </div>
+
+        <div class="hero-metric hero-metric--highlight">
+          <span class="hero-metric__label">Nestify 内存</span>
+          <span class="hero-metric__value hero-metric__value--lg">{{ systemResource?.nestify_memory || '0 B' }}</span>
         </div>
       </div>
     </section>
+
+    <el-alert
+      v-if="healthError"
+      class="dashboard-health-alert"
+      type="error"
+      :closable="false"
+      :title="healthError"
+    />
 
     <section class="dashboard-content">
       <!-- 左侧大窗口：任务预览 -->
@@ -76,7 +99,7 @@
         <el-empty v-else class="task-preview-empty" description="当前没有正在执行的任务" />
       </div>
 
-      <!-- 右侧：上执行摘要 + 下系统资源 -->
+      <!-- 右侧：执行摘要（系统资源三项已移入顶栏右侧区域） -->
       <div class="dashboard-side-stack">
         <div class="dashboard-panel dashboard-panel--summary">
           <div class="dashboard-panel__header">
@@ -106,71 +129,22 @@
           </div>
           <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
         </div>
-
-        <div class="dashboard-panel resource-card">
-          <div class="dashboard-panel__header">
-            <div>
-              <div class="dashboard-panel__eyebrow">RESOURCE</div>
-              <h3 class="page-section-title">系统资源</h3>
-            </div>
-            <el-tag :type="healthTagType" effect="light" size="small">{{ healthStatus }}</el-tag>
-          </div>
-
-          <div class="resource-stack resource-stack--compact">
-            <div class="resource-metric resource-metric--compact">
-              <div class="resource-metric__head">
-                <div class="resource-metric__main">
-                  <span class="resource-metric__icon">⚙</span>
-                  <span class="resource-metric__label">CPU</span>
-                </div>
-                <span class="resource-metric__value">{{ formatPercentage(systemResource?.cpu_usage) }}</span>
-              </div>
-              <el-progress class="resource-progress" :percentage="systemResource?.cpu_usage ?? 0" :show-text="false" :stroke-width="8" color="#2563eb" />
-            </div>
-
-            <div class="resource-metric resource-metric--compact">
-              <div class="resource-metric__head">
-                <div class="resource-metric__main">
-                  <span class="resource-metric__icon">▣</span>
-                  <span class="resource-metric__label">内存</span>
-                </div>
-                <span class="resource-metric__value">{{ formatPercentage(systemResource?.memory_usage) }}</span>
-              </div>
-              <el-progress class="resource-progress" :percentage="systemResource?.memory_usage ?? 0" :show-text="false" :stroke-width="8" color="#7c3aed" />
-            </div>
-
-            <div class="resource-highlight resource-highlight--compact">
-              <span class="resource-highlight__label">Nestify 内存</span>
-              <span class="resource-highlight__value">{{ systemResource?.nestify_memory || '0 B' }}</span>
-            </div>
-          </div>
-
-          <el-alert
-            v-if="healthError"
-            class="resource-card__alert"
-            type="error"
-            :closable="false"
-            :title="healthError"
-          />
-        </div>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
-import { fetchHealth, fetchSystemResource, type HealthPayload, type SystemResourcePayload } from '../api/system'
+import { fetchHealth, fetchSystemResource, type SystemResourcePayload } from '../api/system'
 import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { fetchRules, type RuleItem } from '../api/rules'
 import { fetchRunningBackups } from '../api/backups'
 
-const health = ref<HealthPayload | null>(null)
 const healthError = ref('')
-const loading = ref(false)
 const summaryItems = ref<RunHistoryItem[]>(emptyRunHistory())
 const systemResource = ref<SystemResourcePayload | null>(null)
 const rules = ref<RuleItem[]>([])
@@ -198,29 +172,6 @@ const runningPreviewItems = ref<PreviewTask[]>([])
 const dashboardExecutionHints = ref<Record<number, string>>({})
 const previewRefreshing = ref(false)
 let previewPollTimer: number | null = null
-
-const healthStatus = computed(() => {
-  if (loading.value) return '检查中'
-  if (health.value) return '已连接'
-  return '未连接'
-})
-
-const healthTime = computed(() => formatHealthTime(health.value?.time))
-const healthTagType = computed(() => (health.value ? 'success' : loading.value ? 'warning' : 'danger'))
-
-function formatHealthTime(value?: string) {
-  if (!value) {
-    return '尚未获取'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    const match = value.match(/(?:T|\s)(\d{2}:\d{2})/)
-    return match?.[1] ?? value
-  }
-
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-}
 
 function getStatusType(status: string) {
   if (status === 'success' || status === 'succeeded') return 'success'
@@ -276,18 +227,14 @@ function runDetailText(item: PreviewTask) {
   return item.detailText
 }
 
+// 仅用于在后端不可达时给出提示条（顶栏不再展示「检查时间 / 已连接」）。
 async function loadHealth() {
-  loading.value = true
   healthError.value = ''
 
   try {
-    const response = await fetchHealth()
-    health.value = response.data ?? null
+    await fetchHealth()
   } catch (error) {
-    health.value = null
     healthError.value = error instanceof Error ? error.message : '后端连接失败'
-  } finally {
-    loading.value = false
   }
 }
 
@@ -472,11 +419,11 @@ onBeforeUnmount(() => {
 .dashboard-hero {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
   overflow: hidden;
-  padding: 34px 36px;
+  padding: 30px 36px;
   border-radius: 30px;
   border: 1px solid #dbeafe;
   color: #0f172a;
@@ -502,8 +449,7 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-hero__content,
-.dashboard-hero__top-right,
-.dashboard-hero__status {
+.dashboard-hero__metrics {
   position: relative;
   z-index: 1;
 }
@@ -536,61 +482,82 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
-.dashboard-hero__top-right {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
+/* 顶栏右侧：系统资源三项统计（替代原「检查时间 / 已连接」） */
+.dashboard-hero__metrics {
+  display: flex;
+  align-items: stretch;
   gap: 12px;
   flex: 0 0 auto;
 }
 
-.dashboard-hero__meta {
+.hero-metric {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  min-width: 158px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(10px);
 }
 
-.dashboard-hero__meta span {
+.hero-metric__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-metric__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 132px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  background: rgba(219, 234, 254, 0.66);
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: #eff6ff;
   color: #2563eb;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.hero-metric__label {
+  color: #334155;
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
 }
 
-.dashboard-hero__status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex: 0 0 auto;
-  width: 132px;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid #86efac;
-  border-radius: 999px;
-  background: rgba(220, 252, 231, 0.72);
-  color: #16a34a;
-  font-size: 13px;
+.hero-metric__value {
+  margin-left: auto;
+  color: #2563eb;
+  font-size: 16px;
   font-weight: 900;
   white-space: nowrap;
-  backdrop-filter: blur(12px);
 }
 
-.dashboard-live-dot {
-  width: 9px;
-  height: 9px;
+.hero-metric--highlight {
+  gap: 7px;
+  background: rgba(239, 246, 255, 0.86);
+}
+
+.hero-metric__value--lg {
+  margin-left: 0;
+  font-size: 20px;
+}
+
+.hero-metric__progress {
+  width: 100%;
+}
+
+.hero-metric__progress :deep(.el-progress-bar__outer) {
+  background-color: #dbeafe;
   border-radius: 999px;
-  background: #34d399;
-  box-shadow: 0 0 0 6px rgba(52, 211, 153, 0.18);
+}
+
+.hero-metric__progress :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
 }
 
 .dashboard-content {
@@ -608,7 +575,6 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-panel--summary,
-.resource-card,
 .task-preview-card {
   padding: 24px;
 }
@@ -622,6 +588,7 @@ onBeforeUnmount(() => {
 
 .dashboard-panel__header,
 .task-preview-card__header {
+  flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -662,11 +629,15 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
+/* 高度上限与任务预览列表一致，配合面板 flex 拉伸，
+   使「执行摘要」底部与「任务预览」底部对齐。 */
 .summary-list {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 300px;
+  min-height: 0;
+  max-height: 360px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -799,129 +770,9 @@ onBeforeUnmount(() => {
   min-height: 280px;
 }
 
-.resource-stack {
+.task-preview-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.resource-stack--compact {
-  gap: 10px;
-}
-
-.resource-metric {
-  padding: 16px;
-  border: 1px solid #dbeafe;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #f3f8ff 100%);
-}
-
-.resource-metric--compact {
-  padding: 12px 14px;
-  border-radius: 14px;
-}
-
-.resource-metric__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.resource-metric__main {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  color: #0f172a;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.resource-metric__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 16px;
-  line-height: 1;
-}
-
-.resource-metric__label,
-.resource-metric__value {
-  white-space: nowrap;
-}
-
-.resource-metric__value {
-  color: #2563eb;
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.resource-metric__desc {
-  min-width: 0;
-  margin-bottom: 10px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resource-progress :deep(.el-progress-bar__outer) {
-  background-color: #dbeafe;
-  border-radius: 999px;
-}
-
-.resource-progress :deep(.el-progress-bar__inner) {
-  border-radius: 999px;
-}
-
-.resource-highlight {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid #bfdbfe;
-  border-radius: 18px;
-  background: #eff6ff;
-}
-
-.resource-highlight--compact {
-  padding: 12px 14px;
-  border-radius: 14px;
-}
-
-.resource-highlight__label {
-  color: #334155;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.resource-highlight__value {
-  color: #2563eb;
-  font-size: 20px;
-  font-weight: 900;
-  white-space: nowrap;
-}
-
-.resource-card__alert {
-  margin-top: 16px;
-}
-
-.resource-card {
-  flex: 0 0 auto;
-}
-
-.task-preview-card {
-  flex: 1;
   min-height: 0;
 }
 
@@ -931,10 +782,12 @@ onBeforeUnmount(() => {
 }
 
 .task-preview-list {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 520px;
+  min-height: 0;
+  max-height: 360px;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -1031,6 +884,22 @@ onBeforeUnmount(() => {
 @media (max-width: 1280px) {
   .dashboard-content {
     grid-template-columns: 1fr;
+  }
+}
+
+/* 顶栏一行放不下系统资源三张卡片时，让它们整行换到标题下方 */
+@media (max-width: 1180px) {
+  .dashboard-hero {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-hero__metrics {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .hero-metric {
+    flex: 1 1 150px;
   }
 }
 

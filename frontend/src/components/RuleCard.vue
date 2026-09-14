@@ -206,13 +206,20 @@ function handleCardClick() {
   white-space: nowrap;
 }
 
+/* 与「运行日志」页模式标识（.logs-mode-tag）保持完全一致的观感：矩形 + 同色描边 + 8px 圆角。 */
 .rule-card__mode {
   flex: 0 0 auto;
-  padding: 2px 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
@@ -224,8 +231,8 @@ function handleCardClick() {
 .rule-card__mode.custom-mode-tag--hardlink { color: #2f3136; background: rgba(47, 49, 54, 0.08); }
 .rule-card__mode.custom-mode-tag--softlink { color: #c47c98; background: rgba(196, 124, 152, 0.12); }
 .rule-card__mode.custom-mode-tag--strm { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); }
-.rule-card__mode.custom-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); border-color: rgba(15, 159, 135, 0.28); }
-.rule-card__mode.custom-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); border-color: rgba(95, 127, 168, 0.28); }
+.rule-card__mode.custom-mode-tag--naming { color: #0f8f79; background: rgba(15, 159, 135, 0.12); }
+.rule-card__mode.custom-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); }
 
 .rule-card__body {
   display: flex;

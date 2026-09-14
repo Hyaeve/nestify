@@ -220,7 +220,6 @@
                   @keyup.enter="commitIgnoredExtension"
                 />
               </div>
-              <div class="cache-form__hint">对上传任务全局生效，匹配的文件将不会被处理。</div>
             </el-form-item>
           </el-form>
         </section>

@@ -1142,13 +1142,19 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 /* 右上角模式标识：与规则卡片保持一致的莫奈低饱和雾霾蓝。 */
+/* 与「运行日志」页模式标识（.logs-mode-tag--backup）保持完全一致的观感。 */
 .backup-card__mode {
   flex: 0 0 auto;
-  padding: 2px 10px;
-  border: 1px solid rgba(95, 127, 168, 0.28);
-  border-radius: 999px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
   color: #5f7fa8;
   background: rgba(95, 127, 168, 0.12);
   cursor: pointer;
