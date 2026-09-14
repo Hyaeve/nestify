@@ -86,6 +86,15 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	s.appendLog(runID, "info", fmt.Sprintf("WebDAV 源：%s（%s）；请求间隔 %.1fs / 线程 %d；最小视频 %s",
 		credential.Mount.Name, credential.Mount.BaseURL, interval.Seconds(), threads, describeMinVideoSize(minVideoBytes)))
 
+	// 明确打印最终写入 strm 的直链前缀：WebDAV 端点（/dav）与直链端点（/d）容易混淆，
+	// 日志里给出实际地址，出问题时一眼即可确认。
+	mountEndpoint := model.NormalizeMountBasePath(credential.Mount.BasePath)
+	if mountEndpoint == "" {
+		mountEndpoint = "/"
+	}
+	s.appendLog(runID, "info", fmt.Sprintf("Strm 直链前缀：%s（挂载的 WebDAV 端点 %s 已按直链端点 /d 改写）",
+		client.StrmBaseURL(), mountEndpoint))
+
 	if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, targetDir, extensions, matchers, overwrite, minVideoBytes, threads, stats); err != nil {
 		return *stats, err
 	}

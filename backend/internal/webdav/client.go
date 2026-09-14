@@ -91,36 +91,82 @@ func (c *Client) Fork() *Client {
 	}
 }
 
-// davEndpointSegment 是 OpenList / Alist 默认的 WebDAV 协议端点半段。
-// directLinkSegment 是同一服务的直链（可直接播放/下载）端点半段。
+// davEndpointName 是 OpenList / Alist 默认的 WebDAV 协议端点末段名称（/dav）。
+// directLinkName 是同一服务直链（可直接播放 / 下载）端点的末段名称（/d）。
 const (
+	davEndpointName    = "dav"
+	directLinkName     = "d"
 	davEndpointSegment = "/dav"
 	directLinkSegment  = "/d"
 )
 
-// BuildStrmURL 生成 http strm 需要写入的完整访问地址：
-// 挂载的 http 根地址 + 直链端点 + WebDAV 内部文件路径。
-//
-// strm 会被交给媒体服务器直接播放，必须使用直链端点（OpenList / Alist 的 /d）；
-// WebDAV 端点（/dav）需要 Basic 认证且不是媒体直链，写进去会导致播放失败，
-// 因此这里把 WebDAV 端点半段统一改写为直链端点半段。
-func (c *Client) BuildStrmURL(internalPath string) string {
-	normalized := normalizeInternalPath(internalPath)
-	return c.baseURL + escapePath(joinRemotePath(directLinkBasePath(c.basePath), normalized))
+// StrmBaseURL 返回生成 strm 时使用的直链根地址，例如 http://10.0.0.31:5244/d。
+// 运行日志会打印它，便于直接核对写入 strm 的地址前缀。
+func (c *Client) StrmBaseURL() string {
+	return c.directLinkBaseURL() + escapePath(directLinkBasePath(c.basePath))
 }
 
-// directLinkBasePath 把 WebDAV 挂载的 basePath 映射为直链根路径：
-// /dav -> /d、/xxx/dav -> /xxx/d、/d -> /d、留空 -> /d。
-func directLinkBasePath(basePath string) string {
-	base := strings.TrimRight(strings.TrimSpace(basePath), "/")
-	switch {
-	case base == "" || base == directLinkSegment || base == davEndpointSegment:
-		return directLinkSegment
-	case strings.HasSuffix(base, davEndpointSegment):
-		return strings.TrimSuffix(base, davEndpointSegment) + directLinkSegment
-	default:
-		return base + directLinkSegment
+// BuildStrmURL 生成 http strm 需要写入的完整访问地址：直链根地址 + WebDAV 内部文件路径。
+//
+// strm 会被交给媒体服务器直接播放，必须使用直链端点（OpenList / Alist 的 /d）；
+// WebDAV 端点（/dav）需要 Basic 认证且不是媒体直链，写进去会导致播放失败。
+// 因此这里把各种形态的 WebDAV 端点统统改写为直链端点：
+//
+//	/dav、/DAV、/dav/   -> /d
+//	/dav/xxx           -> /d/xxx
+//	/xxx/dav           -> /xxx/d
+//
+// 协议请求（列目录 / 上传 / 建目录 / 删除）依旧按挂载的 base_path 原样发送，两者互不影响。
+func (c *Client) BuildStrmURL(internalPath string) string {
+	normalized := normalizeInternalPath(internalPath)
+	return c.StrmBaseURL() + escapePath(joinRemotePath("", normalized))
+}
+
+// directLinkBaseURL 去掉根地址尾部可能残留的 WebDAV 端点半段。
+// 少数用户会把端点连同路径一起填进「域名或 IP」栏（例如 10.0.0.31/dav），
+// 这里统一剔除，避免生成 /dav/d 这种畸形直链。
+func (c *Client) directLinkBaseURL() string {
+	root := strings.TrimRight(strings.TrimSpace(c.baseURL), "/")
+	if hasEndpointSuffix(root, davEndpointName) {
+		return root[:len(root)-len(davEndpointSegment)]
 	}
+	return root
+}
+
+// directLinkBasePath 把 WebDAV 挂载的「指定路径」映射为直链根路径：
+// 留空或 /dav -> /d、/dav/xxx -> /d/xxx、/xxx/dav -> /xxx/d、/d 保持不动，
+// 其它自定义路径 -> <base>/d。端点段名大小写不敏感。
+func directLinkBasePath(basePath string) string {
+	base := model.NormalizeMountBasePath(basePath)
+	if base == "" {
+		return directLinkSegment
+	}
+
+	segments := strings.Split(strings.Trim(base, "/"), "/")
+	for index, segment := range segments {
+		if !strings.EqualFold(segment, davEndpointName) {
+			continue
+		}
+		// WebDAV 端点只可能出现在路径开头（/dav/xxx）或结尾（/xxx/dav）。
+		if index == 0 || index == len(segments)-1 {
+			segments[index] = directLinkName
+			return "/" + strings.Join(segments, "/")
+		}
+	}
+
+	if strings.EqualFold(segments[0], directLinkName) {
+		return "/" + strings.Join(segments, "/")
+	}
+	return base + directLinkSegment
+}
+
+// hasEndpointSuffix 判断 value 是否以 "/<segment>" 结尾（大小写不敏感）。
+func hasEndpointSuffix(value, segment string) bool {
+	suffix := "/" + segment
+	if len(value) <= len(suffix) {
+		return false
+	}
+	return strings.EqualFold(value[len(value)-len(suffix):], suffix)
 }
 
 // requestURL 拼接某内部路径对应的完整请求地址（不含尾斜杠处理）。

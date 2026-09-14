@@ -43,7 +43,7 @@
 
       <el-form-item label="指定路径">
         <el-input v-model="form.base_path" placeholder="WebDAV 端点路径，例如 /dav，留空表示根目录" />
-        <div class="mount-form__hint">生成 Strm 时会自动改用直链端点 /d，便于媒体服务器直接播放。</div>
+        <div class="mount-form__hint">生成 Strm 时会自动把 WebDAV 端点 /dav 改写为直链端点 /d（例如 http://10.0.0.31:5244/dav → http://10.0.0.31:5244/d），便于媒体服务器直接播放。</div>
       </el-form-item>
 
       <el-form-item label="启用挂载">

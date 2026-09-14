@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // MountPathScheme 是虚拟 WebDAV 挂载路径的协议前缀，形如 webdav://12 或 webdav://12/移动云盘/电视剧。
 const MountPathScheme = "webdav://"
@@ -64,8 +67,31 @@ func NormalizeMountScheme(value string) string {
 }
 
 // NormalizeMountBasePath 规整「指定路径」，保证以 / 开头且不带结尾斜杠。
+// 同时容忍用户把完整地址粘进来（例如 http://10.0.0.31:5244/dav 或 10.0.0.31:5244/dav），
+// 只保留其中的路径部分，避免请求地址与 Strm 直链地址都被拼成 xxx://host/dav 之类的畸形值。
 func NormalizeMountBasePath(value string) string {
-	trimmed := value
+	trimmed := strings.TrimSpace(value)
+	if index := strings.Index(trimmed, "://"); index >= 0 {
+		trimmed = trimmed[index+3:]
+		if slash := strings.Index(trimmed, "/"); slash >= 0 {
+			trimmed = trimmed[slash:]
+		} else {
+			trimmed = ""
+		}
+	}
+	// 缺协议的半截地址（10.0.0.31:5244/dav）同样只保留路径部分。
+	if !strings.HasPrefix(trimmed, "/") {
+		head, rest, found := strings.Cut(trimmed, "/")
+		if strings.Contains(head, ":") {
+			if !found {
+				return ""
+			}
+			trimmed = "/" + rest
+		}
+	}
+	if index := strings.IndexAny(trimmed, "?#"); index >= 0 {
+		trimmed = trimmed[:index]
+	}
 	for len(trimmed) > 0 && (trimmed[len(trimmed)-1] == '/' || trimmed[len(trimmed)-1] == '\\') {
 		trimmed = trimmed[:len(trimmed)-1]
 	}
