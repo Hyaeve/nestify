@@ -55,8 +55,20 @@ export interface MountListPayload {
   items: WebdavMount[]
 }
 
+/** 某个挂载被谁引用（删除前提示用）。路径里存的是 webdav://<id>，编号不会重排。 */
+export interface MountUsage {
+  mount_id: number
+  rule_names: string[]
+  backup_names: string[]
+}
+
 export function fetchMounts() {
   return getJSON<MountListPayload>('/api/v1/mounts')
+}
+
+/** 拉取引用该挂载的规则与备份任务名称（只做提示，不阻止删除）。 */
+export function fetchMountUsage(id: number) {
+  return getJSON<MountUsage>(`/api/v1/mounts/${id}/usage`)
 }
 
 /** 拉取单个挂载详情（含密码回显，仅编辑时使用）。 */

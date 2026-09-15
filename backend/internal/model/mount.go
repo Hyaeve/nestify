@@ -188,6 +188,29 @@ func BuildMountVirtualPath(id int64) string {
 	return MountPathScheme + itoa64(id)
 }
 
+// ReferencesMount 判断某个路径是否指向指定挂载：既包括挂载根（webdav://12），
+// 也包括它下面的层级（webdav://12/移动云盘/电视剧）。
+// id 之后必须紧跟结尾或 "/"，否则 webdav://1 会错误命中 webdav://12。
+func ReferencesMount(pathValue string, id int64) bool {
+	if id <= 0 {
+		return false
+	}
+	trimmed := strings.TrimSpace(pathValue)
+	prefix := MountPathScheme + itoa64(id)
+	if !strings.HasPrefix(trimmed, prefix) {
+		return false
+	}
+	rest := trimmed[len(prefix):]
+	return rest == "" || strings.HasPrefix(rest, "/")
+}
+
+// MountUsage 汇总「某个挂载被谁引用」，用于删除挂载前给出提示（删除本身仍允许）。
+type MountUsage struct {
+	MountID     int64    `json:"mount_id"`
+	RuleNames   []string `json:"rule_names"`
+	BackupNames []string `json:"backup_names"`
+}
+
 // JoinMountVirtualPath 拼接挂载虚拟路径：webdav://<id> 与内部相对路径（自动补分隔斜杠）。
 // internalPath 可带或不带前导 "/"，结果统一为 webdav://<id>[/a/b] 形式。
 func JoinMountVirtualPath(id int64, internalPath string) string {

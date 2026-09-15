@@ -107,6 +107,22 @@ func (a *apiHandler) handleMountByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// /api/v1/mounts/{id}/usage：删除挂载前先看看它被哪些规则 / 备份任务引用。
+	// 只做提示，不做拦截——引用检查的结论交给前端写进确认框。
+	if len(parts) > 1 && parts[1] == "usage" {
+		if r.Method != http.MethodGet {
+			writeMethodNotAllowed(w)
+			return
+		}
+		usage, err := a.store.ListMountReferences(id)
+		if err != nil {
+			writeInternalError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "挂载引用已加载", Data: usage})
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		credential, err := a.store.GetMountCredential(id)

@@ -270,6 +270,7 @@ import { exportRulesBackup, fetchSettings, importRulesBackup, updateSettings } f
 import {
   deleteMount,
   fetchMounts,
+  fetchMountUsage,
   updateMount,
   type WebdavMount,
 } from '../api/mounts'
@@ -479,6 +480,32 @@ function closeContextMenu() {
   contextMenu.visible = false
 }
 
+/**
+ * 删除挂载前的引用提示（只提示、不拦截）。
+ * 挂载编号（webdav://<id>）是数据库主键、删除后不会重排，其它挂载的既有路径不受影响；
+ * 但被删挂载的引用方会在运行时失败，所以先把引用它的规则 / 备份任务列给用户看。
+ * 引用检查本身失败不阻断删除流程。
+ */
+async function describeMountUsage(mountId: number) {
+  try {
+    // getJSON 返回 ApiResponse<T>，取值前必须先 .data（否则 TS2339）。
+    const response = await fetchMountUsage(mountId)
+    const ruleNames = response.data?.rule_names ?? []
+    const backupNames = response.data?.backup_names ?? []
+    const parts: string[] = []
+    if (ruleNames.length) {
+      parts.push(`${ruleNames.length} 条规则（${ruleNames.join('、')}）`)
+    }
+    if (backupNames.length) {
+      parts.push(`${backupNames.length} 个备份任务（${backupNames.join('、')}）`)
+    }
+    if (!parts.length) return ''
+    return `该挂载仍被 ${parts.join('、')} 引用，删除后它们将执行失败。`
+  } catch {
+    return ''
+  }
+}
+
 async function handleMountCommand(command: string, mount: WebdavMount) {
   closeContextMenu()
   if (command === 'edit') {
@@ -512,7 +539,11 @@ async function handleMountCommand(command: string, mount: WebdavMount) {
   }
   if (command === 'delete') {
     try {
-      await ElMessageBox.confirm(`确认删除挂载「${mount.name}」？`, '删除挂载', { type: 'warning' })
+      await ElMessageBox.confirm(
+        `确认删除挂载「${mount.name}」？${await describeMountUsage(mount.id)}`,
+        '删除挂载',
+        { type: 'warning', confirmButtonText: '仍然删除', cancelButtonText: '取消' },
+      )
       await deleteMount(mount.id)
       ElMessage.success('挂载已删除')
       await loadMounts()

@@ -189,6 +189,61 @@ func (s *Store) DeleteMount(id int64) error {
 	return nil
 }
 
+// ListMountReferences 汇总引用了某个挂载的规则与备份任务名称。
+// 路径里存的是挂载的虚拟根（webdav://<id>）或其子层级，删除挂载不会重排编号，
+// 但被删掉的挂载会让这些规则 / 任务在运行时直接失败，所以删除前先告知用户。
+func (s *Store) ListMountReferences(id int64) (model.MountUsage, error) {
+	usage := model.MountUsage{MountID: id, RuleNames: []string{}, BackupNames: []string{}}
+
+	rules, err := s.ListRules()
+	if err != nil {
+		return usage, err
+	}
+	for _, rule := range rules {
+		if ruleReferencesMount(rule, id) {
+			usage.RuleNames = append(usage.RuleNames, rule.Name)
+		}
+	}
+
+	tasks, err := s.ListBackups()
+	if err != nil {
+		return usage, err
+	}
+	for _, task := range tasks {
+		if backupReferencesMount(task, id) {
+			usage.BackupNames = append(usage.BackupNames, task.Name)
+		}
+	}
+
+	return usage, nil
+}
+
+func ruleReferencesMount(rule model.Rule, id int64) bool {
+	if model.ReferencesMount(rule.SourceDir, id) || model.ReferencesMount(rule.TargetDir, id) {
+		return true
+	}
+	for _, dir := range rule.SourceDirs {
+		if model.ReferencesMount(dir, id) {
+			return true
+		}
+	}
+	return false
+}
+
+func backupReferencesMount(task model.BackupTask, id int64) bool {
+	for _, dir := range task.SourceDirs {
+		if model.ReferencesMount(dir, id) {
+			return true
+		}
+	}
+	for _, dir := range task.TargetDirs {
+		if model.ReferencesMount(dir, id) {
+			return true
+		}
+	}
+	return false
+}
+
 type mountScanner interface {
 	Scan(dest ...any) error
 }
