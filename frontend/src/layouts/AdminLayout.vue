@@ -232,6 +232,9 @@ async function handleLogout() {
     backdrop-filter: blur(16px);
     min-width: 68px;
     will-change: width;
+    /* 侧栏是导航壳层：禁止双击选中文字（连点收起/展开时很容易把菜单名选蓝）。 */
+    user-select: none;
+    -webkit-user-select: none;
     transition:
       width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 0.28s ease,
@@ -272,7 +275,7 @@ async function handleLogout() {
   height: 38px;
   object-fit: cover;
   border-radius: 12px;
-  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.14);
+  box-shadow: 0 12px 24px rgba(127, 178, 162, 0.14);
   transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -458,9 +461,9 @@ async function handleLogout() {
 }
 
 .icon-button--refresh:not(.is-disabled):hover {
-  color: #1688e8;
-  border-color: #b7d8ff;
-  background: #edf7ff;
+  color: #4a6b5f;
+  border-color: rgba(127, 178, 162, 0.42);
+  background: rgba(127, 178, 162, 0.14);
 }
 
 .aside-toggle {
@@ -595,8 +598,8 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item:hover) {
-  color: #1688e8;
-  background: #d7ebfb;
+  color: #4a6b5f;
+  background: rgba(127, 178, 162, 0.14);
 }
 
 .admin-layout__aside.is-collapsed .aside-scroll {
@@ -641,7 +644,7 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item:hover::before) {
-  background: #d7ebfb;
+  background: rgba(127, 178, 162, 0.14);
 }
 
 :deep(.el-menu-item .el-icon) {
@@ -713,9 +716,9 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item.is-active) {
-  color: #1e9bff;
-  background: #e8f4ff;
-  box-shadow: inset 4px 0 0 #1e9bff;
+  color: #5b7a6e;
+  background: rgba(127, 178, 162, 0.2);
+  box-shadow: inset 4px 0 0 #5b7a6e;
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active) {
@@ -724,13 +727,13 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active::before) {
-  background: #e8f4ff;
+  background: rgba(127, 178, 162, 0.2);
 }
 
 :deep(.el-menu-item.is-active:hover) {
-  color: #1688e8;
-  background: #d7ebfb;
-  box-shadow: inset 4px 0 0 #1688e8;
+  color: #4a6b5f;
+  background: rgba(127, 178, 162, 0.14);
+  box-shadow: inset 4px 0 0 #4a6b5f;
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active:hover) {
@@ -739,7 +742,7 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active:hover::before) {
-  background: #d7ebfb;
+  background: rgba(127, 178, 162, 0.14);
 }
 
 :deep(.el-menu-item > span) {

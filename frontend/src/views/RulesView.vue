@@ -3309,7 +3309,7 @@ onBeforeUnmount(() => {
 .history-summary__controls { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .history-summary__control { width: 120px; }
 .history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
-.history-sort-order-button:not(.is-disabled):hover { color: #2f6fd6; border-color: #b7d8ff; background: #edf7ff; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
+.history-sort-order-button:not(.is-disabled):hover { color: #4a6b5f; border-color: rgba(127, 178, 162, 0.42); background: rgba(127, 178, 162, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
 .history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }

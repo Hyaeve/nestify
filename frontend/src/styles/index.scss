@@ -12,8 +12,17 @@
   --text-secondary: #8b97a8;
   --text-tertiary: #94a3b8;
   --border-color: rgba(148, 163, 184, 0.18);
-  --accent-color: #409eff;
-  --accent-soft: rgba(64, 158, 255, 0.1);
+  --accent-color: #5b7a6e;
+  --accent-soft: rgba(127, 178, 162, 0.1);
+  /* Element Plus 主色统一成低饱和青灰（默认 #409eff 太艳），各档浅色要一起给，
+     否则按钮 / 页签 / 开关 / 勾选 / 输入框聚焦这些仍会退回蓝色。 */
+  --el-color-primary: #5b7a6e;
+  --el-color-primary-light-3: #8ca29a;
+  --el-color-primary-light-5: #adbdb7;
+  --el-color-primary-light-7: #ced7d4;
+  --el-color-primary-light-8: #dee4e2;
+  --el-color-primary-light-9: #eff2f1;
+  --el-color-primary-dark-2: #496258;
   --shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.06);
   --app-content-max-width: 100%;
   --app-shell-padding-x: 20px;
@@ -40,8 +49,16 @@
   --text-secondary: #7a8ca3;
   --text-tertiary: #96a6b8;
   --border-color: rgba(148, 163, 184, 0.22);
-  --accent-color: #66b5ff;
-  --accent-soft: rgba(102, 181, 255, 0.14);
+  --accent-color: #7fb2a2;
+  --accent-soft: rgba(127, 178, 162, 0.14);
+  /* Apple TV 主题用更浅一档的青绿，避免和半透明玻璃底叠起来发脏。 */
+  --el-color-primary: #7fb2a2;
+  --el-color-primary-light-3: #a5c9be;
+  --el-color-primary-light-5: #bfd9d1;
+  --el-color-primary-light-7: #d9e8e3;
+  --el-color-primary-light-8: #e5f0ec;
+  --el-color-primary-light-9: #f2f7f6;
+  --el-color-primary-dark-2: #668e82;
   --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
 }
 
@@ -280,7 +297,7 @@ body {
 .el-menu {
   --el-menu-bg-color: transparent;
   --el-menu-text-color: var(--text-secondary);
-  --el-menu-hover-bg-color: rgba(64, 158, 255, 0.08);
+  --el-menu-hover-bg-color: rgba(127, 178, 162, 0.08);
   --el-menu-active-color: var(--accent-color);
   border-right: none;
 }

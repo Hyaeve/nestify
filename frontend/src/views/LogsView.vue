@@ -977,14 +977,14 @@ onMounted(async () => {
 }
 
 .logs-view-toggle__button:hover {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #5b7a6e;
+  background: rgba(127, 178, 162, 0.14);
 }
 
 .logs-view-toggle__button.is-active {
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18), 0 8px 18px rgba(37, 99, 235, 0.1);
+  color: #5b7a6e;
+  background: rgba(127, 178, 162, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(127, 178, 162, 0.18), 0 8px 18px rgba(127, 178, 162, 0.1);
 }
 
 .logs-view-toggle__button:active {
@@ -1018,19 +1018,19 @@ onMounted(async () => {
 .logs-action--sort {
   width: 42px;
   min-width: 42px;
-  color: #2563eb;
-  background: #dbeafe;
+  color: #5b7a6e;
+  background: rgba(127, 178, 162, 0.2);
 }
 
 .logs-action--sort {
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(127, 178, 162, 0.16);
   background: rgba(255, 255, 255, 0.82);
 }
 
 .logs-action--sort:not(.is-disabled):hover {
-  color: #2f6fd6;
-  border-color: #b7d8ff;
-  background: #edf7ff;
+  color: #4a6b5f;
+  border-color: rgba(127, 178, 162, 0.42);
+  background: rgba(127, 178, 162, 0.14);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
   transform: translateY(-1px);
 }
