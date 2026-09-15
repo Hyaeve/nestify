@@ -1561,10 +1561,25 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   color: #cbd5e1;
 }
 
+/* 选中态原先铺满 #5b7a6e 实心块 + 白字，在白底弹窗里过重、抢视线；
+   改成浅底 + 青灰字，跟规则卡片「已启用」用同一套低饱和色。 */
 .backup-filter-chip.is-active {
-  color: #fff;
-  background: #5b7a6e;
-  border-color: #5b7a6e;
+  color: #35604f;
+  background: rgba(127, 178, 162, 0.18);
+  border-color: rgba(127, 178, 162, 0.55);
+}
+
+.backup-filter-chip.is-active:hover {
+  color: #2f6b57;
+  background: rgba(127, 178, 162, 0.3);
+  border-color: rgba(127, 178, 162, 0.78);
+}
+
+/* 不可切换的开关（扩展名 / 体积规则的「文件夹」）即使值为 true 也按禁用显示，别亮成选中态。 */
+.backup-filter-chip.is-active:disabled {
+  color: #b6c9c1;
+  background: rgba(127, 178, 162, 0.08);
+  border-color: #eef2f7;
 }
 
 .backup-filter-row__remove {
