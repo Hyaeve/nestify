@@ -3394,10 +3394,12 @@ onBeforeUnmount(() => {
 .rule-actions { display: inline-flex; align-items: center; justify-content: center; gap: 12px; white-space: nowrap; }
 .rule-actions--nowrap { width: 100%; flex-wrap: nowrap; gap: 18px; }
 
-/* 规则卡片网格：自适应列宽，整卡可拖拽排序（按钮区已被 Sortable 的 filter 排除）。 */
+/* 规则卡片网格：自适应列宽，整卡可拖拽排序（按钮区已被 Sortable 的 filter 排除）。
+   最小列宽 430px 是按底部操作条一行放得下算出来的（启用 + 执行 + 编辑 + 移除 ≈ 400px 内容宽），
+   改小会让「已启用」被挤到上一行。 */
 .rule-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(430px, 1fr));
   gap: 14px;
   align-items: stretch;
 }

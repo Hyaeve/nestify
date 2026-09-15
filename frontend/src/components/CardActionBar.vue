@@ -39,11 +39,11 @@
       <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop="emit('execute')">
         <!-- 「执行」= 圆角方框 + 实心圆角三角（标准「运行」按钮语义，与启用态的裸三角、备份卡片的扫描框都能分开）。 -->
         <svg v-if="executeIcon === 'rescan'" class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 9.5V6.5A2.5 2.5 0 0 1 6.5 4H9.5" />
-          <path d="M14.5 4h3A2.5 2.5 0 0 1 20 6.5v3" />
-          <path d="M20 14.5v3a2.5 2.5 0 0 1-2.5 2.5h-3" />
-          <path d="M9.5 20h-3A2.5 2.5 0 0 1 4 17.5v-3" />
-          <path d="M4 12h16" />
+          <path d="M4 9.5V7A3 3 0 0 1 7 4h2.5" />
+          <path d="M14.5 4H17a3 3 0 0 1 3 3v2.5" />
+          <path d="M20 14.5V17a3 3 0 0 1-3 3h-2.5" />
+          <path d="M9.5 20H7a3 3 0 0 1-3-3v-2.5" />
+          <path d="M5.4 12h13.2" />
         </svg>
         <svg v-else class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4.4" />
@@ -53,12 +53,23 @@
       </button>
 
       <button type="button" class="card-action-bar__btn card-action-bar__btn--edit" @click.stop="emit('edit')">
-        <el-icon class="card-action-bar__icon"><Edit /></el-icon>
+        <!-- 铅笔/垃圾桶改为自绘：Element Plus 的 Edit / Delete 是实心填充图形，棱角硬，
+             与操作条里其它 1.7 描边 + 圆头圆角的线条图标不是一路，所以自己画一版更圆润的。 -->
+        <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5.1 19.7 6.2 15.3 15.8 5.7a2.5 2.5 0 0 1 3.5 3.5L9.7 18.8a1.3 1.3 0 0 1-.9.4z" />
+          <path d="m14.3 7.2 3.5 3.5" />
+        </svg>
         <span>编辑</span>
       </button>
 
       <button type="button" class="card-action-bar__btn card-action-bar__btn--remove" @click.stop="emit('remove')">
-        <el-icon class="card-action-bar__icon"><Delete /></el-icon>
+        <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4.9 7.1h14.2" />
+          <path d="M9.7 7.1V5.5a1.3 1.3 0 0 1 1.3-1.3h2a1.3 1.3 0 0 1 1.3 1.3v1.6" />
+          <path d="M7 7.1l.75 11.5a2.1 2.1 0 0 0 2.1 1.97h4.3a2.1 2.1 0 0 0 2.1-1.97L17 7.1" />
+          <path d="M10.5 10.9v5.4" />
+          <path d="M13.5 10.9v5.4" />
+        </svg>
         <span>移除</span>
       </button>
     </div>
@@ -66,8 +77,6 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit } from '@element-plus/icons-vue'
-
 withDefaults(
   defineProps<{
     enabled: boolean
@@ -107,8 +116,9 @@ function handleStrmCommand(command: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* 窄卡片放不下时才会换行；卡片网格的最小列宽（430/450px）已保证正常情况是一行。 */
   flex-wrap: wrap;
-  gap: 9px 12px;
+  gap: 9px 10px;
   min-width: 0;
 }
 
@@ -116,9 +126,9 @@ function handleStrmCommand(command: string) {
 .card-action-bar__btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   height: 36px;
-  padding: 0 15px;
+  padding: 0 13px;
   border: 1px solid var(--border-color);
   /* 圆角矩形而非胶囊：36px 高配 10px 圆角，既有圆润感又保留矩形轮廓。 */
   border-radius: 10px;
@@ -172,7 +182,7 @@ function handleStrmCommand(command: string) {
   justify-content: flex-end;
   /* 按钮放大后窄卡片可能放不下：允许换行到第二行，别溢出卡片。 */
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 

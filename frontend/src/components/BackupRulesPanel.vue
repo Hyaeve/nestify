@@ -1187,9 +1187,11 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   line-height: 1.6;
 }
 
+/* 最小列宽 450px：保证底部操作条（已启用 + 重新扫描 + 编辑 + 移除）能排成一行，
+   否则「已启用」会被挤到上一行。卡片内边距 18px，内容宽 = 列宽 - 36。 */
 .backup-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(450px, 1fr));
   gap: 16px;
 }
 
