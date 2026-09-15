@@ -63,7 +63,6 @@
         :enabled="rule.enabled"
         :busy="busy"
         :strm-sync="strmSync"
-        execute-title="执行该规则"
         @toggle="emit('toggle', rule)"
         @execute="emit('execute', rule)"
         @strm-sync="(command) => emit('strm-sync', rule, command)"

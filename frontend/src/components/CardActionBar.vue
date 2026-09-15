@@ -5,7 +5,6 @@
       class="card-action-bar__toggle"
       :class="enabled ? 'is-on' : 'is-off'"
       :disabled="busy"
-      :title="enabled ? '点击禁用' : '点击启用'"
       @click.stop="emit('toggle')"
     >
       <el-icon class="card-action-bar__icon">
@@ -17,14 +16,14 @@
 
     <div class="card-action-bar__actions">
       <el-dropdown v-if="strmSync" trigger="click" @command="handleStrmCommand">
-        <button type="button" class="card-action-bar__btn card-action-bar__btn--run" title="执行 Strm 同步" @click.stop>
+        <button type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop>
           <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M5 4.5h11.5v4" />
             <path d="M8 7.5h11v12H8z" />
             <path d="M11 13.5h5.5" />
             <path d="m14.5 10.5 3 3-3 3" />
           </svg>
-          <span>执行</span>
+          <span>{{ executeLabel }}</span>
         </button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -34,22 +33,22 @@
         </template>
       </el-dropdown>
 
-      <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" :title="executeTitle" @click.stop="emit('execute')">
+      <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop="emit('execute')">
         <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 4.5h11.5v4" />
           <path d="M8 7.5h11v12H8z" />
           <path d="M11 13.5h5.5" />
           <path d="m14.5 10.5 3 3-3 3" />
         </svg>
-        <span>执行</span>
+        <span>{{ executeLabel }}</span>
       </button>
 
-      <button type="button" class="card-action-bar__btn card-action-bar__btn--edit" title="编辑该规则" @click.stop="emit('edit')">
+      <button type="button" class="card-action-bar__btn card-action-bar__btn--edit" @click.stop="emit('edit')">
         <el-icon class="card-action-bar__icon"><Edit /></el-icon>
         <span>编辑</span>
       </button>
 
-      <button type="button" class="card-action-bar__btn card-action-bar__btn--remove" title="移除该规则" @click.stop="emit('remove')">
+      <button type="button" class="card-action-bar__btn card-action-bar__btn--remove" @click.stop="emit('remove')">
         <el-icon class="card-action-bar__icon"><Delete /></el-icon>
         <span>移除</span>
       </button>
@@ -67,12 +66,13 @@ withDefaults(
     busy?: boolean
     /** Strm 模式的链路规则：执行按钮改为「增量同步 / 全量同步」下拉。 */
     strmSync?: boolean
-    executeTitle?: string
+    /** 执行按钮文案：规则卡片用「执行」，备份卡片用「重新扫描」。 */
+    executeLabel?: string
   }>(),
   {
     busy: false,
     strmSync: false,
-    executeTitle: '执行该规则',
+    executeLabel: '执行',
   },
 )
 

@@ -65,7 +65,7 @@
           <CardActionBar
             :enabled="task.enabled"
             :busy="updatingIds.has(task.id)"
-            execute-title="立即执行一次备份扫描"
+            execute-label="重新扫描"
             @toggle="toggleEnabled(task)"
             @execute="rescan(task)"
             @edit="openEditWizard(task)"
@@ -991,11 +991,13 @@ async function toggleEnabled(task: BackupTask) {
   }
 }
 
+// 「重新扫描」= 强制全量扫描：跳过增量时间线，重新遍历全部源文件，
+// 期间照常套用任务自身的筛选规则（后端 matcher := newFilterMatcher(task.FilterRules)）。
 async function rescan(task: BackupTask) {
   scanningIds.value = new Set(scanningIds.value).add(task.id)
   try {
     await runBackup(task.id, true)
-    ElMessage.success('已开始完整扫描')
+    ElMessage.success('已开始全量扫描')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '扫描失败')
   } finally {

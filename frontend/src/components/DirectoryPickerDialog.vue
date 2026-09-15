@@ -97,10 +97,9 @@ interface TreeNode {
   isMount?: boolean
 }
 
-type SourceFilter = 'all' | 'local' | 'mount'
+type SourceFilter = 'local' | 'mount'
 
 const sourceOptions: Array<{ value: SourceFilter; label: string; icon: unknown }> = [
-  { value: 'all', label: '全部来源', icon: FolderOpened },
   { value: 'local', label: '本地目录', icon: Monitor },
   { value: 'mount', label: '远程挂载', icon: Cloudy },
 ]
@@ -120,7 +119,7 @@ const loading = ref(false)
 const confirming = ref(false)
 const errorMessage = ref('')
 const roots = ref<BrowseRoot[]>([])
-const sourceFilter = ref<SourceFilter>('all')
+const sourceFilter = ref<SourceFilter>('local')
 const currentPath = ref('')
 const parentPath = ref('')
 const pathInput = ref('')
@@ -142,25 +141,14 @@ const visibleProxy = computed({
 const localRoots = computed(() => roots.value.filter((root) => !isMountPath(root.path)))
 /** WebDAV 远程挂载根。 */
 const mountRoots = computed(() => roots.value.filter((root) => isMountPath(root.path)))
-/** 按「目录来源」筛选后的根列表。 */
-const filteredRoots = computed(() => {
-  if (sourceFilter.value === 'local') {
-    return localRoots.value
-  }
-  if (sourceFilter.value === 'mount') {
-    return mountRoots.value
-  }
-  return roots.value
-})
+/** 按「目录来源」筛选后的根列表：本地目录 / 远程挂载互不混显。 */
+const filteredRoots = computed(() => (sourceFilter.value === 'mount' ? mountRoots.value : localRoots.value))
 
 const emptyHint = computed(() => {
-  if (sourceFilter.value === 'mount' && !mountRoots.value.length) {
-    return '尚未配置远程挂载，可在「系统设置 → 远程挂载」添加'
+  if (sourceFilter.value === 'mount') {
+    return mountRoots.value.length ? '暂无可选目录' : '尚未配置远程挂载，可在「系统设置 → 远程挂载」添加'
   }
-  if (sourceFilter.value === 'local' && !localRoots.value.length) {
-    return '未发现可用的本地目录'
-  }
-  return '暂无可选目录'
+  return localRoots.value.length ? '暂无可选目录' : '未发现可用的本地目录'
 })
 
 function normalizePath(path: string) {
@@ -221,9 +209,9 @@ async function initialize() {
     const response = await fetchBrowseRoots()
     roots.value = response.data?.items ?? []
 
-    // 打开时按「上次用过的来源」复位：初始路径是挂载路径就默认远程，否则保留当前筛选。
+    // 打开时按「上次用过的来源」复位：初始路径是挂载路径就默认远程，否则回到本地目录。
     if (!currentPath.value && props.initialPath) {
-      sourceFilter.value = isMountPath(props.initialPath) ? 'mount' : 'all'
+      sourceFilter.value = isMountPath(props.initialPath) ? 'mount' : 'local'
     }
 
     const startPath = props.initialPath || currentPath.value || ''
@@ -271,9 +259,12 @@ function findRootPath(path: string) {
   return ''
 }
 
-/** 「全部来源」视图才允许本地根目录里出现远程挂载文件夹；限定本地时不再混入。 */
+/**
+ * 浏览本地路径时恒传 source=local：后端不再把 WebDAV 虚拟挂载追加进根目录列表，
+ * 「本地目录」视图里因此永远看不到远程挂载目录（远程挂载只在「远程挂载」视图里作为根出现）。
+ */
 function pickerBrowseSource() {
-  return sourceFilter.value === 'local' ? 'local' : undefined
+  return 'local'
 }
 
 async function populateRootLevel(path: string) {
@@ -301,6 +292,10 @@ async function openPath(path: string) {
   errorMessage.value = ''
   currentPath.value = targetPath
   pathInput.value = targetPath
+  // 浏览路径决定所属来源：挂载路径 → 远程挂载视图，物理路径 → 本地目录视图。
+  // 这样即便上一次打开残留了另一个来源，也不会出现「本地路径配远程根」的错配
+  // （本地目录视图永远只列本地根，看不到任何远程挂载）。
+  sourceFilter.value = isMountPath(targetPath) ? 'mount' : 'local'
 
   try {
     await populateRootLevel(targetPath)
