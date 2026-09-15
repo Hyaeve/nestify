@@ -160,7 +160,16 @@ func (s *Service) startWatchRuleLocked(rule model.Rule) {
 }
 
 func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
-	_, _ = s.PrepareRuleRun(ExecuteRuleRequest{
+	_, _ = s.PrepareRuleRun(buildRuleExecuteRequest(rule, triggerMode))
+}
+
+// buildRuleExecuteRequest 把库里的一条规则整体映射成执行请求。
+//
+// ⚠️ 规则新增字段时必须在这里同步补上：「启动后立即运行」「计划执行」「新文件触发」
+// 三条自动触发链路都只经过这里，漏字段不会报错，只会在这几种触发方式下静默失效
+// （曾漏过 MetadataFilters —— 定时运行不同步元数据文件，手动执行却正常）。
+func buildRuleExecuteRequest(rule model.Rule, triggerMode string) ExecuteRuleRequest {
+	return ExecuteRuleRequest{
 		RuleID:            rule.ID,
 		RuleName:          rule.Name,
 		ArchiveMode:       rule.ArchiveMode,
@@ -176,12 +185,13 @@ func (s *Service) triggerRule(rule model.Rule, triggerMode string) {
 		PackageOptions:    ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           ParseStringListJSON(rule.FiltersJSON),
+		MetadataFilters:   ParseStringListJSON(rule.MetadataFiltersJSON),
 		Whitelist:         ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       ParseStringListJSON(rule.NestFiltersJSON),
 		TransformRules:    ParseTransformRulesJSON(rule.TransformRulesJSON),
 		TransformFilters:  ParseStringListJSON(rule.TransformFiltersJSON),
-	})
+	}
 }
 
 func (s *Service) directoryFingerprintMany(mode string, roots []string) (string, error) {

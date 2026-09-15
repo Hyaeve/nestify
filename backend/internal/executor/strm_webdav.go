@@ -184,7 +184,7 @@ func (s *Service) walkOpenListStrmRecursive(
 		len(entries), time.Since(started).Round(time.Millisecond)))
 
 	for _, entry := range entries {
-		if matchesFileName(entry.Name, entry.IsDir, matchers) {
+		if matchesFileName(entry.Name, entry.IsDir, matchers) || isUnderFilteredDir(entry.Path, matchers) {
 			stats.SkipCount++
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
 			continue
@@ -253,6 +253,33 @@ func (s *Service) walkOpenListStrmRecursive(
 	}
 
 	return true, nil
+}
+
+// isUnderFilteredDir 判断条目是否位于「命中过滤名单的目录」之内。
+//
+// 递归列举把整棵树压平成一次响应，没有「不进入这个目录」的机会：命中过滤名单的目录
+// 若只跳过它自己，目录内的文件仍然会被生成 strm（元数据也会被下载），
+// 与逐目录列举「命中目录即整棵跳过」的行为不一致。这里按路径逐级判断祖先目录名，
+// 使两种列举路径的过滤语义一致。
+func isUnderFilteredDir(entryPath string, matchers []fileNameMatcher) bool {
+	if len(matchers) == 0 {
+		return false
+	}
+	normalized := strings.Trim(strings.ReplaceAll(strings.TrimSpace(entryPath), "\\", "/"), "/")
+	if normalized == "" {
+		return false
+	}
+	segments := strings.Split(normalized, "/")
+	// 最后一段是条目自身，由调用方按 isDir 语义单独判断，这里只看祖先目录。
+	for _, segment := range segments[:len(segments)-1] {
+		if segment == "" || segment == "." || segment == ".." {
+			continue
+		}
+		if matchesFileName(segment, true, matchers) {
+			return true
+		}
+	}
+	return false
 }
 
 // walkWebdavStrm 并发遍历 WebDAV 目录树并生成 strm。
