@@ -275,7 +275,7 @@ async function handleLogout() {
   height: 38px;
   object-fit: cover;
   border-radius: 12px;
-  box-shadow: 0 12px 24px rgba(107, 159, 176, 0.14);
+  box-shadow: 0 12px 24px rgba(63, 127, 149, 0.14);
   transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -461,9 +461,9 @@ async function handleLogout() {
 }
 
 .icon-button--refresh:not(.is-disabled):hover {
-  color: #3f6c7d;
-  border-color: rgba(107, 159, 176, 0.42);
-  background: rgba(107, 159, 176, 0.14);
+  color: #325d6d;
+  border-color: rgba(63, 127, 149, 0.42);
+  background: rgba(63, 127, 149, 0.14);
 }
 
 .aside-toggle {
@@ -598,8 +598,8 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item:hover) {
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.14);
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.14);
 }
 
 .admin-layout__aside.is-collapsed .aside-scroll {
@@ -644,7 +644,7 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item:hover::before) {
-  background: rgba(107, 159, 176, 0.14);
+  background: rgba(63, 127, 149, 0.14);
 }
 
 :deep(.el-menu-item .el-icon) {
@@ -716,9 +716,9 @@ async function handleLogout() {
 }
 
 :deep(.el-menu-item.is-active) {
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.2);
-  box-shadow: inset 4px 0 0 #6b9fb0;
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.2);
+  box-shadow: inset 4px 0 0 #3f7f95;
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active) {
@@ -727,13 +727,13 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active::before) {
-  background: rgba(107, 159, 176, 0.2);
+  background: rgba(63, 127, 149, 0.2);
 }
 
 :deep(.el-menu-item.is-active:hover) {
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.14);
-  box-shadow: inset 4px 0 0 #3f6c7d;
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.14);
+  box-shadow: inset 4px 0 0 #325d6d;
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active:hover) {
@@ -742,7 +742,7 @@ async function handleLogout() {
 }
 
 :deep(.el-menu--collapse .el-menu-item.is-active:hover::before) {
-  background: rgba(107, 159, 176, 0.14);
+  background: rgba(63, 127, 149, 0.14);
 }
 
 :deep(.el-menu-item > span) {

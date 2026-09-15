@@ -148,18 +148,19 @@ function handleStrmCommand(command: string) {
   cursor: not-allowed;
 }
 
-/* 「已启用」用更浅的低饱和青蓝，避免强调色过于抢眼（禁用态保持不变）。 */
+/* 「已启用」= 浅底 + 主色字。字色用主色本身而不是更浅一档，
+   否则在浅底上对比太弱、看着发淡（r43 由 #7fb0c3 提深）；悬浮态再深一档。 */
 .card-action-bar__toggle.is-on {
-  color: #8fbdcb;
-  border-color: rgba(107, 159, 176, 0.42);
-  background: rgba(107, 159, 176, 0.13);
+  color: #3f7f95;
+  border-color: rgba(63, 127, 149, 0.42);
+  background: rgba(63, 127, 149, 0.13);
 }
 
 /* 悬浮只比静置态加深一档：原来直接铺满强调色实心块，颜色过重、和卡片的浅色基调冲突。 */
 .card-action-bar__toggle.is-on:hover {
-  color: #2e5f6b;
-  border-color: rgba(107, 159, 176, 0.72);
-  background: rgba(107, 159, 176, 0.26);
+  color: #274c58;
+  border-color: rgba(63, 127, 149, 0.72);
+  background: rgba(63, 127, 149, 0.26);
 }
 
 .card-action-bar__toggle.is-off {
@@ -185,9 +186,9 @@ function handleStrmCommand(command: string) {
 }
 
 .card-action-bar__btn--run:hover {
-  color: #2e5f6b;
-  border-color: rgba(107, 159, 176, 0.5);
-  background: rgba(107, 159, 176, 0.12);
+  color: #274c58;
+  border-color: rgba(63, 127, 149, 0.5);
+  background: rgba(63, 127, 149, 0.12);
 }
 
 .card-action-bar__btn--edit:hover {

@@ -178,7 +178,7 @@ function formatSize(size?: number) {
 .backup-files__title {
   font-size: 14px;
   font-weight: 800;
-  color: #3f6c7d;
+  color: #325d6d;
 }
 
 .backup-files__filters {
@@ -208,14 +208,14 @@ function formatSize(size?: number) {
 }
 
 .backup-files__filter:hover {
-  color: #3f6c7d;
-  border-color: rgba(107, 159, 176, 0.5);
+  color: #325d6d;
+  border-color: rgba(63, 127, 149, 0.5);
 }
 
 .backup-files__filter.is-active {
-  color: #3f6c7d;
-  border-color: rgba(107, 159, 176, 0.55);
-  background: rgba(107, 159, 176, 0.12);
+  color: #325d6d;
+  border-color: rgba(63, 127, 149, 0.55);
+  background: rgba(63, 127, 149, 0.12);
 }
 
 .backup-files__filter-count {
@@ -262,7 +262,7 @@ function formatSize(size?: number) {
 
 .backup-files__icon {
   flex: 0 0 auto;
-  color: #8aa39a;
+  color: #6f97a6;
   font-size: 15px;
 }
 

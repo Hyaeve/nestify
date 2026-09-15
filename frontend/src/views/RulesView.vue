@@ -3309,7 +3309,7 @@ onBeforeUnmount(() => {
 .history-summary__controls { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .history-summary__control { width: 120px; }
 .history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
-.history-sort-order-button:not(.is-disabled):hover { color: #3f6c7d; border-color: rgba(107, 159, 176, 0.42); background: rgba(107, 159, 176, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
+.history-sort-order-button:not(.is-disabled):hover { color: #325d6d; border-color: rgba(63, 127, 149, 0.42); background: rgba(63, 127, 149, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
 .history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .history-search { display: flex; align-items: center; gap: 8px; }
 .history-search :deep(.el-input) { width: 260px; }
@@ -3331,7 +3331,7 @@ onBeforeUnmount(() => {
 /* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
 .detail-backup { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 16px; background: var(--el-bg-color); }
 .detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
-.detail-backup__title { font-size: 14px; font-weight: 800; color: #3f6c7d; }
+.detail-backup__title { font-size: 14px; font-weight: 800; color: #325d6d; }
 .detail-backup__hint { font-size: 12px; color: var(--el-text-color-secondary); }
 .detail-backup__grid { display: flex; flex-direction: column; gap: 8px; }
 .detail-backup__row { display: flex; align-items: flex-start; gap: 12px; }
@@ -3506,7 +3506,7 @@ onBeforeUnmount(() => {
 /* 卡片式规则列表的拖拽反馈（表格版用的是 td 背景色）。 */
 .rule-card-grid .rule-sortable-chosen {
   border-color: var(--el-color-primary-light-5);
-  box-shadow: 0 14px 30px rgba(107, 159, 176, 0.22);
+  box-shadow: 0 14px 30px rgba(63, 127, 149, 0.22);
 }
 
 .rule-card-grid .rule-sortable-drag {

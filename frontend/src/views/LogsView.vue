@@ -753,16 +753,16 @@ onMounted(async () => {
   /* 与仪表盘顶栏（.dashboard-hero）保持同一高度与内边距。 */
   padding: 30px 36px;
   border-radius: 30px;
-  border: 1px solid #d6e4de;
+  border: 1px solid #d9e6ec;
   color: #0f172a;
   background:
-    linear-gradient(rgba(107, 159, 176, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(107, 159, 176, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(63, 127, 149, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 127, 149, 0.04) 1px, transparent 1px),
     radial-gradient(circle at 14% 18%, rgba(182, 197, 201, 0.5), transparent 30%),
     radial-gradient(circle at 86% 20%, rgba(221, 232, 238, 0.8), transparent 26%),
-    linear-gradient(100deg, #f2f7f4 0%, #ffffff 46%, #eef4f1 100%);
+    linear-gradient(100deg, #f2f7f9 0%, #ffffff 46%, #eef4f7 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
-  box-shadow: 0 18px 42px rgba(107, 159, 176, 0.1);
+  box-shadow: 0 18px 42px rgba(63, 127, 149, 0.1);
 }
 
 .logs-hero::after {
@@ -772,7 +772,7 @@ onMounted(async () => {
   width: 260px;
   height: 260px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(107, 159, 176, 0.12), transparent 66%);
+  background: radial-gradient(circle, rgba(63, 127, 149, 0.12), transparent 66%);
   content: '';
 }
 
@@ -789,7 +789,7 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.16em;
-  color: #3f6c7d;
+  color: #325d6d;
 }
 
 .logs-hero__title {
@@ -828,7 +828,7 @@ onMounted(async () => {
   border: 1px solid rgba(255, 255, 255, 0.74);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 18px rgba(107, 159, 176, 0.08);
+  box-shadow: 0 8px 18px rgba(63, 127, 149, 0.08);
   backdrop-filter: blur(6px);
 }
 
@@ -845,8 +845,8 @@ onMounted(async () => {
 }
 
 .metric-card__icon--primary {
-  color: #3f6c7d;
-  background: #e6efeb;
+  color: #325d6d;
+  background: #e7f0f4;
 }
 
 .metric-card__icon--info {
@@ -977,14 +977,14 @@ onMounted(async () => {
 }
 
 .logs-view-toggle__button:hover {
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.14);
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.14);
 }
 
 .logs-view-toggle__button.is-active {
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(107, 159, 176, 0.18), 0 8px 18px rgba(107, 159, 176, 0.1);
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(63, 127, 149, 0.18), 0 8px 18px rgba(63, 127, 149, 0.1);
 }
 
 .logs-view-toggle__button:active {
@@ -1018,19 +1018,19 @@ onMounted(async () => {
 .logs-action--sort {
   width: 42px;
   min-width: 42px;
-  color: #3f6c7d;
-  background: rgba(107, 159, 176, 0.2);
+  color: #325d6d;
+  background: rgba(63, 127, 149, 0.2);
 }
 
 .logs-action--sort {
-  border: 1px solid rgba(107, 159, 176, 0.16);
+  border: 1px solid rgba(63, 127, 149, 0.16);
   background: rgba(255, 255, 255, 0.82);
 }
 
 .logs-action--sort:not(.is-disabled):hover {
-  color: #3f6c7d;
-  border-color: rgba(107, 159, 176, 0.42);
-  background: rgba(107, 159, 176, 0.14);
+  color: #325d6d;
+  border-color: rgba(63, 127, 149, 0.42);
+  background: rgba(63, 127, 149, 0.14);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1);
   transform: translateY(-1px);
 }
@@ -1207,7 +1207,7 @@ onMounted(async () => {
 .detail-backup__title {
   font-size: 14px;
   font-weight: 800;
-  color: #3f6c7d;
+  color: #325d6d;
 }
 
 .detail-backup__hint {
