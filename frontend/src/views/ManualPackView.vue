@@ -1745,14 +1745,14 @@ onBeforeUnmount(() => {
 
 .toolbar-action--folder:not(.is-disabled):hover,
 .toolbar-action--folder:not(.is-disabled):focus-visible {
-  color: #5b7a6e;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .toolbar-action--upload:not(.is-disabled):hover,
 .toolbar-action--upload:not(.is-disabled):focus-visible {
-  box-shadow: 0 10px 24px rgba(127, 178, 162, 0.28);
+  box-shadow: 0 10px 24px rgba(107, 159, 176, 0.28);
 }
 
 .toolbar-action:not(.is-disabled):hover,
@@ -1783,9 +1783,9 @@ onBeforeUnmount(() => {
 
 .toolbar-action--copy:not(.is-disabled):hover,
 .toolbar-action--copy:not(.is-disabled):focus-visible {
-  color: #4a6b5f;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .toolbar-action--extract:not(.is-disabled):hover,
@@ -1832,9 +1832,9 @@ onBeforeUnmount(() => {
 .toolbar-action--browse:not(.is-disabled):focus-visible,
 .toolbar-action--parent:not(.is-disabled):hover,
 .toolbar-action--parent:not(.is-disabled):focus-visible {
-  color: #5b7a6e;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .toolbar-action__icon {
@@ -2173,7 +2173,7 @@ onBeforeUnmount(() => {
 }
 
 .entry-name.is-dir .entry-name__title {
-  color: #5b7a6e;
+  color: #3f6c7d;
 }
 
 .entry-name:hover .entry-name__title {

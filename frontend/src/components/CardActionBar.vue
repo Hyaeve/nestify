@@ -148,18 +148,18 @@ function handleStrmCommand(command: string) {
   cursor: not-allowed;
 }
 
-/* 「已启用」用更浅的低饱和青灰，避免深绿过于抢眼（禁用态保持不变）。 */
+/* 「已启用」用更浅的低饱和青蓝，避免强调色过于抢眼（禁用态保持不变）。 */
 .card-action-bar__toggle.is-on {
-  color: #7fb2a2;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.13);
+  color: #8fbdcb;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.13);
 }
 
-/* 悬浮只比静置态加深一档：原来直接铺满 #5b7a6e 实心块，颜色过重、和卡片的浅色基调冲突。 */
+/* 悬浮只比静置态加深一档：原来直接铺满强调色实心块，颜色过重、和卡片的浅色基调冲突。 */
 .card-action-bar__toggle.is-on:hover {
-  color: #35604f;
-  border-color: rgba(127, 178, 162, 0.72);
-  background: rgba(127, 178, 162, 0.26);
+  color: #2e5f6b;
+  border-color: rgba(107, 159, 176, 0.72);
+  background: rgba(107, 159, 176, 0.26);
 }
 
 .card-action-bar__toggle.is-off {
@@ -185,9 +185,9 @@ function handleStrmCommand(command: string) {
 }
 
 .card-action-bar__btn--run:hover {
-  color: #2f6b57;
-  border-color: rgba(91, 122, 110, 0.5);
-  background: rgba(91, 122, 110, 0.12);
+  color: #2e5f6b;
+  border-color: rgba(107, 159, 176, 0.5);
+  background: rgba(107, 159, 176, 0.12);
 }
 
 .card-action-bar__btn--edit:hover {

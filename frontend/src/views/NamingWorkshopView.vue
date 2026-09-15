@@ -1330,8 +1330,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   flex-shrink: 0;
   padding: 5px 10px;
   border-radius: 999px;
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1415,8 +1415,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .mounted-entry-name__icon.is-file {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .icon-action,
@@ -1436,9 +1436,9 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 .icon-action--file:not(.is-disabled):hover,
 .icon-action--folder:not(.is-disabled):hover,
 .icon-action--sort:not(.is-disabled):hover {
-  color: #4a6b5f;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .icon-action--undo:not(.is-disabled):hover {
@@ -1501,7 +1501,7 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .result-item:hover {
-  border-color: rgba(127, 178, 162, 0.32);
+  border-color: rgba(107, 159, 176, 0.32);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
   transform: translateY(-1px);
 }
@@ -1531,8 +1531,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .file-item__expand:not(.is-disabled):hover {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .file-item__icon {
@@ -1556,8 +1556,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .file-item__icon--file {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .file-item__icon--folder {
@@ -1657,7 +1657,7 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .folder-child-item:hover {
-  border-color: rgba(127, 178, 162, 0.28);
+  border-color: rgba(107, 159, 176, 0.28);
   background: rgba(237, 247, 255, 0.78);
 }
 
@@ -1681,8 +1681,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .folder-child-item__icon--file {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .folder-child-item__icon--folder {
@@ -1803,9 +1803,9 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .rail-button--set:not(.is-disabled):hover {
-  color: #4a6b5f;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .rail-button--rule:not(.is-disabled):hover {
@@ -1815,9 +1815,9 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .rail-button--preview:not(.is-disabled):hover {
-  color: #4a6b5f;
-  border-color: rgba(127, 178, 162, 0.42);
-  background: rgba(127, 178, 162, 0.14);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.42);
+  background: rgba(107, 159, 176, 0.14);
 }
 
 .rail-button--rename:not(.is-disabled):hover {
@@ -1832,9 +1832,9 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   justify-content: center;
   width: 62px;
   height: 62px;
-  color: #5b7a6e;
+  color: #3f6c7d;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(127, 178, 162, 0.16), rgba(127, 178, 162, 0.08));
+  background: linear-gradient(135deg, rgba(107, 159, 176, 0.16), rgba(107, 159, 176, 0.08));
   border: 1px solid transparent;
 }
 
@@ -1887,8 +1887,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .result-item__tag--preview {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .result-item__tag--renamed {
@@ -1937,12 +1937,12 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .rule-nav-item:hover,
 .rule-nav-item.is-active {
-  color: #5b7a6e;
-  background: rgba(127, 178, 162, 0.11);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.11);
 }
 
 .rule-nav-item.is-active {
-  box-shadow: inset 3px 0 0 #5b7a6e;
+  box-shadow: inset 3px 0 0 #6b9fb0;
 }
 
 .rule-config-panel {
@@ -2149,11 +2149,11 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   min-width: 48px;
   height: 26px;
   padding: 0 10px;
-  color: #4a6b5f;
+  color: #3f6c7d;
   font-size: 12px;
   font-weight: 800;
   border-radius: 999px;
-  background: rgba(127, 178, 162, 0.1);
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .added-rule-list {
@@ -2179,11 +2179,11 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: #5b7a6e;
+  color: #3f6c7d;
   font-size: 12px;
   font-weight: 800;
   border-radius: 999px;
-  background: rgba(127, 178, 162, 0.12);
+  background: rgba(107, 159, 176, 0.12);
 }
 
 .added-rule-item__title {
@@ -2241,9 +2241,9 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 
 .rule-set-card:hover,
 .rule-set-card.is-active {
-  color: #4a6b5f;
-  border-color: rgba(127, 178, 162, 0.26);
-  background: rgba(127, 178, 162, 0.08);
+  color: #3f6c7d;
+  border-color: rgba(107, 159, 176, 0.26);
+  background: rgba(107, 159, 176, 0.08);
 }
 
 .rule-set-card__name {
@@ -2311,11 +2311,11 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   justify-content: center;
   width: 24px;
   height: 24px;
-  color: #4a6b5f;
+  color: #3f6c7d;
   font-size: 12px;
   font-weight: 800;
   border-radius: 999px;
-  background: rgba(127, 178, 162, 0.1);
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .rule-set-item__meta {
@@ -2374,8 +2374,8 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
 }
 
 .folder-option__icon--blue {
-  color: #4a6b5f;
-  background: rgba(127, 178, 162, 0.1);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.1);
 }
 
 .folder-option__icon--yellow {

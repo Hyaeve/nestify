@@ -176,8 +176,8 @@ onBeforeUnmount(unbindGlobalListeners)
 }
 
 .card-context-menu__item:hover {
-  color: #2f6b57;
-  background: rgba(91, 122, 110, 0.12);
+  color: #2e5f6b;
+  background: rgba(107, 159, 176, 0.12);
 }
 
 .card-context-menu__item.is-danger {

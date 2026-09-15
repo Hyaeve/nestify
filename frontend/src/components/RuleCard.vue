@@ -167,8 +167,8 @@ function handleCardClick() {
 }
 
 .rule-card:hover {
-  border-color: rgba(91, 122, 110, 0.42);
-  box-shadow: 0 12px 26px rgba(91, 122, 110, 0.14);
+  border-color: rgba(107, 159, 176, 0.42);
+  box-shadow: 0 12px 26px rgba(107, 159, 176, 0.14);
   transform: translateY(-1px);
 }
 
@@ -219,8 +219,8 @@ function handleCardClick() {
 }
 
 .rule-card__grip:hover {
-  color: #5b7a6e;
-  background: rgba(91, 122, 110, 0.12);
+  color: #3f6c7d;
+  background: rgba(107, 159, 176, 0.12);
 }
 
 .rule-card__grip:active {
