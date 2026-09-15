@@ -56,6 +56,67 @@ func TestRunStatsRecordFileCapsPerAction(t *testing.T) {
 	}
 }
 
+// 「跳过」只累计数量，不写进明细列表；files_total 也只统计会列出的明细。
+// 归巢历史 / 运行日志的详情只关心备份了什么、什么失败了，跳过的只需要数目。
+func TestRunStatsKeepsSkipCountWithoutEntries(t *testing.T) {
+	stats := &runStats{}
+
+	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionUpload})
+	stats.recordFile(model.BackupFileEntry{Path: "剧集/b.mkv", Action: model.BackupFileActionFail})
+	for index := 0; index < 5; index++ {
+		stats.recordFile(model.BackupFileEntry{
+			Path:   "剧集/已存在.mkv",
+			Action: model.BackupFileActionSkip,
+			Note:   "目标已存在同名文件，按「同名跳过」处理",
+		})
+	}
+
+	if len(stats.Files) != 2 {
+		t.Fatalf("skip entries should not be listed: got %d, want 2", len(stats.Files))
+	}
+	for _, entry := range stats.Files {
+		if entry.Action == model.BackupFileActionSkip {
+			t.Fatalf("unexpected skip entry in detail list: %+v", entry)
+		}
+	}
+
+	var detail model.BackupDetail
+	if err := json.Unmarshal([]byte(stats.buildBackupDetailJSON()), &detail); err != nil {
+		t.Fatalf("decode detail json: %v", err)
+	}
+	if detail.Counts[model.BackupFileActionSkip] != 5 {
+		t.Fatalf("skip count must stay accurate: %+v", detail.Counts)
+	}
+	if detail.FilesTotal != 2 {
+		t.Fatalf("files_total should exclude skipped entries: got %d, want 2", detail.FilesTotal)
+	}
+	if detail.FilesTruncated {
+		t.Fatalf("skip counting must not mark the payload as truncated")
+	}
+}
+
+// 一次执行全部跳过时仍然要写 detail_json（前端靠 counts.skip 展示跳过数目，列表为空）。
+func TestRunStatsWritesPayloadWhenEverythingSkipped(t *testing.T) {
+	stats := &runStats{}
+	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionSkip})
+
+	payload := stats.buildBackupDetailJSON()
+	if payload == "" {
+		t.Fatalf("all-skip run should still persist counts")
+	}
+
+	var detail model.BackupDetail
+	if err := json.Unmarshal([]byte(payload), &detail); err != nil {
+		t.Fatalf("decode detail json: %v", err)
+	}
+	if len(detail.Files) != 0 || detail.FilesTotal != 0 {
+		t.Fatalf("all-skip run should have no listed files: %+v", detail)
+	}
+	if detail.Counts[model.BackupFileActionSkip] != 1 {
+		t.Fatalf("unexpected counts payload: %+v", detail.Counts)
+	}
+}
+
 // 空路径不入库；未采集到任何文件时不写 detail_json（保持历史记录干净）。
 func TestRunStatsSkipsEmptyPathAndEmptyPayload(t *testing.T) {
 	stats := &runStats{}

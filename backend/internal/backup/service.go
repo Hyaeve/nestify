@@ -28,8 +28,9 @@ import (
 const (
 	monitorPollInterval = 5 * time.Second
 	maxRecentLogs       = 60
-	// maxFileEntriesPerAction 限制运行日志详情里每个动作（上传/跳过/失败/删除）
+	// maxFileEntriesPerAction 限制运行日志详情里每个动作（上传/失败/删除）
 	// 最多记录多少条文件明细，避免日志记录体积失控。
+	// 「跳过」不记明细，只累计数量（见 recordFile）。
 	maxFileEntriesPerAction = 200
 )
 
@@ -610,6 +611,9 @@ type runStats struct {
 
 // recordFile 采集一条文件明细。每个动作最多保留 maxFileEntriesPerAction 条，
 // 但 fileCounts / fileTotal 始终按真实数量累加（详情面板用它显示准确条数）。
+//
+// 「跳过」只计数、不落明细：归巢历史 / 运行日志只需要知道跳过了多少
+// （筛选规则排除、目标同名文件都可能产生海量条目，逐条列出没有意义）。
 func (s *runStats) recordFile(entry model.BackupFileEntry) {
 	if s == nil || strings.TrimSpace(entry.Path) == "" {
 		return
@@ -621,6 +625,10 @@ func (s *runStats) recordFile(entry model.BackupFileEntry) {
 	s.fileCounts[entry.Action]++
 	s.fileTotal++
 
+	if entry.Action == model.BackupFileActionSkip {
+		return
+	}
+
 	if s.fileCounts[entry.Action] > maxFileEntriesPerAction {
 		s.truncated = true
 		return
@@ -629,16 +637,23 @@ func (s *runStats) recordFile(entry model.BackupFileEntry) {
 }
 
 // buildBackupDetailJSON 把采集到的文件明细序列化成 run_history.detail_json。
+// files_total 只统计会被列出的明细（上传/失败/删除）；跳过是纯计数，只出现在 counts 里。
 func (s *runStats) buildBackupDetailJSON() string {
 	if s == nil || (len(s.Files) == 0 && s.fileTotal == 0) {
 		return ""
+	}
+
+	skipCount := s.fileCounts[model.BackupFileActionSkip]
+	filesTotal := s.fileTotal - skipCount
+	if filesTotal < 0 {
+		filesTotal = 0
 	}
 
 	encoded, err := json.Marshal(model.BackupDetail{
 		Kind:           "backup",
 		Files:          s.Files,
 		Counts:         s.fileCounts,
-		FilesTotal:     s.fileTotal,
+		FilesTotal:     filesTotal,
 		FilesTruncated: s.truncated,
 	})
 	if err != nil {

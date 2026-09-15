@@ -84,6 +84,7 @@ const (
 
 // BackupFileEntry 记录备份执行中单个文件（或文件夹）的处理结果。
 // 写入 run_history.detail_json，供运行日志 / 归巢历史的详情展开查看「备份了什么」。
+// 策划上只收录真的动了文件的结果（上传/失败/删除）；「跳过」只计数、不逐条列明细。
 type BackupFileEntry struct {
 	Path   string `json:"path"`
 	Action string `json:"action"`
@@ -94,8 +95,8 @@ type BackupFileEntry struct {
 }
 
 // BackupDetail 是备份任务的详情载荷（run_history.detail_json）。
-// Files 为明细列表（每个动作只保留有限条数，见 backup.maxFileEntriesPerAction）；
-// Counts / FilesTotal 是采集到的真实数量，不受截断影响。
+// Files 为明细列表（上传/失败/删除，每个动作只保留有限条数，见 backup.maxFileEntriesPerAction）；
+// Counts 是采集到的真实数量（含只计数的 skip），FilesTotal 是明细总数（不含跳过），均不受截断影响。
 type BackupDetail struct {
 	Kind           string            `json:"kind"`
 	Files          []BackupFileEntry `json:"files"`

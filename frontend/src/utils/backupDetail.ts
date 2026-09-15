@@ -51,7 +51,8 @@ export function resolveBackupDeletedCount(item?: { deleted_count?: number; summa
 
 export type BackupFileAction = 'upload' | 'skip' | 'fail' | 'delete'
 
-export type BackupFileFilter = 'all' | BackupFileAction
+// 明细面板只列「真的动了文件」的三种结果；跳过只显示数目，不参与筛选。
+export type BackupFileFilter = 'all' | 'upload' | 'fail' | 'delete'
 
 export interface BackupFileEntry {
   path: string
@@ -118,18 +119,19 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
     if (!path) {
       continue
     }
+    const action = normalizeAction(entry.action)
+    // 「跳过」不列明细（旧记录里可能存过这类条目，这里一并丢掉），只用 counts.skip 显示数目。
+    if (action === 'skip') {
+      continue
+    }
     files.push({
       path,
-      action: normalizeAction(entry.action),
+      action,
       size: typeof entry.size === 'number' ? entry.size : undefined,
       target: typeof entry.target === 'string' ? entry.target : undefined,
       note: typeof entry.note === 'string' ? entry.note : undefined,
       dir: entry.dir === true,
     })
-  }
-
-  if (files.length === 0) {
-    return null
   }
 
   const counts = emptyActionCounts()
@@ -147,9 +149,14 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
     }
   }
 
-  const total = typeof payload.files_total === 'number' && payload.files_total > 0
-    ? payload.files_total
-    : files.length
+  // 全部是「跳过」的执行也要保留（面板要显示跳过数目），彻底没有明细时才返回 null。
+  if (files.length === 0 && counts.skip === 0) {
+    return null
+  }
+
+  // 「共 N 项」只算会被列出的动作：旧记录的 files_total 含跳过，不能直接用。
+  const listedTotal = counts.upload + counts.fail + counts.delete
+  const total = listedTotal > 0 ? listedTotal : files.length
 
   return {
     files,

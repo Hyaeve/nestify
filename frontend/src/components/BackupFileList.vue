@@ -15,6 +15,11 @@
           {{ tab.label }}
           <span class="backup-files__filter-count">{{ tab.count }}</span>
         </button>
+
+        <!-- 跳过只看数目、不列明细（筛选规则排除 / 目标同名文件会产生海量条目）。 -->
+        <span v-if="skipCount > 0" class="backup-files__stat">
+          跳过 <strong>{{ skipCount }}</strong> 项 · 仅统计
+        </span>
       </div>
 
       <span class="backup-files__hint">{{ hintText }}</span>
@@ -93,12 +98,14 @@ const tabs = computed(() => {
   const counts = props.manifest?.counts
   return [
     { key: 'upload' as BackupFileFilter, label: '已上传', count: counts?.upload ?? 0 },
-    { key: 'skip' as BackupFileFilter, label: '已跳过', count: counts?.skip ?? 0 },
     { key: 'fail' as BackupFileFilter, label: '失败', count: counts?.fail ?? 0 },
     { key: 'delete' as BackupFileFilter, label: '已删除', count: counts?.delete ?? 0 },
     { key: 'all' as BackupFileFilter, label: '全部', count: props.manifest?.total ?? 0 },
   ]
 })
+
+// 「跳过」不参与筛选，只在筛选行旁边显示总数。
+const skipCount = computed(() => props.manifest?.counts.skip ?? 0)
 
 const filteredFiles = computed(() => {
   const files = props.manifest?.files ?? []
@@ -217,6 +224,25 @@ function formatSize(size?: number) {
   opacity: 0.75;
 }
 
+/* 「跳过」只报数目：虚线胶囊，区别于可点击的筛选按钮。 */
+.backup-files__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.backup-files__stat strong {
+  font-weight: 800;
+  color: #8a8f98;
+}
+
 .backup-files__hint {
   flex: 0 0 auto;
   font-size: 12px;
@@ -279,11 +305,6 @@ function formatSize(size?: number) {
 .backup-files__action.is-upload {
   color: #2f8f5b;
   background: rgba(47, 143, 91, 0.12);
-}
-
-.backup-files__action.is-skip {
-  color: #8a8f98;
-  background: rgba(138, 143, 152, 0.14);
 }
 
 .backup-files__action.is-fail {
