@@ -463,6 +463,10 @@ const wizardEditingId = ref<number | null>(null)
 const wizardStep = ref(0)
 const saving = ref(false)
 
+// 编辑时记下原任务的启用状态：「应用」只负责保存设置，不负责启用。
+// （原实现无论新建还是编辑都硬编码 enabled: true，编辑一个已停用的任务会把它顺手打开。）
+const wizardOriginalEnabled = ref(true)
+
 interface WizardForm {
   name: string
   source_dirs: string[]
@@ -704,6 +708,8 @@ function openCreateWizard() {
   Object.assign(wizardForm, emptyWizardForm())
   wizardEditing.value = false
   wizardEditingId.value = null
+  // 新建：与规则对话框一致，默认就是启用（创建后即可按计划/监控运行）。
+  wizardOriginalEnabled.value = true
   wizardStep.value = 0
   wizardVisible.value = true
 }
@@ -711,6 +717,7 @@ function openCreateWizard() {
 function openEditWizard(task: BackupTask) {
   wizardEditing.value = true
   wizardEditingId.value = task.id
+  wizardOriginalEnabled.value = task.enabled
   wizardForm.name = task.name
   wizardForm.source_dirs = [...task.source_dirs]
   wizardForm.target_dirs = [...task.target_dirs]
@@ -750,6 +757,7 @@ function resetWizard() {
   Object.assign(wizardForm, emptyWizardForm())
   wizardEditing.value = false
   wizardEditingId.value = null
+  wizardOriginalEnabled.value = true
   wizardStep.value = 0
 }
 
@@ -812,7 +820,9 @@ async function applyWizard() {
 
     const payload = {
       name: wizardForm.name.trim(),
-      enabled: true,
+      // 应用 = 只确认设置：编辑时沿用原任务的启用状态，不因为保存而顺带启用；
+      // 新建时按 emptyWizardForm 的约定为启用。
+      enabled: wizardOriginalEnabled.value,
       source_dirs: wizardForm.source_dirs.map((p) => p.trim()).filter(Boolean),
       target_dirs: wizardForm.target_dirs.map((p) => p.trim()).filter(Boolean),
       monitor_enabled: wizardForm.monitor_enabled,
@@ -827,7 +837,7 @@ async function applyWizard() {
 
     if (wizardEditing.value && wizardEditingId.value != null) {
       await updateBackup(wizardEditingId.value, payload)
-      ElMessage.success('备份规则已更新')
+      ElMessage.success(payload.enabled ? '备份规则已更新' : '备份规则已更新（保持停用）')
     } else {
       await createBackup(payload)
       ElMessage.success('备份规则已创建')
@@ -1065,11 +1075,12 @@ function buildDuplicateBackupName(name: string) {
   return trimmed ? `${trimmed} - 副本` : '备份规则副本'
 }
 
-/** 复制 = 原样带到新建接口：源/目标、开关、筛选规则全部照搬，只换名字。 */
+/** 复制 = 原样带到新建接口：源/目标、各开关、筛选规则全部照搬，只换名字。
+ *  副本一律以「停用」创建：同名同目标的副本若直接开跑会和原任务抢写同一批文件。 */
 function buildBackupCopyInput(task: BackupTask, name: string): BackupInput {
   return {
     name,
-    enabled: task.enabled,
+    enabled: false,
     source_dirs: [...task.source_dirs],
     target_dirs: [...task.target_dirs],
     monitor_enabled: task.monitor_enabled,
@@ -1086,7 +1097,7 @@ function buildBackupCopyInput(task: BackupTask, name: string): BackupInput {
 async function duplicateTask(task: BackupTask) {
   try {
     await createBackup(buildBackupCopyInput(task, buildDuplicateBackupName(task.name)))
-    ElMessage.success('备份规则复制成功')
+    ElMessage.success('备份规则复制成功（副本默认停用）')
     await loadBackups()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '复制备份规则失败')

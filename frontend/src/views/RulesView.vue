@@ -1929,11 +1929,14 @@ function buildDuplicateRuleName(name: string) {
 async function duplicateRule(rule: RuleItem, type: RuleListType) {
   errorMessage.value = ''
   try {
+    // 副本一律以「停用」创建：复制出来的规则往往还要改路径/参数，
+    // 直接继承启用态会和原规则抢同一批文件（monitor/cron 双双触发）。
     const payload = buildRuleUpdatePayload(rule, {
       name: buildDuplicateRuleName(rule.name),
+      enabled: false,
     })
     await createRule(payload)
-    ElMessage.success('规则复制成功')
+    ElMessage.success('规则复制成功（副本默认停用）')
     await refreshRuleList(type)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '复制规则失败'
