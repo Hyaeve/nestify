@@ -391,6 +391,7 @@
           @remove="removeRule(rule.id, 'naming')"
           @toggle="toggleRuleEnabled(rule)"
           @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
+          @contextmenu="(item, event) => handleRuleContextMenu(item, 'naming', event)"
         />
       </div>
       <el-empty v-if="!namingLoading && namingRules.length === 0" description="暂无命名规则，可选择命名工坊规则或规则集" />
@@ -871,6 +872,16 @@
     </el-dialog>
 
     <DirectoryPickerDialog v-model="directoryPickerVisible" title="选择目录" :initial-path="directoryPickerInitialPath" @selected="applyDirectorySelection" />
+
+    <!-- 右键规则卡片：跟随指针的悬浮菜单（取代原来的居中确认框）。 -->
+    <CardContextMenu
+      :visible="cardContextMenu.visible"
+      :x="cardContextMenu.x"
+      :y="cardContextMenu.y"
+      :items="cardContextMenuItems"
+      @close="closeRuleContextMenu"
+      @select="handleRuleContextMenuSelect"
+    />
   </div>
 </template>
 
@@ -886,6 +897,7 @@ import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
 import BackupFileList from '../components/BackupFileList.vue'
 import RuleCard from '../components/RuleCard.vue'
+import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
 import { fetchRun, prepareRuleExecution } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
@@ -1928,31 +1940,35 @@ async function duplicateRule(rule: RuleItem, type: RuleListType) {
   }
 }
 
+// —— 右键规则卡片：跟随指针的悬浮菜单 ——
+// 归档 / 净化 / 链路 / 命名四个 tab 的卡片共用一份菜单状态。
+const cardContextMenuItems: CardContextMenuItem[] = [{ key: 'duplicate', label: '复制规则', icon: 'copy' }]
+
+const cardContextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  rule: null as RuleItem | null,
+  type: 'archive' as RuleListType,
+})
+
 function handleRuleContextMenu(row: RuleItem, type: RuleListType, event: MouseEvent) {
   event.preventDefault()
-  void ElMessageBox.confirm(`复制规则“${row.name}”？`, '复制规则', {
-    type: 'info',
-    confirmButtonText: '复制',
-    cancelButtonText: '取消',
-    distinguishCancelAndClose: true,
-  })
-    .then(() => duplicateRule(row, type))
-    .catch((error) => {
-      if (error === 'cancel' || error === 'close') return
-      errorMessage.value = error instanceof Error ? error.message : '复制规则失败'
-    })
+  cardContextMenu.rule = row
+  cardContextMenu.type = type
+  cardContextMenu.x = event.clientX
+  cardContextMenu.y = event.clientY
+  cardContextMenu.visible = true
 }
 
-function handleArchiveRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
-  handleRuleContextMenu(row, 'archive', event as MouseEvent)
+function closeRuleContextMenu() {
+  cardContextMenu.visible = false
 }
 
-function handlePurifyRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
-  handleRuleContextMenu(row, 'cleanup', event as MouseEvent)
-}
-
-function handleLinkRuleContextMenu(row: RuleItem, _column: unknown, event: Event) {
-  handleRuleContextMenu(row, 'link', event as MouseEvent)
+function handleRuleContextMenuSelect(key: string) {
+  const rule = cardContextMenu.rule
+  if (key !== 'duplicate' || !rule) return
+  void duplicateRule(rule, cardContextMenu.type)
 }
 
 function applyDefaultCronOnEnable(enabled: boolean, cronExpression: string) {

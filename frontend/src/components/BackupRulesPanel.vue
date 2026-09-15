@@ -13,7 +13,7 @@
     <el-empty v-if="!loading && backups.length === 0" description="暂无备份规则，点击右上角「添加备份」创建" />
 
     <div v-else class="backup-grid" ref="backupGridRef">
-      <div v-for="task in backups" :key="task.id" class="backup-card" :class="{ 'backup-card--disabled': !task.enabled }" @click="handleBackupCardClick(task)">
+      <div v-for="task in backups" :key="task.id" class="backup-card" :class="{ 'backup-card--disabled': !task.enabled }" @click="handleBackupCardClick(task)" @contextmenu.prevent="openTaskContextMenu(task, $event)">
         <div class="backup-card__head">
           <div class="backup-card__title-row">
             <button type="button" class="backup-card__drag" aria-label="拖拽排序" title="拖拽排序" @click.stop>
@@ -388,6 +388,16 @@
     </el-dialog>
 
     <DirectoryPickerDialog v-model="pickerVisible" title="选择目录" :initial-path="pickerInitialPath" @selected="applyPathSelection" />
+
+    <!-- 右键备份卡片：跟随指针的悬浮菜单。 -->
+    <CardContextMenu
+      :visible="props.visible && taskContextMenu.visible"
+      :x="taskContextMenu.x"
+      :y="taskContextMenu.y"
+      :items="taskContextMenuItems"
+      @close="closeTaskContextMenu"
+      @select="handleTaskContextMenuSelect"
+    />
   </el-card>
 </template>
 
@@ -400,6 +410,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from './DirectoryPickerDialog.vue'
 import CardActionBar from './CardActionBar.vue'
+import CardContextMenu, { type CardContextMenuItem } from './CardContextMenu.vue'
 import { syncOverflowTitle } from '../utils/overflowTitle'
 import {
   createBackup,
@@ -413,6 +424,7 @@ import {
   type BackupCompletionRule,
   type BackupFilterRule,
   type BackupFilterType,
+  type BackupInput,
   type BackupReplaceRule,
   type BackupStatusSnapshot,
   type BackupTask,
@@ -1017,6 +1029,67 @@ async function removeTask(task: BackupTask) {
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
     ElMessage.error(error instanceof Error ? error.message : '移除失败')
+  }
+}
+
+// —— 右键备份卡片：跟随指针的悬浮菜单 ——
+const taskContextMenuItems: CardContextMenuItem[] = [{ key: 'duplicate', label: '复制备份规则', icon: 'copy' }]
+
+const taskContextMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  task: null as BackupTask | null,
+})
+
+function openTaskContextMenu(task: BackupTask, event: MouseEvent) {
+  event.preventDefault()
+  taskContextMenu.task = task
+  taskContextMenu.x = event.clientX
+  taskContextMenu.y = event.clientY
+  taskContextMenu.visible = true
+}
+
+function closeTaskContextMenu() {
+  taskContextMenu.visible = false
+}
+
+function handleTaskContextMenuSelect(key: string) {
+  const task = taskContextMenu.task
+  if (key !== 'duplicate' || !task) return
+  void duplicateTask(task)
+}
+
+function buildDuplicateBackupName(name: string) {
+  const trimmed = name.trim()
+  return trimmed ? `${trimmed} - 副本` : '备份规则副本'
+}
+
+/** 复制 = 原样带到新建接口：源/目标、开关、筛选规则全部照搬，只换名字。 */
+function buildBackupCopyInput(task: BackupTask, name: string): BackupInput {
+  return {
+    name,
+    enabled: task.enabled,
+    source_dirs: [...task.source_dirs],
+    target_dirs: [...task.target_dirs],
+    monitor_enabled: task.monitor_enabled,
+    completion_rule: task.completion_rule,
+    replace_rule: task.replace_rule,
+    sync_delete_from_target: task.sync_delete_from_target,
+    force_full_scan: task.force_full_scan,
+    scan_interval_seconds: task.scan_interval_seconds,
+    cron_expression: task.cron_expression,
+    filter_rules: task.filter_rules.map((rule) => ({ ...rule })),
+  }
+}
+
+async function duplicateTask(task: BackupTask) {
+  try {
+    await createBackup(buildBackupCopyInput(task, buildDuplicateBackupName(task.name)))
+    ElMessage.success('备份规则复制成功')
+    await loadBackups()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '复制备份规则失败')
   }
 }
 

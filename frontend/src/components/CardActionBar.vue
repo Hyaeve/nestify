@@ -145,10 +145,11 @@ function handleStrmCommand(command: string) {
   background: rgba(127, 178, 162, 0.13);
 }
 
+/* 悬浮只比静置态加深一档：原来直接铺满 #5b7a6e 实心块，颜色过重、和卡片的浅色基调冲突。 */
 .card-action-bar__toggle.is-on:hover {
-  color: #fff;
-  border-color: #5b7a6e;
-  background: #5b7a6e;
+  color: #35604f;
+  border-color: rgba(127, 178, 162, 0.72);
+  background: rgba(127, 178, 162, 0.26);
 }
 
 .card-action-bar__toggle.is-off {
