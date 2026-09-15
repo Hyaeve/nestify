@@ -34,7 +34,15 @@
       </el-dropdown>
 
       <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop="emit('execute')">
-        <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+        <!-- 「重新扫描」用四角扫描框 + 扫描线；其余执行沿用「搬进文件夹」图标。 -->
+        <svg v-if="executeIcon === 'rescan'" class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9.5V6.5A2.5 2.5 0 0 1 6.5 4H9.5" />
+          <path d="M14.5 4h3A2.5 2.5 0 0 1 20 6.5v3" />
+          <path d="M20 14.5v3a2.5 2.5 0 0 1-2.5 2.5h-3" />
+          <path d="M9.5 20h-3A2.5 2.5 0 0 1 4 17.5v-3" />
+          <path d="M4 12h16" />
+        </svg>
+        <svg v-else class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M5 4.5h11.5v4" />
           <path d="M8 7.5h11v12H8z" />
           <path d="M11 13.5h5.5" />
@@ -68,11 +76,14 @@ withDefaults(
     strmSync?: boolean
     /** 执行按钮文案：规则卡片用「执行」，备份卡片用「重新扫描」。 */
     executeLabel?: string
+    /** 执行按钮图标：'run' = 搬运进文件夹（执行）；'rescan' = 四角扫描框（重新扫描）。 */
+    executeIcon?: 'run' | 'rescan'
   }>(),
   {
     busy: false,
     strmSync: false,
     executeLabel: '执行',
+    executeIcon: 'run',
   },
 )
 
@@ -95,7 +106,8 @@ function handleStrmCommand(command: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   min-width: 0;
 }
 
@@ -103,12 +115,12 @@ function handleStrmCommand(command: string) {
 .card-action-bar__btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 12px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 13px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
   color: var(--text-primary);
@@ -154,6 +166,9 @@ function handleStrmCommand(command: string) {
 .card-action-bar__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  /* 按钮放大后窄卡片可能放不下：允许换行到第二行，别溢出卡片。 */
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }
@@ -177,10 +192,10 @@ function handleStrmCommand(command: string) {
 }
 
 .card-action-bar__icon {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .card-action-bar__btn svg.card-action-bar__icon {
@@ -189,11 +204,5 @@ function handleStrmCommand(command: string) {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-@media (max-width: 640px) {
-  .card-action-bar {
-    flex-wrap: wrap;
-  }
 }
 </style>

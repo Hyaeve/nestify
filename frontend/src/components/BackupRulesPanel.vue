@@ -66,6 +66,7 @@
             :enabled="task.enabled"
             :busy="updatingIds.has(task.id)"
             execute-label="重新扫描"
+            execute-icon="rescan"
             @toggle="toggleEnabled(task)"
             @execute="rescan(task)"
             @edit="openEditWizard(task)"

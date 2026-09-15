@@ -731,13 +731,26 @@ async function switchSource(next: SourceMode, explicitPath = '') {
   await enterSource(next, explicitPath)
 }
 
-/** 进入某个来源页面：有显式路径就直接进该目录，否则停在根层级。 */
+/** 进入某个来源页面：有显式路径就直接进该目录，否则按来源给出默认落点。 */
 async function enterSource(mode: SourceMode, explicitPath = '') {
   if (explicitPath) {
     await openPath(explicitPath)
     return
   }
+
+  // 本地目录：直接打开「根目录」本身，不再停在只列一个根路径的中间页；
+  // 远程挂载：仍停在根层级，让用户先挑已挂载的远程目录。
+  const fallback = mode === 'local' ? primaryLocalRoot() : ''
+  if (fallback) {
+    await openPath(fallback)
+    return
+  }
   showSourceRootLevel()
+}
+
+/** 本地目录的默认落点：配置里的第一个本地根（Windows 下即第一个盘符）。 */
+function primaryLocalRoot(): string {
+  return localRoots.value[0]?.path ?? ''
 }
 
 /** 左上角下拉：只切换「本地目录 / 远程挂载」两块页面。 */
@@ -749,11 +762,11 @@ function toggleRootMenu() {
   rootMenuVisible.value = !rootMenuVisible.value
 }
 
-/** 选中某个来源：切页（写入 URL 后缀）并回到该来源的根层级。 */
+/** 选中某个来源：切页（写入 URL 后缀）并进入该来源的默认落点。 */
 function selectSource(mode: SourceMode) {
   rootMenuVisible.value = false
   if (mode === sourceMode.value) {
-    showSourceRootLevel()
+    void enterSource(mode)
     return
   }
   void switchSource(mode)
