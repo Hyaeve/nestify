@@ -53,12 +53,8 @@
       </button>
 
       <button type="button" class="card-action-bar__btn card-action-bar__btn--edit" @click.stop="emit('edit')">
-        <!-- 铅笔/垃圾桶改为自绘：Element Plus 的 Edit / Delete 是实心填充图形，棱角硬，
-             与操作条里其它 1.7 描边 + 圆头圆角的线条图标不是一路，所以自己画一版更圆润的。 -->
-        <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5.1 19.7 6.2 15.3 15.8 5.7a2.5 2.5 0 0 1 3.5 3.5L9.7 18.8a1.3 1.3 0 0 1-.9.4z" />
-          <path d="m14.3 7.2 3.5 3.5" />
-        </svg>
+        <!-- 编辑沿用 Element Plus 的 Edit（造型比自绘铅笔更受认可），圆润度交给样式里的同色描边处理。 -->
+        <el-icon class="card-action-bar__icon"><Edit /></el-icon>
         <span>编辑</span>
       </button>
 
@@ -77,6 +73,8 @@
 </template>
 
 <script setup lang="ts">
+import { Edit } from '@element-plus/icons-vue'
+
 withDefaults(
   defineProps<{
     enabled: boolean
@@ -223,5 +221,15 @@ function handleStrmCommand(command: string) {
 /* 自带实心填充的图形（执行闪电）不参与描边，否则笔画会被再描一圈、比启用态三角粗一档。 */
 .card-action-bar__btn svg.card-action-bar__icon path[fill='currentColor'] {
   stroke: none;
+}
+
+/* 编辑按钮：保留 Element Plus `Edit` 的造型（用户点名要这一版），只把偏硬朗的转折磨圆一点。
+   它的网格是 1024，所以描边宽度要按 1024 计 —— 48 单位渲染到 19px 约 0.9px，向外各摊 ~0.45px，
+   配合 round 连接，笔尖与方框转角就从尖角变成小圆弧。 */
+.card-action-bar__btn--edit .card-action-bar__icon :deep(svg) {
+  stroke: currentColor;
+  stroke-width: 48;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 </style>
