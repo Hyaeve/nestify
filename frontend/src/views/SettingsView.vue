@@ -10,7 +10,7 @@
         <section class="settings-panel settings-panel--account">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">登录账户</div>
-            <el-button type="primary" size="small" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
+            <el-button type="primary" class="settings-btn-lg" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
           </div>
           <el-form label-position="top" @submit.prevent="submitAdminChange">
             <el-form-item label="账户">
@@ -31,7 +31,7 @@
         <section class="settings-panel settings-panel--basic">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">基础设置</div>
-            <el-button type="primary" size="small" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
+            <el-button type="primary" class="settings-btn-lg" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </div>
           <el-form label-position="top" class="settings-basic-form">
             <div class="settings-field-card">
@@ -114,14 +114,14 @@
         <section class="settings-panel settings-panel--backup">
           <div class="settings-panel__title">规则备份</div>
           <div class="settings-actions">
-            <el-button type="primary" :loading="exportingRules" @click="handleExportRulesBackup">导出规则</el-button>
+            <el-button class="settings-btn-lg settings-actions__btn--backup" :loading="exportingRules" @click="handleExportRulesBackup">备份</el-button>
             <el-upload
               :show-file-list="false"
               accept="application/json,.json"
               :auto-upload="false"
               :on-change="handleBackupFileChange"
             >
-              <el-button :loading="importingRules">导入规则备份</el-button>
+              <el-button class="settings-btn-lg settings-actions__btn--restore" :loading="importingRules">还原</el-button>
             </el-upload>
           </div>
         </section>
@@ -132,7 +132,7 @@
         <section class="settings-panel settings-panel--mounts">
           <div class="settings-panel__header">
             <div class="settings-panel__title">远程挂载</div>
-            <el-button type="primary" size="small" @click="openAddMount">添加挂载</el-button>
+            <el-button type="primary" class="settings-btn-lg" @click="openAddMount">添加挂载</el-button>
           </div>
 
           <div v-if="mounts.length === 0" class="mounts-empty">
@@ -531,9 +531,9 @@ async function handleExportRulesBackup() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success('规则备份已导出')
+    ElMessage.success('规则已备份')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '导出规则备份失败')
+    ElMessage.error(error instanceof Error ? error.message : '备份规则失败')
   } finally {
     exportingRules.value = false
   }
@@ -547,14 +547,14 @@ async function handleBackupFileChange(file: UploadFile) {
 
   importingRules.value = true
   try {
-    await ElMessageBox.confirm('导入备份将覆盖当前全部规则配置，是否继续？', '导入规则备份', { type: 'warning' })
+    await ElMessageBox.confirm('还原将覆盖当前全部规则配置，是否继续？', '还原规则', { type: 'warning' })
     const text = await file.raw.text()
     const payload = JSON.parse(text) as { version: string; exported_at: string; rules: Array<Record<string, unknown>> }
     const response = await importRulesBackup(payload)
-    ElMessage.success(`规则备份已导入，共恢复 ${response.data?.count || 0} 条规则`)
+    ElMessage.success(`规则已还原，共恢复 ${response.data?.count || 0} 条规则`)
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error(error instanceof Error ? error.message : '导入规则备份失败')
+    ElMessage.error(error instanceof Error ? error.message : '还原规则失败')
   } finally {
     importingRules.value = false
   }
@@ -842,6 +842,43 @@ async function handleBackupFileChange(file: UploadFile) {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 系统设置里的动作按钮统一放大一档：原来用 size="small"（12px 字 / 24px 高）偏小，
+   跟卡片操作条的 36px / 14px 对齐。 */
+.settings-btn-lg {
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+/* 规则「备份 / 还原」是两种不同性质的动作，各用一种浅色区分开。
+   颜色走 Element Plus 的按钮变量而不是直接写 background——EP 的 hover 规则带
+   `:not(.is-disabled):not(.is-text)` 链式选择器，直接写会被它的优先级压过。 */
+.settings-actions__btn--backup {
+  --el-button-text-color: #3d5a7d;
+  --el-button-bg-color: rgba(95, 127, 168, 0.14);
+  --el-button-border-color: rgba(95, 127, 168, 0.5);
+  --el-button-hover-text-color: #33506f;
+  --el-button-hover-bg-color: rgba(95, 127, 168, 0.24);
+  --el-button-hover-border-color: rgba(95, 127, 168, 0.72);
+  --el-button-active-text-color: #33506f;
+  --el-button-active-bg-color: rgba(95, 127, 168, 0.3);
+  --el-button-active-border-color: rgba(95, 127, 168, 0.72);
+}
+
+/* 还原是覆盖式操作，用琥珀浅色提示「会动到现有配置」。 */
+.settings-actions__btn--restore {
+  --el-button-text-color: #8a5a12;
+  --el-button-bg-color: rgba(183, 121, 31, 0.13);
+  --el-button-border-color: rgba(183, 121, 31, 0.48);
+  --el-button-hover-text-color: #6f470c;
+  --el-button-hover-bg-color: rgba(183, 121, 31, 0.23);
+  --el-button-hover-border-color: rgba(183, 121, 31, 0.7);
+  --el-button-active-text-color: #6f470c;
+  --el-button-active-bg-color: rgba(183, 121, 31, 0.29);
+  --el-button-active-border-color: rgba(183, 121, 31, 0.7);
 }
 
 /* —— 临时缓存 —— */
