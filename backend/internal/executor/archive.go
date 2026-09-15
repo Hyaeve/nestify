@@ -29,7 +29,9 @@ type executionStats struct {
 	CleanupRemovedDirs  int
 	SizeBytes           int64
 	HistoryEvents       int
-	Summary             string
+	// MetadataCount 记录 strm 链路里作为实体文件落地的元数据文件数（图片 / 字幕 / nfo）。
+	MetadataCount int
+	Summary       string
 }
 
 type packageStageResult struct {
@@ -374,8 +376,8 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 }
 
 func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
-	extensions := normalizeStrmExtensions(req.Filters)
-	if len(extensions) == 0 {
+	strmExtensions, metadataExtensions := splitStrmExtensionSets(req.Filters, req.MetadataFilters)
+	if len(strmExtensions) == 0 && len(metadataExtensions) == 0 {
 		return *stats, fmt.Errorf("strm extensions are required")
 	}
 	matchers := buildFileNameMatchers(req.Whitelist)
@@ -392,8 +394,11 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	if minVideoBytes > 0 {
 		s.appendLog(runID, "info", fmt.Sprintf("最小视频：%s（小于该值的视频不生成 Strm）", describeMinVideoSize(minVideoBytes)))
 	}
+	if len(metadataExtensions) > 0 {
+		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：按实体文件复制到目标目录，不生成 Strm", describeExtensionSet(metadataExtensions)))
+	}
 
-	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, extensions, matchers, overwrite, minVideoBytes, stats); err != nil {
+	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats); err != nil {
 		return *stats, err
 	}
 
@@ -407,9 +412,11 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		}
 		if overwrite {
 			syncLabel += "·覆盖生成"
-			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成/覆盖 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		} else {
-			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项", syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		}
 	}
 
@@ -420,7 +427,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	return *stats, nil
 }
 
-func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, extensions map[string]struct{}, matchers []fileNameMatcher, overwrite bool, minVideoBytes int64, stats *executionStats) error {
+func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, compatibilityMode string, strmExtensions, metadataExtensions map[string]struct{}, matchers []fileNameMatcher, overwrite bool, minVideoBytes int64, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		return fmt.Errorf("read strm source directory %s: %w", currentPath, err)
@@ -436,7 +443,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
 				return nil
 			}
-			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, extensions, matchers, overwrite, minVideoBytes, stats)
+			return s.syncStrmDirectory(runID, rootPath, sourcePath, targetRoot, compatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats)
 		}
 
 		if matchesFileName(entry.Name(), false, matchers) {
@@ -445,8 +452,15 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 			return nil
 		}
 
-		if !matchesStrmExtension(entry.Name(), extensions) {
+		if !matchesStrmExtension(entry.Name(), strmExtensions) && !matchesStrmExtension(entry.Name(), metadataExtensions) {
 			stats.SkipCount++
+			return nil
+		}
+
+		// 元数据（图片 / 字幕 / nfo）必须以实体文件出现在目标目录：
+		// 生成 .strm 后媒体服务器读到的是一个地址，封面与字幕都会失效。
+		if isStrmMetadataFile(entry.Name(), strmExtensions, metadataExtensions) {
+			s.syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot, overwrite, stats)
 			return nil
 		}
 
@@ -495,6 +509,52 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		}
 		return nil
 	})
+}
+
+// syncStrmMetadataFile 把命中「元数据后缀」的源文件复制到目标目录：
+// 目标保持与源相同的相对路径与文件名（poster.jpg 依旧是 poster.jpg，而不是 poster.strm）。
+func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot string, overwrite bool, stats *executionStats) {
+	relPath, relErr := filepath.Rel(rootPath, sourcePath)
+	if relErr != nil || relPath == "." || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+		stats.FailureCount++
+		s.appendLog(runID, "error", fmt.Sprintf("resolve metadata target for %s failed: %v", sourcePath, relErr))
+		return
+	}
+
+	targetPath := filepath.Join(targetRoot, relPath)
+	existed := false
+	if _, err := os.Lstat(targetPath); err == nil {
+		existed = true
+		if !overwrite {
+			stats.SkipCount++
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
+			return
+		}
+	} else if !os.IsNotExist(err) {
+		stats.FailureCount++
+		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		stats.FailureCount++
+		s.appendLog(runID, "error", fmt.Sprintf("create metadata parent for %s failed: %v", targetPath, err))
+		return
+	}
+	if err := copyFile(sourcePath, targetPath); err != nil {
+		stats.FailureCount++
+		s.appendLog(runID, "error", fmt.Sprintf("copy metadata %s -> %s failed: %v", sourcePath, targetPath, err))
+		return
+	}
+
+	stats.ProcessedFiles++
+	stats.SuccessCount++
+	stats.MetadataCount++
+	if existed {
+		s.appendLog(runID, "info", fmt.Sprintf("overwrote metadata %s -> %s", targetPath, sourcePath))
+	} else {
+		s.appendLog(runID, "info", fmt.Sprintf("copied metadata %s -> %s", targetPath, sourcePath))
+	}
 }
 
 func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode string, stats *executionStats) error {
@@ -548,6 +608,48 @@ func normalizeStrmExtensions(filters []string) map[string]struct{} {
 func matchesStrmExtension(name string, extensions map[string]struct{}) bool {
 	_, ok := extensions[strings.ToLower(filepath.Ext(name))]
 	return ok
+}
+
+// splitStrmExtensionSets 把 strm 规则的后缀拆成两套：
+//   - strmExtensions：媒体后缀，生成 .strm（内容为可直接播放的地址）；
+//   - metadataExtensions：元数据后缀（图片 / 字幕 / nfo），以实体文件复制（本地）或下载（远程）到目标目录。
+//
+// 媒体优先：同一后缀同时配在两处时按媒体处理，否则一次误配就会让规则不再生成 strm。
+func splitStrmExtensionSets(filters, metadataFilters []string) (map[string]struct{}, map[string]struct{}) {
+	strmExtensions := normalizeStrmExtensions(filters)
+	metadataExtensions := normalizeStrmExtensions(metadataFilters)
+	for extension := range metadataExtensions {
+		if _, ok := strmExtensions[extension]; ok {
+			delete(metadataExtensions, extension)
+		}
+	}
+	return strmExtensions, metadataExtensions
+}
+
+// isStrmMetadataFile 判断文件是否按「元数据」处理（落地实体文件而不是生成 strm）。
+func isStrmMetadataFile(name string, strmExtensions, metadataExtensions map[string]struct{}) bool {
+	if matchesStrmExtension(name, strmExtensions) {
+		return false
+	}
+	return matchesStrmExtension(name, metadataExtensions)
+}
+
+// describeExtensionSet 把后缀集合排成稳定字符串，用于执行日志。
+func describeExtensionSet(extensions map[string]struct{}) string {
+	items := make([]string, 0, len(extensions))
+	for extension := range extensions {
+		items = append(items, extension)
+	}
+	sort.Strings(items)
+	return strings.Join(items, " ")
+}
+
+// describeMetadataCount 生成摘要里的元数据片段，没有元数据时不占篇幅。
+func describeMetadataCount(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("、同步 %d 个元数据文件", count)
 }
 
 func strmTargetPath(rootPath, sourcePath, targetRoot string) (string, error) {

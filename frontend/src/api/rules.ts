@@ -28,6 +28,8 @@ export interface RuleItem {
   package_options_json?: string
   collect_options_json?: string
   filters_json?: string
+  // 元数据后缀（图片 / 字幕 / nfo）：strm 链路里按实体文件同步到目标目录，不生成 .strm。
+  metadata_filters_json?: string
   whitelist_json?: string
   match_filters_json?: string
   nest_filters_json?: string
@@ -75,6 +77,7 @@ export interface CreateRulePayload {
   package_options?: Record<string, boolean>
   collect_options?: Record<string, boolean>
   filters?: string[]
+  metadata_filters?: string[]
   whitelist?: string[]
   match_filters?: string[]
   nest_filters?: string[]

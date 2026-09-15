@@ -1,9 +1,12 @@
 package sqlite
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
+
+	"nestify/backend/internal/model"
 )
 
 func (s *Store) migrate() error {
@@ -37,6 +40,7 @@ func (s *Store) migrate() error {
 			package_options_json TEXT NOT NULL DEFAULT '{}',
 			collect_options_json TEXT NOT NULL DEFAULT '{}',
 			filters_json TEXT NOT NULL DEFAULT '[]',
+			metadata_filters_json TEXT NOT NULL DEFAULT '[]',
 			whitelist_json TEXT NOT NULL DEFAULT '[]',
 			match_filters_json TEXT NOT NULL DEFAULT '[]',
 			nest_filters_json TEXT NOT NULL DEFAULT '[]',
@@ -250,6 +254,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure rules metadata filters column")
+	if err := s.ensureRuleMetadataFiltersColumn(); err != nil {
+		log.Printf("sqlite:migrate: ensure rules metadata filters column failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure performance indexes")
 	if err := s.ensurePerformanceIndexes(); err != nil {
 		log.Printf("sqlite:migrate: ensure performance indexes failed: %v", err)
@@ -379,6 +389,136 @@ func (s *Store) ensureMountProviderColumns() error {
 	}
 
 	return nil
+}
+
+// ensureRuleMetadataFiltersColumn 为 rules 表补齐「元数据后缀」列。
+//
+// strm 链路里两类命中后缀的处理方式不同：
+//   - 媒体后缀（filters_json）生成 .strm（内容为可播放的直链/本地路径）；
+//   - 元数据后缀（本列）必须以实体文件落到目标目录，生成 .strm 对媒体服务器毫无意义。
+//
+// 老库补列成功后，顺手把历史规则里混在 filters_json 中的元数据后缀拆到新列，
+// 让已存在的规则立刻符合「元数据不生成 strm」的行为。
+func (s *Store) ensureRuleMetadataFiltersColumn() error {
+	existing := map[string]bool{}
+	rows, err := s.db.Query(`PRAGMA table_info(rules);`)
+	if err != nil {
+		return fmt.Errorf("query rules schema: %w", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan rules schema: %w", err)
+		}
+		existing[strings.ToLower(name)] = true
+	}
+	rows.Close()
+
+	if existing["metadata_filters_json"] {
+		return nil
+	}
+
+	if _, err := s.db.Exec(`ALTER TABLE rules ADD COLUMN metadata_filters_json TEXT NOT NULL DEFAULT '[]';`); err != nil {
+		return fmt.Errorf("add rules metadata_filters_json column: %w", err)
+	}
+
+	return s.splitLegacyStrmMetadataFilters()
+}
+
+// splitLegacyStrmMetadataFilters 把历史 strm 规则 filters_json 中的元数据后缀
+// （图片 / 字幕 / nfo，见 model.DefaultStrmMetadataExtensions）挪到 metadata_filters_json。
+// 只处理 link_mode = 'strm' 且新列为空的规则，重复执行无副作用。
+func (s *Store) splitLegacyStrmMetadataFilters() error {
+	metadataPreset := make(map[string]bool)
+	for _, extension := range model.DefaultStrmMetadataExtensions {
+		metadataPreset[strings.ToLower(extension)] = true
+	}
+
+	rows, err := s.db.Query(
+		`SELECT id, filters_json FROM rules WHERE link_mode = 'strm' AND (metadata_filters_json IS NULL OR metadata_filters_json IN ('', '[]'));`)
+	if err != nil {
+		return fmt.Errorf("query legacy strm rules: %w", err)
+	}
+
+	type legacyRule struct {
+		id      int64
+		filters []string
+	}
+	pending := make([]legacyRule, 0)
+	for rows.Next() {
+		var id int64
+		var raw string
+		if err := rows.Scan(&id, &raw); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan legacy strm rule: %w", err)
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			raw = "[]"
+		}
+		var filters []string
+		if err := json.Unmarshal([]byte(raw), &filters); err != nil {
+			continue
+		}
+		pending = append(pending, legacyRule{id: id, filters: filters})
+	}
+	rows.Close()
+
+	for _, item := range pending {
+		media := make([]string, 0, len(item.filters))
+		metadata := make([]string, 0, len(item.filters))
+		for _, filter := range item.filters {
+			normalized := normalizeStrmFilterExtension(filter)
+			if normalized == "" {
+				continue
+			}
+			if metadataPreset[normalized] {
+				metadata = append(metadata, normalized)
+				continue
+			}
+			media = append(media, normalized)
+		}
+		if len(metadata) == 0 {
+			continue
+		}
+
+		mediaJSON, err := json.Marshal(media)
+		if err != nil {
+			return fmt.Errorf("marshal rule %d filters: %w", item.id, err)
+		}
+		metadataJSON, err := json.Marshal(metadata)
+		if err != nil {
+			return fmt.Errorf("marshal rule %d metadata filters: %w", item.id, err)
+		}
+		if _, err := s.db.Exec(`UPDATE rules SET filters_json = ?, metadata_filters_json = ? WHERE id = ?`,
+			string(mediaJSON), string(metadataJSON), item.id); err != nil {
+			return fmt.Errorf("split rule %d strm metadata filters: %w", item.id, err)
+		}
+		log.Printf("sqlite:migrate: rule %d 元数据后缀已拆分到 metadata_filters_json: %v", item.id, metadata)
+	}
+
+	return nil
+}
+
+// normalizeStrmFilterExtension 把各种写法的后缀统一成「带点 + 小写」：mp4 / .MP4 / *.mp4 -> .mp4。
+func normalizeStrmFilterExtension(value string) string {
+	trimmed := strings.TrimSpace(value)
+	trimmed = strings.Trim(trimmed, `"'`)
+	trimmed = strings.TrimPrefix(trimmed, "*")
+	trimmed = strings.TrimSpace(trimmed)
+	if trimmed == "" {
+		return ""
+	}
+	if !strings.HasPrefix(trimmed, ".") {
+		trimmed = "." + trimmed
+	}
+	return strings.ToLower(trimmed)
 }
 
 func (s *Store) ensurePerformanceIndexes() error {

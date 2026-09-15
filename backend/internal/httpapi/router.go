@@ -788,6 +788,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		MetadataFilters:   executor.ParseStringListJSON(rule.MetadataFiltersJSON),
 		Whitelist:         executor.ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
@@ -819,6 +820,7 @@ func (a *apiHandler) handlePrepareRuleExecution(w http.ResponseWriter, r *http.R
 		PackageOptions:    executor.ParseBoolOptionsJSON(rule.PackageOptionsJSON),
 		CollectOptions:    executor.ParseBoolOptionsJSON(rule.CollectOptionsJSON),
 		Filters:           executor.ParseStringListJSON(rule.FiltersJSON),
+		MetadataFilters:   executor.ParseStringListJSON(rule.MetadataFiltersJSON),
 		Whitelist:         executor.ParseStringListJSON(rule.WhitelistJSON),
 		MatchFilters:      executor.ParseStringListJSON(rule.MatchFiltersJSON),
 		NestFilters:       executor.ParseStringListJSON(rule.NestFiltersJSON),
@@ -1442,6 +1444,7 @@ func (a *apiHandler) handleImportRulesBackup(w http.ResponseWriter, r *http.Requ
 			PackageOptions:    parseBoolMapJSON(rule.PackageOptionsJSON),
 			CollectOptions:    parseBoolMapJSON(rule.CollectOptionsJSON),
 			Filters:           normalizeRuleFilters(parseStringArrayJSON(rule.FiltersJSON)),
+			MetadataFilters:   normalizeRuleFilters(parseStringArrayJSON(rule.MetadataFiltersJSON)),
 			Whitelist:         normalizeRuleFilters(parseStringArrayJSON(rule.WhitelistJSON)),
 			MatchFilters:      normalizeRuleFilters(parseStringArrayJSON(rule.MatchFiltersJSON)),
 			NestFilters:       normalizeRuleFilters(parseStringArrayJSON(rule.NestFiltersJSON)),
@@ -1865,14 +1868,14 @@ func (a *apiHandler) handleCreateRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateCreateRuleInput(input model.CreateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.MetadataFilters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
 func validateUpdateRuleInput(input model.UpdateRuleInput) error {
-	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
+	return validateRuleFields(input.Name, input.SourceDir, input.SourceDirs, input.TargetDir, input.CompatibilityMode, input.ArchiveMode, input.RunMode, input.LinkMode, input.Options, input.OptionValues, input.PackageOptions, input.Filters, input.MetadataFilters, input.Whitelist, input.MatchFilters, input.NestFilters, input.TransformRules, input.TransformFilters)
 }
 
-func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, compatibilityMode, archiveMode, runMode, linkMode string, options map[string]bool, optionValues map[string]int, packageOptions map[string]bool, filters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
+func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, compatibilityMode, archiveMode, runMode, linkMode string, options map[string]bool, optionValues map[string]int, packageOptions map[string]bool, filters []string, metadataFilters []string, whitelist []string, matchFilters []string, nestFilters []string, transformRules []string, transformFilters []string) error {
 	if strings.TrimSpace(name) == "" {
 		return errors.New("rule name is required")
 	}
@@ -1903,7 +1906,9 @@ func validateRuleFields(name, sourceDir string, sourceDirs []string, targetDir, 
 		if linkMode != "soft" && linkMode != "hard" && linkMode != "strm" {
 			return errors.New("link_mode must be soft, hard, or strm")
 		}
-		if linkMode == "strm" && len(normalizeRuleFilters(filters)) == 0 {
+		// strm 规则至少要有一类后缀：媒体后缀生成 .strm，元数据后缀落地为实体文件，
+		// 两者都填时可以只做其中一件事。
+		if linkMode == "strm" && len(normalizeRuleFilters(filters)) == 0 && len(normalizeRuleFilters(metadataFilters)) == 0 {
 			return errors.New("filters are required when strm link mode is enabled")
 		}
 	}

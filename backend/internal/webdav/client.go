@@ -11,7 +11,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,13 @@ import (
 // 避免对网盘后端造成过高的请求频繁度。
 // Strm 规则里的「API 请求间隔」会通过 SetRequestInterval 覆盖它。
 const defaultMinRequestInterval = 250 * time.Millisecond
+
+// defaultRequestTimeout 用于列目录等协议请求。
+const defaultRequestTimeout = 30 * time.Second
+
+// downloadRequestTimeout 用于元数据文件下载：海报/字幕等可能比协议请求慢得多，
+// 沿用协议请求的 30s 会把正常下载误判成失败。
+const downloadRequestTimeout = 10 * time.Minute
 
 type Entry struct {
 	Name       string
@@ -41,6 +50,9 @@ type Client struct {
 	password   string
 	token      string
 	httpClient *http.Client
+	// downloadClient 用于把元数据文件拉到本地，超时比协议请求宽松，
+	// 与 httpClient 共用同一个 Transport，从而复用连接池。
+	downloadClient *http.Client
 
 	// minInterval 为 0 表示不节流；每个 Client 实例各自维护节流状态。
 	minInterval time.Duration
@@ -51,6 +63,11 @@ type Client struct {
 
 func NewClient(credential model.MountCredential) *Client {
 	mount := credential.Mount
+	transport := &http.Transport{
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+		MaxIdleConns:        8,
+		MaxIdleConnsPerHost: 4,
+	}
 	return &Client{
 		baseURL:  strings.TrimRight(model.BuildMountBaseURL(mount), "/"),
 		basePath: model.NormalizeMountBasePath(mount.BasePath),
@@ -60,12 +77,12 @@ func NewClient(credential model.MountCredential) *Client {
 		password: credential.Password,
 		token:    strings.TrimSpace(credential.Token),
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-				MaxIdleConns:        8,
-				MaxIdleConnsPerHost: 4,
-			},
+			Timeout:   defaultRequestTimeout,
+			Transport: transport,
+		},
+		downloadClient: &http.Client{
+			Timeout:   downloadRequestTimeout,
+			Transport: transport,
 		},
 		minInterval: defaultMinRequestInterval,
 	}
@@ -93,7 +110,7 @@ func (c *Client) authFailedError() error {
 	if c.usesTokenAuth() {
 		return fmt.Errorf("OpenList 令牌认证失败，请核对后台「设置 → 令牌」中的永久令牌")
 	}
-	return c.authFailedError()
+	return fmt.Errorf("WebDAV 认证失败，请核对挂载的用户名与密码")
 }
 
 // Provider 返回挂载类型（webdav / openlist）。
@@ -125,15 +142,16 @@ func (c *Client) RequestInterval() time.Duration {
 // 这里显式逐字段构造，避免复制内含 sync.Mutex 的结构体。
 func (c *Client) Fork() *Client {
 	return &Client{
-		baseURL:     c.baseURL,
-		basePath:    c.basePath,
-		provider:    c.provider,
-		authType:    c.authType,
-		username:    c.username,
-		password:    c.password,
-		token:       c.token,
-		httpClient:  c.httpClient,
-		minInterval: c.minInterval,
+		baseURL:        c.baseURL,
+		basePath:       c.basePath,
+		provider:       c.provider,
+		authType:       c.authType,
+		username:       c.username,
+		password:       c.password,
+		token:          c.token,
+		httpClient:     c.httpClient,
+		downloadClient: c.downloadClient,
+		minInterval:    c.minInterval,
 	}
 }
 
@@ -252,6 +270,71 @@ func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Re
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 	return fmt.Errorf("WebDAV PUT 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
+}
+
+// Download 用 GET 把远端文件内容下载到本地目标路径。
+//
+// 元数据（海报 / 字幕 / nfo）必须作为实体文件出现在目标目录，
+// 因此这里走真正的数据传输（而不是生成 strm 的地址）。
+// 先写 `<target>.download` 再改名，避免半截文件被媒体服务器读到；
+// 与列目录一样遵守「API 请求间隔」并复用同一份连接池。
+func (c *Client) Download(ctx context.Context, internalPath, targetPath string) error {
+	if err := c.Wait(ctx); err != nil {
+		return err
+	}
+
+	requestURL := c.requestURL(internalPath)
+	request, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
+	if err != nil {
+		return fmt.Errorf("build get request: %w", err)
+	}
+	request.Header.Set("Accept", "*/*")
+	c.applyAuth(request)
+
+	response, err := c.downloadClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("webdav get failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode == http.StatusUnauthorized {
+		return c.authFailedError()
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+		return fmt.Errorf("WebDAV GET 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("create download parent: %w", err)
+	}
+
+	tempPath := targetPath + ".download"
+	target, err := os.Create(tempPath)
+	if err != nil {
+		return fmt.Errorf("create download file: %w", err)
+	}
+
+	written, copyErr := io.Copy(target, response.Body)
+	closeErr := target.Close()
+	if copyErr != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("write download file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("close download file: %w", closeErr)
+	}
+	if response.ContentLength >= 0 && written != response.ContentLength {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("下载不完整：期望 %d 字节，实际 %d 字节", response.ContentLength, written)
+	}
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("move download into place: %w", err)
+	}
+
+	return nil
 }
 
 // MkdirAll 在 WebDAV 上逐级创建目录（MKCOL）。已存在则忽略。

@@ -745,7 +745,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeCreateMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addCreateMetadataSuffix" />
+              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addCreateMetadataSuffix" />
             </div>
           </div>
           <el-row :gutter="16">
@@ -826,7 +826,7 @@
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeEditMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addEditMetadataSuffix" />
+              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addEditMetadataSuffix" />
             </div>
           </div>
           <el-row :gutter="16">
@@ -1089,8 +1089,11 @@ function normalizeStrmSuffixes(values: string[]) {
   return suffixes
 }
 
-// Strm 规则实际保存的是「媒体 + 元数据」合并后的后缀列表；
-// 界面上两块分开编辑，保存时合并、载入时按预设类别拆回。
+// 链路规则把后缀分成两块保存：
+//   - filters：媒体后缀（生成 .strm）；
+//   - metadata_filters：元数据后缀（图片 / 字幕 / nfo，按实体文件同步到目标目录）。
+// 后端的元数据后缀是独立字段，所以保存时不再合并成一份；
+// splitStrmSuffixes 只用于兼容历史规则（元数据后缀混在 filters 里）。
 function mergeStrmSuffixes(...groups: string[][]) {
   return normalizeStrmSuffixes(groups.flat())
 }
@@ -1441,6 +1444,8 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
       ? parseOptionJSON(rule.collect_options_json, createDefaultCollectOptions())
       : {},
     filters: parseFiltersText(parseFiltersJSON(rule.filters_json)),
+    // 元数据后缀必须原样带回：PUT 是整体覆盖，漏掉它会在开关启用/停用时把清单清空。
+    metadata_filters: parseFiltersText(parseFiltersJSON(rule.metadata_filters_json)),
     whitelist: parseFiltersText(parseFiltersJSON(rule.whitelist_json)),
     match_filters: parseFiltersText(parseFiltersJSON(rule.match_filters_json)),
     nest_filters: parseFiltersText(parseFiltersJSON(rule.nest_filters_json)),
@@ -2053,9 +2058,18 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.strm_api_interval_seconds = parseStrmAPIIntervalSeconds(rule.option_values_json)
     editLinkForm.strm_min_video_mb = parseStrmMinVideoMB(rule.option_values_json)
     editLinkForm.strm_download_threads = parseStrmDownloadThreads(rule.option_values_json)
-    const strmSuffixGroups = splitStrmSuffixes(normalizeStrmSuffixes(parseFiltersArray(rule.filters_json)))
-    editLinkForm.strm_suffixes = strmSuffixGroups.media
-    editLinkForm.strm_metadata_suffixes = strmSuffixGroups.metadata
+    // 元数据后缀是后端独立字段：优先按它还原；
+    // 历史规则（升级前保存、元数据后缀混在 filters 里）回落到按预设拆分。
+    const mediaSuffixes = normalizeStrmSuffixes(parseFiltersArray(rule.filters_json))
+    const metadataSuffixes = normalizeStrmSuffixes(parseFiltersArray(rule.metadata_filters_json))
+    if (metadataSuffixes.length > 0) {
+      editLinkForm.strm_suffixes = mediaSuffixes
+      editLinkForm.strm_metadata_suffixes = metadataSuffixes
+    } else {
+      const strmSuffixGroups = splitStrmSuffixes(mediaSuffixes)
+      editLinkForm.strm_suffixes = strmSuffixGroups.media
+      editLinkForm.strm_metadata_suffixes = strmSuffixGroups.metadata
+    }
     editLinkForm.filters_text = editLinkForm.link_mode === 'strm' ? parseFiltersJSON(rule.whitelist_json) : parseFiltersJSON(rule.filters_json)
     editLinkStrmSuffixInput.value = ''
     editLinkDialogVisible.value = true
@@ -3007,7 +3021,8 @@ async function submitCreateLinkRule() {
       option_values: createLinkForm.link_mode === 'strm' ? buildStrmOptionValues(createLinkForm) : {},
       package_options: {},
       collect_options: {},
-      filters: createLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(createLinkForm.strm_suffixes, createLinkForm.strm_metadata_suffixes) : parseFiltersText(createLinkForm.filters_text),
+      filters: createLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(createLinkForm.strm_suffixes) : parseFiltersText(createLinkForm.filters_text),
+      metadata_filters: createLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(createLinkForm.strm_metadata_suffixes) : [],
       whitelist: createLinkForm.link_mode === 'strm' ? parseFiltersText(createLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则创建成功')
@@ -3113,7 +3128,8 @@ async function submitUpdateLinkRule() {
       option_values: editLinkForm.link_mode === 'strm' ? buildStrmOptionValues(editLinkForm) : {},
       package_options: {},
       collect_options: {},
-      filters: editLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(editLinkForm.strm_suffixes, editLinkForm.strm_metadata_suffixes) : parseFiltersText(editLinkForm.filters_text),
+      filters: editLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(editLinkForm.strm_suffixes) : parseFiltersText(editLinkForm.filters_text),
+      metadata_filters: editLinkForm.link_mode === 'strm' ? mergeStrmSuffixes(editLinkForm.strm_metadata_suffixes) : [],
       whitelist: editLinkForm.link_mode === 'strm' ? parseFiltersText(editLinkForm.filters_text) : [],
     })
     ElMessage.success('链路规则更新成功')

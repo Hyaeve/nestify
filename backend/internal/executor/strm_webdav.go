@@ -48,8 +48,8 @@ func parseWebdavSource(sourceDir string) (int64, string, error) {
 //   - 通用 WebDAV 走逐目录列举：远端请求按「下载线程数」并发、每个线程遵守「API 请求间隔」，
 //     避免把网盘后端打限流。
 func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, sourceDir, targetDir string, stats *executionStats) (executionStats, error) {
-	extensions := normalizeStrmExtensions(req.Filters)
-	if len(extensions) == 0 {
+	strmExtensions, metadataExtensions := splitStrmExtensionSets(req.Filters, req.MetadataFilters)
+	if len(strmExtensions) == 0 && len(metadataExtensions) == 0 {
 		return *stats, fmt.Errorf("strm extensions are required")
 	}
 	matchers := buildFileNameMatchers(req.Whitelist)
@@ -100,12 +100,16 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	s.appendLog(runID, "info", fmt.Sprintf("Strm 直链前缀：%s（挂载的 WebDAV 端点 %s 已按直链端点 /d 改写）",
 		client.StrmBaseURL(), mountEndpoint))
 
+	if len(metadataExtensions) > 0 {
+		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：从挂载下载为实体文件，不生成 Strm", describeExtensionSet(metadataExtensions)))
+	}
+
 	// OpenList 挂载优先走原生递归列举：一次 PROPFIND（Depth: infinity）取回整棵子树，
 	// 远端请求数从「每个目录一次」降到一次，也不再按目录数累加节流等待。
 	// 服务端不支持无限深度时回落到逐目录 + 多线程列举。
 	recursiveUsed := false
 	if client.SupportsRecursiveList() {
-		listed, recursiveErr := s.walkOpenListStrmRecursive(context.Background(), runID, client, internalPath, targetDir, extensions, matchers, overwrite, minVideoBytes, stats)
+		listed, recursiveErr := s.walkOpenListStrmRecursive(context.Background(), runID, client, internalPath, targetDir, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats)
 		recursiveUsed = listed
 		if recursiveErr != nil {
 			s.appendLog(runID, "warn", fmt.Sprintf("OpenList 原生递归列举不可用（%v），回落为逐目录列举", recursiveErr))
@@ -113,7 +117,7 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	}
 
 	if !recursiveUsed {
-		if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, targetDir, extensions, matchers, overwrite, minVideoBytes, threads, stats); err != nil {
+		if err := s.walkWebdavStrm(context.Background(), runID, client, internalPath, targetDir, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, threads, stats); err != nil {
 			return *stats, err
 		}
 	}
@@ -131,11 +135,11 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 		}
 		if overwrite {
 			syncLabel += "·覆盖生成"
-			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成/覆盖 %d 个 Strm，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		} else {
-			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		}
 	}
 
@@ -162,7 +166,8 @@ func (s *Service) walkOpenListStrmRecursive(
 	client *webdav.Client,
 	rootInternal string,
 	targetRoot string,
-	extensions map[string]struct{},
+	strmExtensions map[string]struct{},
+	metadataExtensions map[string]struct{},
 	matchers []fileNameMatcher,
 	overwrite bool,
 	minVideoBytes int64,
@@ -189,8 +194,24 @@ func (s *Service) walkOpenListStrmRecursive(
 			continue
 		}
 
-		if !matchesStrmExtension(entry.Name, extensions) {
+		if !matchesStrmExtension(entry.Name, strmExtensions) && !matchesStrmExtension(entry.Name, metadataExtensions) {
 			stats.SkipCount++
+			continue
+		}
+
+		// 元数据后缀（图片 / 字幕 / nfo）：下载成实体文件，媒体服务器才能读到封面与字幕。
+		// 递归列举本身只有一次 PROPFIND，这里的下载是唯一的额外远端请求。
+		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
+			switch s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite) {
+			case strmMetadataCopied:
+				stats.ProcessedFiles++
+				stats.SuccessCount++
+				stats.MetadataCount++
+			case strmMetadataSkipped:
+				stats.SkipCount++
+			case strmMetadataFailed:
+				stats.FailureCount++
+			}
 			continue
 		}
 
@@ -243,7 +264,8 @@ func (s *Service) walkWebdavStrm(
 	client *webdav.Client,
 	rootInternal string,
 	targetRoot string,
-	extensions map[string]struct{},
+	strmExtensions map[string]struct{},
+	metadataExtensions map[string]struct{},
 	matchers []fileNameMatcher,
 	overwrite bool,
 	minVideoBytes int64,
@@ -276,7 +298,7 @@ func (s *Service) walkWebdavStrm(
 				if !ok {
 					return
 				}
-				s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, extensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
+				s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
 				queue.done()
 			}
 		}(workers[index])
@@ -295,7 +317,8 @@ func (s *Service) processWebdavStrmDir(
 	currentInternal string,
 	rootInternal string,
 	targetRoot string,
-	extensions map[string]struct{},
+	strmExtensions map[string]struct{},
+	metadataExtensions map[string]struct{},
 	matchers []fileNameMatcher,
 	overwrite bool,
 	minVideoBytes int64,
@@ -326,9 +349,27 @@ func (s *Service) processWebdavStrmDir(
 			continue
 		}
 
-		if !matchesStrmExtension(entry.Name, extensions) {
+		if !matchesStrmExtension(entry.Name, strmExtensions) && !matchesStrmExtension(entry.Name, metadataExtensions) {
 			statsMu.Lock()
 			stats.SkipCount++
+			statsMu.Unlock()
+			continue
+		}
+
+		// 元数据后缀：下载成实体文件。下载本身不持锁（可能很慢），只把结果计入统计。
+		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
+			outcome := s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite)
+			statsMu.Lock()
+			switch outcome {
+			case strmMetadataCopied:
+				stats.ProcessedFiles++
+				stats.SuccessCount++
+				stats.MetadataCount++
+			case strmMetadataSkipped:
+				stats.SkipCount++
+			case strmMetadataFailed:
+				stats.FailureCount++
+			}
 			statsMu.Unlock()
 			continue
 		}
@@ -377,6 +418,47 @@ func (s *Service) processWebdavStrmDir(
 			s.appendLog(runID, "info", fmt.Sprintf("created http strm %s", targetPath))
 		}
 	}
+}
+
+// strmMetadataOutcome 表示一次元数据下载的结果，统计交由调用方按需加锁累加。
+type strmMetadataOutcome int
+
+const (
+	strmMetadataCopied strmMetadataOutcome = iota
+	strmMetadataSkipped
+	strmMetadataFailed
+)
+
+// downloadStrmMetadata 把远端元数据文件（图片 / 字幕 / nfo）下载到目标目录，
+// 保持与源相同的相对路径与文件名（poster.jpg 依旧是 poster.jpg，而不是 poster.strm）。
+//
+// 远端请求由 webdav.Client 内部按「API 请求间隔」节流，
+// 并发路径下每个线程持有独立客户端，因此间隔按线程生效。
+func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client *webdav.Client, entryPath, rootInternal, targetRoot string, overwrite bool) strmMetadataOutcome {
+	relative := strings.TrimPrefix(entryPath, rootInternal)
+	relative = strings.TrimLeft(relative, "/")
+	if relative == "" {
+		return strmMetadataSkipped
+	}
+	targetPath := filepath.Join(targetRoot, filepath.FromSlash(relative))
+
+	if _, err := os.Lstat(targetPath); err == nil {
+		if !overwrite {
+			s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
+			return strmMetadataSkipped
+		}
+	} else if !os.IsNotExist(err) {
+		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
+		return strmMetadataFailed
+	}
+
+	if err := client.Download(ctx, entryPath, targetPath); err != nil {
+		s.appendLog(runID, "error", fmt.Sprintf("download metadata %s -> %s failed: %v", entryPath, targetPath, err))
+		return strmMetadataFailed
+	}
+
+	s.appendLog(runID, "info", fmt.Sprintf("downloaded metadata %s -> %s", entryPath, targetPath))
+	return strmMetadataCopied
 }
 
 // strmDirQueue 是并发遍历用的「待处理目录」队列。
