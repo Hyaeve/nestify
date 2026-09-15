@@ -6,7 +6,7 @@
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'link' }" @click="switchTab('link')">链路规则</button>
       <button type="button" class="rules-tabs__item rules-tabs__item--naming" :class="{ 'is-active': activeTab === 'naming' }" @click="switchTab('naming')">命名规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'backup' }" @click="switchTab('backup')">备份规则</button>
-      <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
+      <button type="button" class="rules-tabs__item rules-tabs__item--history" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
     <el-alert v-if="errorMessage" :closable="false" type="error" :title="errorMessage" class="rules-error" />
@@ -3295,11 +3295,17 @@ onBeforeUnmount(() => {
 .rules-page { display: flex; flex-direction: column; gap: 16px; }
 .rules-tabs { display: flex; gap: 32px; padding: 0 4px; border-bottom: 1px solid var(--el-border-color-lighter); }
 .rules-tabs__item { position: relative; padding: 12px 0; font-size: 15px; background: transparent; border: 0; cursor: pointer; color: var(--el-text-color-regular); transition: color 0.2s ease; }
-.rules-tabs__item:hover { color: var(--el-color-primary); }
-.rules-tabs__item.is-active { color: var(--el-color-primary); font-weight: 600; }
-.rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: var(--el-color-primary); border-radius: 999px; }
+/* 页签选中态用比主色更深一档的青蓝（同色相 H203，明度 53%→46%）：
+   #209fee 做 15px 文字在白底上偏飘，加深后才「有颜色」。 */
+.rules-tabs__item:hover { color: #098ee1; }
+.rules-tabs__item.is-active { color: #098ee1; font-weight: 600; }
+.rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: #098ee1; border-radius: 999px; }
 .rules-tabs__item--naming.is-active { color: #0f9f87; }
 .rules-tabs__item--naming.is-active::after { background: #0f9f87; }
+/* 归巢历史单独走琥珀金，与规则类页签的青蓝区分开。 */
+.rules-tabs__item--history:hover { color: #d99a00; }
+.rules-tabs__item--history.is-active { color: #d99a00; }
+.rules-tabs__item--history.is-active::after { background: #d99a00; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }

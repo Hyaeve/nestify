@@ -10,7 +10,7 @@
         <section class="settings-panel settings-panel--account">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">登录账户</div>
-            <el-button type="primary" class="settings-btn-lg" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
           </div>
           <el-form label-position="top" @submit.prevent="submitAdminChange">
             <el-form-item label="账户">
@@ -31,7 +31,7 @@
         <section class="settings-panel settings-panel--basic">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">基础设置</div>
-            <el-button type="primary" class="settings-btn-lg" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </div>
           <el-form label-position="top" class="settings-basic-form">
             <div class="settings-field-card">
@@ -132,7 +132,7 @@
         <section class="settings-panel settings-panel--mounts">
           <div class="settings-panel__header">
             <div class="settings-panel__title">远程挂载</div>
-            <el-button type="primary" class="settings-btn-lg" @click="openAddMount">添加挂载</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid" @click="openAddMount">添加挂载</el-button>
           </div>
 
           <div v-if="mounts.length === 0" class="mounts-empty">
@@ -851,6 +851,22 @@ async function handleBackupFileChange(file: UploadFile) {
   padding: 0 18px;
   border-radius: 10px;
   font-size: 14px;
+}
+
+/* 「保存修改 / 保存设置 / 添加挂载」三个实心动作按钮：
+   原来走 EP 主色 #209fee（明度 53%）铺满底，看着偏淡、饱和度不够，
+   改成深青 #0e7490（H193 S82 L31，白字对比 5.36）。颜色仍走 --el-button-*
+   变量，scoped 选择器带上 data-v 属性后权重高于 EP 的 .el-button--primary，能覆盖住。 */
+.settings-btn-solid {
+  --el-button-text-color: #ffffff;
+  --el-button-bg-color: #0e7490;
+  --el-button-border-color: #0e7490;
+  --el-button-hover-text-color: #ffffff;
+  --el-button-hover-bg-color: #2b859d;
+  --el-button-hover-border-color: #2b859d;
+  --el-button-active-text-color: #ffffff;
+  --el-button-active-bg-color: #0a576c;
+  --el-button-active-border-color: #0a576c;
 }
 
 /* 规则「备份 / 还原」是两种不同性质的动作，各用一种浅色区分开。
