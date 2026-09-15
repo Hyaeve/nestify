@@ -7,10 +7,14 @@
       :disabled="busy"
       @click.stop="emit('toggle')"
     >
-      <el-icon class="card-action-bar__icon">
-        <CircleCheckFilled v-if="enabled" />
-        <CircleCloseFilled v-else />
-      </el-icon>
+      <!-- 已启用 = 实心播放三角（正在运行）；已禁用 = 双竖线暂停条。自绘实心图形，语义比圆形徽标更直白。 -->
+      <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path v-if="enabled" d="M9 6.6 17.6 12 9 17.4z" fill="currentColor" />
+        <g v-else>
+          <rect x="8.9" y="6.8" width="2.3" height="10.4" rx="1.15" fill="currentColor" />
+          <rect x="12.8" y="6.8" width="2.3" height="10.4" rx="1.15" fill="currentColor" />
+        </g>
+      </svg>
       <span>{{ enabled ? '已启用' : '已禁用' }}</span>
     </button>
 
@@ -18,8 +22,7 @@
       <el-dropdown v-if="strmSync" trigger="click" @command="handleStrmCommand">
         <button type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop>
           <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.6" />
-            <path d="M10.4 8.6 15.55 12 10.4 15.4z" fill="currentColor" />
+            <path d="M13.6 2.6 4.9 13.9a.6.6 0 0 0 .47.96h5.1l-.98 6.5a.6.6 0 0 0 1.06.44l8.7-11.3a.6.6 0 0 0-.47-.96h-5.1l.95-6.5a.6.6 0 0 0-1.06-.44z" fill="currentColor" />
           </svg>
           <span>{{ executeLabel }}</span>
         </button>
@@ -32,7 +35,7 @@
       </el-dropdown>
 
       <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop="emit('execute')">
-        <!-- 「执行」= 立即运行一次：实心播放三角 + 描边圆环（自绘线条，1.7 描边与其它图标同款）。 -->
+        <!-- 「执行」= 实心闪电（立即触发一次，与启用态的播放三角、重新扫描的扫描框都不重样）。 -->
         <!-- 「重新扫描」用四角扫描框 + 扫描线；两者语义不同，视觉上也要能一眼分开。 -->
         <svg v-if="executeIcon === 'rescan'" class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 9.5V6.5A2.5 2.5 0 0 1 6.5 4H9.5" />
@@ -42,8 +45,7 @@
           <path d="M4 12h16" />
         </svg>
         <svg v-else class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8.6" />
-          <path d="M10.4 8.6 15.55 12 10.4 15.4z" fill="currentColor" />
+          <path d="M13.6 2.6 4.9 13.9a.6.6 0 0 0 .47.96h5.1l-.98 6.5a.6.6 0 0 0 1.06.44l8.7-11.3a.6.6 0 0 0-.47-.96h-5.1l.95-6.5a.6.6 0 0 0-1.06-.44z" fill="currentColor" />
         </svg>
         <span>{{ executeLabel }}</span>
       </button>
@@ -62,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { CircleCheckFilled, CircleCloseFilled, Delete, Edit } from '@element-plus/icons-vue'
+import { Delete, Edit } from '@element-plus/icons-vue'
 
 withDefaults(
   defineProps<{
@@ -73,7 +75,7 @@ withDefaults(
     strmSync?: boolean
     /** 执行按钮文案：规则卡片用「执行」，备份卡片用「重新扫描」。 */
     executeLabel?: string
-    /** 执行按钮图标：'run' = 播放三角（立即执行）；'rescan' = 四角扫描框（重新扫描）。 */
+    /** 执行按钮图标：'run' = 实心闪电（立即执行）；'rescan' = 四角扫描框（重新扫描）。 */
     executeIcon?: 'run' | 'rescan'
   }>(),
   {
@@ -116,7 +118,8 @@ function handleStrmCommand(command: string) {
   height: 36px;
   padding: 0 15px;
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  /* 圆角矩形而非胶囊：36px 高配 10px 圆角，既有圆润感又保留矩形轮廓。 */
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
@@ -202,5 +205,10 @@ function handleStrmCommand(command: string) {
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* 自带实心填充的图形（执行闪电）不参与描边，否则笔画会被再描一圈、比启用态三角粗一档。 */
+.card-action-bar__btn svg.card-action-bar__icon path[fill='currentColor'] {
+  stroke: none;
 }
 </style>
