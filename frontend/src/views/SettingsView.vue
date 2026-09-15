@@ -148,8 +148,9 @@
               @click="openEditMount(mount)"
               @contextmenu.prevent="openMountContextMenu($event, mount)"
             >
-              <div class="mount-card__icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
+              <div class="mount-card__icon" :class="{ 'mount-card__icon--openlist': mount.provider === 'openlist' }">
+                <img v-if="mount.provider === 'openlist'" class="mount-card__icon-img" src="/Olist.png" alt="" />
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M2.5 8.5h19" />
                   <path d="M4 6.5h16a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V8A1.5 1.5 0 0 1 4 6.5Z" />
                   <path d="M2.5 8.5a1.5 1.5 0 0 1 1.5-1.5h4.3l2 2h9.2a1.5 1.5 0 0 1 1.5 1.5" />
@@ -489,11 +490,15 @@ async function handleMountCommand(command: string, mount: WebdavMount) {
     try {
       await updateMount(mount.id, {
         name: mount.name,
+        provider: mount.provider,
+        auth_type: mount.auth_type,
         scheme: mount.scheme,
         host: mount.host,
         port: mount.port,
         username: mount.username,
+        // 留空表示沿用已保存的口令与令牌，这里只切启用状态。
         password: '',
+        token: '',
         base_path: mount.base_path,
         enabled,
         sort_order: mount.sort_order,
@@ -678,6 +683,21 @@ async function handleBackupFileChange(file: UploadFile) {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* OpenList 挂载用项目自带的品牌图标，不用线框图形。 */
+.mount-card__icon--openlist {
+  padding: 3px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.mount-card__icon-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .mount-card__body {

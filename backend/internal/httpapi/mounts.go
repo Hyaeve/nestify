@@ -118,9 +118,10 @@ func (a *apiHandler) handleMountByID(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, jsonResponse{Success: false, Code: "MOUNT_NOT_FOUND", Message: "挂载不存在"})
 			return
 		}
-		// 编辑场景需要回显密码（本机管理工具，仅 admin 登录后可见）。
+		// 编辑场景需要回显密码与令牌（本机管理工具，仅 admin 登录后可见）。
 		detail := credential.Mount
 		detail.Password = credential.Password
+		detail.Token = credential.Token
 		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "WebDAV 挂载已加载", Data: detail})
 	case http.MethodPut:
 		var input model.UpdateMountInput
@@ -190,7 +191,7 @@ func (a *apiHandler) handleMountBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := webdav.NewClient(credential.Mount, credential.Password)
+	client := webdav.NewClient(*credential)
 	entries, err := client.List(r.Context(), internalPath)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, jsonResponse{Success: false, Code: "MOUNT_BROWSE_FAILED", Message: err.Error()})
@@ -249,6 +250,8 @@ func (a *apiHandler) handleMountTest(w http.ResponseWriter, r *http.Request) {
 
 	mount := model.WebdavMount{
 		Name:     strings.TrimSpace(input.Name),
+		Provider: model.NormalizeMountProvider(input.Provider),
+		AuthType: model.NormalizeMountAuthType(input.AuthType),
 		Scheme:   model.NormalizeMountScheme(input.Scheme),
 		Host:     strings.TrimSpace(input.Host),
 		Port:     input.Port,
@@ -257,7 +260,11 @@ func (a *apiHandler) handleMountTest(w http.ResponseWriter, r *http.Request) {
 		Enabled:  true,
 	}
 
-	client := webdav.NewClient(mount, input.Password)
+	client := webdav.NewClient(model.MountCredential{
+		Mount:    mount,
+		Password: input.Password,
+		Token:    strings.TrimSpace(input.Token),
+	})
 	entries, err := client.List(r.Context(), "")
 	if err != nil {
 		writeJSON(w, http.StatusOK, jsonResponse{

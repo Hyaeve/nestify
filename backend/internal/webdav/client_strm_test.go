@@ -34,12 +34,12 @@ func TestDirectLinkBasePath(t *testing.T) {
 
 // TestBuildStrmURL 验证最终写入 strm 的完整地址。
 func TestBuildStrmURL(t *testing.T) {
-	client := NewClient(model.WebdavMount{
+	client := NewClient(model.MountCredential{Mount: model.WebdavMount{
 		Scheme:   "http",
 		Host:     "10.0.0.31",
 		Port:     5244,
 		BasePath: "/dav",
-	}, "")
+	}})
 
 	got := client.BuildStrmURL("/移动云盘/剧集/a.mkv")
 	want := "http://10.0.0.31:5244/d/移动云盘/剧集/a.mkv"
@@ -53,11 +53,11 @@ func TestBuildStrmURL(t *testing.T) {
 
 // TestBuildStrmURLWithEndpointInHost 覆盖「端点被误填进域名栏」的情况。
 func TestBuildStrmURLWithEndpointInHost(t *testing.T) {
-	client := NewClient(model.WebdavMount{
+	client := NewClient(model.MountCredential{Mount: model.WebdavMount{
 		Scheme: "http",
 		Host:   "10.0.0.31/dav",
 		Port:   0,
-	}, "")
+	}})
 
 	got := client.BuildStrmURL("/a/b.mkv")
 	want := "http://10.0.0.31/d/a/b.mkv"

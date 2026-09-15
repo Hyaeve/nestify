@@ -3,9 +3,20 @@ import type { BrowseDirectoriesPayload } from './paths'
 
 export { MOUNT_PATH_SCHEME, isMountPath } from './paths'
 
+/** 挂载类型：通用 WebDAV 或 OpenList（后者支持原生递归列举生成 Strm）。 */
+export type MountProvider = 'webdav' | 'openlist'
+
+/** 认证方式：用户名 + 密码（Basic）或 OpenList 永久令牌（Bearer）。 */
+export type MountAuthType = 'password' | 'token'
+
+/** OpenList 默认监听端口，选定 OpenList 类型时自动填入。 */
+export const OPENLIST_DEFAULT_PORT = 5244
+
 export interface WebdavMount {
   id: number
   name: string
+  provider: MountProvider
+  auth_type: MountAuthType
   scheme: 'http' | 'https'
   host: string
   port: number
@@ -13,6 +24,9 @@ export interface WebdavMount {
   has_password: boolean
   /** 仅单条挂载（编辑）时返回，列表接口始终为空。 */
   password?: string
+  has_token: boolean
+  /** 与 password 同策略：仅编辑单条挂载时返回。 */
+  token?: string
   base_path: string
   enabled: boolean
   sort_order: number
@@ -24,11 +38,14 @@ export interface WebdavMount {
 
 export interface MountInput {
   name: string
+  provider: MountProvider
+  auth_type: MountAuthType
   scheme: 'http' | 'https'
   host: string
   port: number
   username: string
   password: string
+  token: string
   base_path: string
   enabled: boolean
   sort_order?: number

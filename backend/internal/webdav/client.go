@@ -35,8 +35,11 @@ type Entry struct {
 type Client struct {
 	baseURL    string
 	basePath   string
+	provider   string
+	authType   string
 	username   string
 	password   string
+	token      string
 	httpClient *http.Client
 
 	// minInterval 为 0 表示不节流；每个 Client 实例各自维护节流状态。
@@ -46,22 +49,62 @@ type Client struct {
 	lastRequest time.Time
 }
 
-func NewClient(mount model.WebdavMount, password string) *Client {
+func NewClient(credential model.MountCredential) *Client {
+	mount := credential.Mount
 	return &Client{
 		baseURL:  strings.TrimRight(model.BuildMountBaseURL(mount), "/"),
 		basePath: model.NormalizeMountBasePath(mount.BasePath),
+		provider: model.NormalizeMountProvider(mount.Provider),
+		authType: model.NormalizeMountAuthType(mount.AuthType),
 		username: mount.Username,
-		password: password,
+		password: credential.Password,
+		token:    strings.TrimSpace(credential.Token),
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
 				TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-				MaxIdleConns:        4,
-				MaxIdleConnsPerHost: 2,
+				MaxIdleConns:        8,
+				MaxIdleConnsPerHost: 4,
 			},
 		},
 		minInterval: defaultMinRequestInterval,
 	}
+}
+
+// applyAuth 按认证方式给请求挂上凭证。
+// token 模式使用 OpenList 的 `Authorization: Bearer <永久令牌>`（见其 WebDAVAuth 中间件，
+// 令牌取自 OpenList 后台「设置 → 令牌」）；password 模式回落到 HTTP Basic。
+func (c *Client) applyAuth(request *http.Request) {
+	if c.usesTokenAuth() {
+		request.Header.Set("Authorization", "Bearer "+c.token)
+		return
+	}
+	if c.username != "" || c.password != "" {
+		request.SetBasicAuth(c.username, c.password)
+	}
+}
+
+func (c *Client) usesTokenAuth() bool {
+	return model.NormalizeMountAuthType(c.authType) == model.MountAuthToken
+}
+
+// authFailedError 按认证方式给出可操作的错误提示，避免令牌用户被误导去翻密码。
+func (c *Client) authFailedError() error {
+	if c.usesTokenAuth() {
+		return fmt.Errorf("OpenList 令牌认证失败，请核对后台「设置 → 令牌」中的永久令牌")
+	}
+	return c.authFailedError()
+}
+
+// Provider 返回挂载类型（webdav / openlist）。
+func (c *Client) Provider() string {
+	return c.provider
+}
+
+// SupportsRecursiveList 判断该挂载是否应走 OpenList 原生递归列举
+// （一次 PROPFIND 取回整棵子树，而不是每个目录各来一次）。
+func (c *Client) SupportsRecursiveList() bool {
+	return c.provider == model.MountProviderOpenList
 }
 
 // SetRequestInterval 覆盖两次请求之间的最小间隔（<=0 表示不节流）。
@@ -84,8 +127,11 @@ func (c *Client) Fork() *Client {
 	return &Client{
 		baseURL:     c.baseURL,
 		basePath:    c.basePath,
+		provider:    c.provider,
+		authType:    c.authType,
 		username:    c.username,
 		password:    c.password,
+		token:       c.token,
 		httpClient:  c.httpClient,
 		minInterval: c.minInterval,
 	}
@@ -190,9 +236,7 @@ func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Re
 		request.ContentLength = size
 	}
 	request.Header.Set("Accept", "*/*")
-	if c.username != "" || c.password != "" {
-		request.SetBasicAuth(c.username, c.password)
-	}
+	c.applyAuth(request)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -204,7 +248,7 @@ func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Re
 		return nil
 	}
 	if response.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+		return c.authFailedError()
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 	return fmt.Errorf("WebDAV PUT 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
@@ -245,9 +289,7 @@ func (c *Client) mkcol(ctx context.Context, internalPath string) error {
 	if err != nil {
 		return fmt.Errorf("build mkcol request: %w", err)
 	}
-	if c.username != "" || c.password != "" {
-		request.SetBasicAuth(c.username, c.password)
-	}
+	c.applyAuth(request)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -263,7 +305,7 @@ func (c *Client) mkcol(ctx context.Context, internalPath string) error {
 		return nil
 	}
 	if response.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+		return c.authFailedError()
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 	return fmt.Errorf("WebDAV MKCOL 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
@@ -276,15 +318,13 @@ func (c *Client) Exists(ctx context.Context, internalPath string) (bool, error) 
 	}
 
 	requestURL := c.requestURL(internalPath)
-	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody))
+	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody(true)))
 	if err != nil {
 		return false, fmt.Errorf("build propfind request: %w", err)
 	}
 	request.Header.Set("Depth", "0")
 	request.Header.Set("Content-Type", "application/xml; charset=utf-8")
-	if c.username != "" || c.password != "" {
-		request.SetBasicAuth(c.username, c.password)
-	}
+	c.applyAuth(request)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -299,7 +339,7 @@ func (c *Client) Exists(ctx context.Context, internalPath string) (bool, error) 
 		return true, nil
 	}
 	if response.StatusCode == http.StatusUnauthorized {
-		return false, fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+		return false, c.authFailedError()
 	}
 	return false, fmt.Errorf("WebDAV PROPFIND 返回状态 %d", response.StatusCode)
 }
@@ -315,9 +355,7 @@ func (c *Client) Delete(ctx context.Context, internalPath string) error {
 	if err != nil {
 		return fmt.Errorf("build delete request: %w", err)
 	}
-	if c.username != "" || c.password != "" {
-		request.SetBasicAuth(c.username, c.password)
-	}
+	c.applyAuth(request)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -329,7 +367,7 @@ func (c *Client) Delete(ctx context.Context, internalPath string) error {
 		return nil
 	}
 	if response.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+		return c.authFailedError()
 	}
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 	return fmt.Errorf("WebDAV DELETE 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
@@ -371,8 +409,51 @@ func (c *Client) Wait(ctx context.Context) error {
 	}
 }
 
-// List 列出 internalPath 下的直接子项。internalPath 为空表示挂载根目录。
+// Depth 请求头取值：1 只取直接子项，infinity 递归整棵子树。
+const (
+	depthOne      = "1"
+	depthInfinity = "infinity"
+)
+
+// List 列出 internalPath 下的直接子项（PROPFIND Depth: 1）。internalPath 为空表示挂载根目录。
 func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error) {
+	entries, err := c.propfind(ctx, internalPath, depthOne, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// 只保留当前目录的直接子项。父目录需归一化后再比较，
+	// 否则根目录（""）与 path.Dir 返回的 "/" 永远不相等，导致根目录子项被全部过滤。
+	requestDir := normalizeInternalPath(internalPath)
+	direct := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		if normalizeInternalPath(path.Dir(entry.Path)) != requestDir {
+			continue
+		}
+		direct = append(direct, entry)
+	}
+	return direct, nil
+}
+
+// ListRecursive 用一次请求取回 internalPath 下整棵子树的条目（PROPFIND Depth: infinity）。
+//
+// 这是 OpenList / Alist 的原生能力：其 handlePropfind 在未指定 Depth 时默认按无限深度走
+// walkFS，服务端在同一个响应里递归遍历整棵目录树，于是「每个目录一次请求」被压缩成一次。
+// 以两千个目录的媒体库为例，请求数从 2000 次降到 1 次，
+// 挂载级节流带来的等待也从「目录数 × 请求间隔」降为一次往返。
+//
+// withSize 为 false 时不请求 getcontentlength，可省掉服务端为每个文件取大小的开销；
+// 只有启用「最小视频」过滤时才真正需要文件大小。
+//
+// 仅对支持无限深度的服务端（OpenList / Alist / SabreDAV 等）调用；
+// 受限实现可能返回 403/400，调用方需回落到逐目录列举。
+func (c *Client) ListRecursive(ctx context.Context, internalPath string, withSize bool) ([]Entry, error) {
+	return c.propfind(ctx, internalPath, depthInfinity, withSize)
+}
+
+// propfind 发起一次 PROPFIND 并流式解析 multistatus。
+// 递归响应可能非常大（整棵目录树），所以按 <d:response> 逐个解码，不把整份 XML 读进内存。
+func (c *Client) propfind(ctx context.Context, internalPath, depth string, withSize bool) ([]Entry, error) {
 	if err := c.Wait(ctx); err != nil {
 		return nil, err
 	}
@@ -385,16 +466,14 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 	}
 	requestURL := c.baseURL + escapePath(remotePath)
 
-	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody))
+	request, err := http.NewRequestWithContext(ctx, "PROPFIND", requestURL, strings.NewReader(propfindBody(withSize)))
 	if err != nil {
 		return nil, fmt.Errorf("build propfind request: %w", err)
 	}
-	request.Header.Set("Depth", "1")
+	request.Header.Set("Depth", depth)
 	request.Header.Set("Content-Type", "application/xml; charset=utf-8")
 	request.Header.Set("Accept", "application/xml")
-	if c.username != "" || c.password != "" {
-		request.SetBasicAuth(c.username, c.password)
-	}
+	c.applyAuth(request)
 
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -403,74 +482,95 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 	defer response.Body.Close()
 
 	if response.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("WebDAV 认证失败，请检查用户名与密码")
+		return nil, c.authFailedError()
 	}
 	if response.StatusCode != http.StatusMultiStatus && response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		return nil, fmt.Errorf("WebDAV 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 
-	var multistatus multiStatus
-	if err := xml.NewDecoder(response.Body).Decode(&multistatus); err != nil {
-		return nil, fmt.Errorf("解析 WebDAV 响应失败: %w", err)
-	}
-
 	basePrefix := normalizeInternalPath(c.basePath)
 	// 请求目录在「内部路径」坐标系下的值（即去掉 base_path 前缀后的相对挂载根路径）。
-	// 用于与响应 href 对齐并过滤自身及非直接子项。
+	// 用于与响应 href 对齐并过滤自身。
 	requestDir := normalizeInternalPath(internalPath)
-	entries := make([]Entry, 0, len(multistatus.Responses))
-	for _, item := range multistatus.Responses {
-		decoded, decodeErr := decodeHref(item.Href)
-		if decodeErr != nil {
+
+	entries := make([]Entry, 0, 64)
+	decoder := xml.NewDecoder(response.Body)
+	for {
+		token, tokenErr := decoder.Token()
+		if tokenErr == io.EOF {
+			break
+		}
+		if tokenErr != nil {
+			return nil, fmt.Errorf("解析 WebDAV 响应失败: %w", tokenErr)
+		}
+		start, ok := token.(xml.StartElement)
+		if !ok || start.Name.Local != "response" {
 			continue
 		}
-
-		trimmed := strings.TrimRight(decoded, "/")
-		if trimmed == "" {
+		var item propfindResponse
+		if err := decoder.DecodeElement(&item, &start); err != nil {
+			return nil, fmt.Errorf("解析 WebDAV 响应失败: %w", err)
+		}
+		entry, ok := decodePropfindEntry(item, basePrefix, requestDir)
+		if !ok {
 			continue
 		}
-
-		relative := trimmed
-		if basePrefix != "" && strings.HasPrefix(trimmed, basePrefix) {
-			relative = strings.TrimPrefix(trimmed, basePrefix)
-		}
-		relative = normalizeInternalPath(relative)
-
-		// 过滤掉请求目录本身（其 href 通常与请求路径一致）。
-		if relative == "" || relative == requestDir {
-			continue
-		}
-		// 只保留当前目录的直接子项。父目录需归一化后再比较，
-		// 否则根目录（""）与 path.Dir 返回的 "/" 永远不相等，导致根目录子项被全部过滤。
-		if normalizeInternalPath(path.Dir(relative)) != requestDir {
-			continue
-		}
-
-		name := path.Base(relative)
-		if name == "" || name == "." || name == "/" {
-			continue
-		}
-
-		entry := Entry{
-			Name:       name,
-			Path:       relative,
-			IsDir:      item.Propstat.Prop.ResourceType.Collection != nil,
-			Size:       item.Propstat.Prop.ContentLength,
-			ModifiedAt: item.Propstat.Prop.LastModified.Time,
-		}
-		if entry.IsDir {
-			entry.Size = 0
-			entry.Name = strings.TrimRight(name, "/")
-		}
-		if entry.Name == "" {
-			continue
-		}
-
 		entries = append(entries, entry)
 	}
 
 	return entries, nil
+}
+
+// decodePropfindEntry 把一条 <d:response> 转成挂载内的相对条目（ok=false 表示该条应丢弃）。
+func decodePropfindEntry(item propfindResponse, basePrefix, requestDir string) (Entry, bool) {
+	decoded, err := decodeHref(item.Href)
+	if err != nil {
+		return Entry{}, false
+	}
+
+	trimmed := strings.TrimRight(decoded, "/")
+	if trimmed == "" {
+		return Entry{}, false
+	}
+
+	relative := trimmed
+	if basePrefix != "" && strings.HasPrefix(trimmed, basePrefix) {
+		relative = strings.TrimPrefix(trimmed, basePrefix)
+	}
+	relative = normalizeInternalPath(relative)
+
+	// 过滤掉请求目录自身（其 href 通常与请求路径一致）。
+	if relative == "" || relative == requestDir {
+		return Entry{}, false
+	}
+
+	name := path.Base(relative)
+	if name == "" || name == "." || name == "/" {
+		return Entry{}, false
+	}
+
+	// 目录判定优先看 resourcetype/collection；部分实现会省略 collection，
+	// 此时回退到 href 的尾斜杠（OpenList 的 PROPFIND 会给目录 href 补 "/"）。
+	// 少了这条回退，递归结果里的目录会被整体误判成文件。
+	isDir := item.Propstat.Prop.ResourceType.Collection != nil || strings.HasSuffix(decoded, "/")
+
+	entry := Entry{
+		Name:       name,
+		Path:       relative,
+		IsDir:      isDir,
+		Size:       item.Propstat.Prop.ContentLength,
+		ModifiedAt: item.Propstat.Prop.LastModified.Time,
+	}
+	if entry.IsDir {
+		entry.Size = 0
+		entry.Name = strings.TrimRight(name, "/")
+	}
+	if entry.Name == "" {
+		return Entry{}, false
+	}
+
+	return entry, true
 }
 
 func joinRemotePath(basePath, internalPath string) string {
@@ -541,17 +641,22 @@ func escapePath(value string) string {
 	return builder.String()
 }
 
-const propfindBody = `<?xml version="1.0" encoding="utf-8"?>
+// propfindBody 生成 PROPFIND 请求体。
+// withSize 为 false 时不索取 getcontentlength：Strm 生成只需要路径与目录标记，
+// 只有「最小视频」过滤才用到文件大小，少要一个属性即可让部分服务端省掉
+// 为每个文件取大小的额外上游请求。
+func propfindBody(withSize bool) string {
+	sizeProp := ""
+	if withSize {
+		sizeProp = "\n    <d:getcontentlength/>"
+	}
+	return `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:">
   <d:prop>
-    <d:resourcetype/>
-    <d:getcontentlength/>
+    <d:resourcetype/>` + sizeProp + `
     <d:getlastmodified/>
   </d:prop>
 </d:propfind>`
-
-type multiStatus struct {
-	Responses []propfindResponse `xml:"response"`
 }
 
 type propfindResponse struct {

@@ -8,7 +8,7 @@ import (
 	"nestify/backend/internal/model"
 )
 
-const mountColumns = `id, name, scheme, host, port, username, password, base_path, enabled, sort_order, created_at, updated_at`
+const mountColumns = `id, name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at`
 
 // ListMountCredentials 返回全部挂载（含明文口令），仅限服务端内部使用。
 func (s *Store) ListMountCredentials(enabledOnly bool) ([]model.MountCredential, error) {
@@ -71,15 +71,18 @@ func (s *Store) CreateMount(input model.CreateMountInput) (*model.WebdavMount, e
 	}
 
 	result, err := s.db.Exec(`
-		INSERT INTO webdav_mounts (name, scheme, host, port, username, password, base_path, enabled, sort_order, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+		INSERT INTO webdav_mounts (name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`,
 		strings.TrimSpace(input.Name),
+		model.NormalizeMountProvider(input.Provider),
+		model.NormalizeMountAuthType(input.AuthType),
 		model.NormalizeMountScheme(strings.TrimSpace(input.Scheme)),
 		strings.TrimSpace(input.Host),
 		input.Port,
 		strings.TrimSpace(input.Username),
 		input.Password,
+		strings.TrimSpace(input.Token),
 		model.NormalizeMountBasePath(input.BasePath),
 		boolToInt(enabled),
 		input.SortOrder,
@@ -118,6 +121,11 @@ func (s *Store) UpdateMount(id int64, input model.UpdateMountInput) (*model.Webd
 	if strings.TrimSpace(password) == "" {
 		password = existing.Password
 	}
+	// 令牌与密码同策略：留空表示沿用已保存的值（前端编辑时不回显就不提交）。
+	token := strings.TrimSpace(input.Token)
+	if token == "" {
+		token = existing.Token
+	}
 
 	enabled := existing.Mount.Enabled
 	if input.Enabled != nil {
@@ -127,15 +135,18 @@ func (s *Store) UpdateMount(id int64, input model.UpdateMountInput) (*model.Webd
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := s.db.Exec(`
 		UPDATE webdav_mounts
-		SET name = ?, scheme = ?, host = ?, port = ?, username = ?, password = ?, base_path = ?, enabled = ?, sort_order = ?, updated_at = ?
+		SET name = ?, provider = ?, auth_type = ?, scheme = ?, host = ?, port = ?, username = ?, password = ?, token = ?, base_path = ?, enabled = ?, sort_order = ?, updated_at = ?
 		WHERE id = ?;
 	`,
 		strings.TrimSpace(input.Name),
+		model.NormalizeMountProvider(input.Provider),
+		model.NormalizeMountAuthType(input.AuthType),
 		model.NormalizeMountScheme(strings.TrimSpace(input.Scheme)),
 		strings.TrimSpace(input.Host),
 		input.Port,
 		strings.TrimSpace(input.Username),
 		password,
+		token,
 		model.NormalizeMountBasePath(input.BasePath),
 		boolToInt(enabled),
 		input.SortOrder,
@@ -186,11 +197,14 @@ func scanMountWithPassword(scanner mountScanner) (model.MountCredential, error) 
 	var (
 		id              int64
 		name            string
+		provider        string
+		authType        string
 		scheme          string
 		host            string
 		port            int
 		username        string
 		password        string
+		token           string
 		basePath        string
 		enabled         int
 		sortOrder       int
@@ -198,18 +212,21 @@ func scanMountWithPassword(scanner mountScanner) (model.MountCredential, error) 
 		updatedAtSource string
 	)
 
-	if err := scanner.Scan(&id, &name, &scheme, &host, &port, &username, &password, &basePath, &enabled, &sortOrder, &createdAtSource, &updatedAtSource); err != nil {
+	if err := scanner.Scan(&id, &name, &provider, &authType, &scheme, &host, &port, &username, &password, &token, &basePath, &enabled, &sortOrder, &createdAtSource, &updatedAtSource); err != nil {
 		return model.MountCredential{}, fmt.Errorf("scan mount: %w", err)
 	}
 
 	mount := model.WebdavMount{
 		ID:          id,
 		Name:        name,
+		Provider:    model.NormalizeMountProvider(provider),
+		AuthType:    model.NormalizeMountAuthType(authType),
 		Scheme:      model.NormalizeMountScheme(scheme),
 		Host:        host,
 		Port:        port,
 		Username:    username,
 		HasPassword: strings.TrimSpace(password) != "",
+		HasToken:    strings.TrimSpace(token) != "",
 		BasePath:    model.NormalizeMountBasePath(basePath),
 		Enabled:     intToBool(enabled),
 		SortOrder:   sortOrder,
@@ -219,5 +236,5 @@ func scanMountWithPassword(scanner mountScanner) (model.MountCredential, error) 
 	mount.CreatedAt, _ = time.Parse(time.RFC3339, createdAtSource)
 	mount.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtSource)
 
-	return model.MountCredential{Mount: mount, Password: password}, nil
+	return model.MountCredential{Mount: mount, Password: password, Token: token}, nil
 }

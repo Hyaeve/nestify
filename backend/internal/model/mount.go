@@ -9,17 +9,41 @@ import (
 // MountPathScheme 是虚拟 WebDAV 挂载路径的协议前缀，形如 webdav://12 或 webdav://12/移动云盘/电视剧。
 const MountPathScheme = "webdav://"
 
+// 挂载类型。webdav 是通用 WebDAV 服务，openlist 指向 OpenList / Alist，
+// 后者可用「只发一次 PROPFIND（Depth: infinity）拿回整棵子树」的原生递归列举能力。
+const (
+	MountProviderWebdav   = "webdav"
+	MountProviderOpenList = "openlist"
+)
+
+// 认证方式。password 走 HTTP Basic（用户名 + 密码），
+// token 走 OpenList 的 `Authorization: Bearer <永久令牌>`。
+const (
+	MountAuthPassword = "password"
+	MountAuthToken    = "token"
+)
+
+// OpenListDefaultPort 是 OpenList 的默认监听端口，选定 OpenList 后前端会自动填入。
+const OpenListDefaultPort = 5244
+
 // WebdavMount 描述一个 OpenList / WebDAV 挂载点。
 type WebdavMount struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// Provider 区分挂载类型：webdav（通用）或 openlist（OpenList / Alist）。
+	// OpenList 类型生成 Strm 时走原生递归列举，请求次数从「每个目录一次」降到一次。
+	Provider    string `json:"provider"`
+	AuthType    string `json:"auth_type"`
 	Scheme      string `json:"scheme"`
 	Host        string `json:"host"`
 	Port        int    `json:"port"`
 	Username    string `json:"username"`
 	HasPassword bool   `json:"has_password"`
 	// Password 仅在选择单个挂载（编辑）时回填，供前端回显；列表接口始终为空。
-	Password    string    `json:"password,omitempty"`
+	Password string `json:"password,omitempty"`
+	HasToken bool   `json:"has_token"`
+	// Token 与 Password 同策略：仅编辑单条挂载时回填。
+	Token       string    `json:"token,omitempty"`
 	BasePath    string    `json:"base_path"`
 	Enabled     bool      `json:"enabled"`
 	SortOrder   int       `json:"sort_order"`
@@ -31,11 +55,14 @@ type WebdavMount struct {
 
 type CreateMountInput struct {
 	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	AuthType  string `json:"auth_type"`
 	Scheme    string `json:"scheme"`
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
 	Username  string `json:"username"`
 	Password  string `json:"password"`
+	Token     string `json:"token"`
 	BasePath  string `json:"base_path"`
 	Enabled   *bool  `json:"enabled"`
 	SortOrder int    `json:"sort_order"`
@@ -43,20 +70,58 @@ type CreateMountInput struct {
 
 type UpdateMountInput struct {
 	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	AuthType  string `json:"auth_type"`
 	Scheme    string `json:"scheme"`
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
 	Username  string `json:"username"`
 	Password  string `json:"password"`
+	Token     string `json:"token"`
 	BasePath  string `json:"base_path"`
 	Enabled   *bool  `json:"enabled"`
 	SortOrder int    `json:"sort_order"`
 }
 
-// MountCredential 携带明文口令，仅供服务端内部建立连接使用，绝不出现在 HTTP 响应里。
+// MountCredential 携带明文口令与令牌，仅供服务端内部建立连接使用，绝不出现在 HTTP 响应里。
 type MountCredential struct {
 	Mount    WebdavMount
 	Password string
+	Token    string
+}
+
+// NormalizeMountProvider 把用户输入统一成 webdav / openlist，未知值回退为 webdav。
+func NormalizeMountProvider(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), MountProviderOpenList) {
+		return MountProviderOpenList
+	}
+	return MountProviderWebdav
+}
+
+// NormalizeMountAuthType 把用户输入统一成 password / token，未知值回退为 password。
+func NormalizeMountAuthType(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), MountAuthToken) {
+		return MountAuthToken
+	}
+	return MountAuthPassword
+}
+
+// DefaultMountPort 返回某类型挂载的默认端口：OpenList 为 5244，通用 WebDAV 不做假设。
+func DefaultMountPort(provider string) int {
+	if NormalizeMountProvider(provider) == MountProviderOpenList {
+		return OpenListDefaultPort
+	}
+	return 0
+}
+
+// IsOpenList 判断挂载是否为 OpenList 类型。
+func (m WebdavMount) IsOpenList() bool {
+	return NormalizeMountProvider(m.Provider) == MountProviderOpenList
+}
+
+// UsesTokenAuth 判断挂载是否使用令牌认证。
+func (m WebdavMount) UsesTokenAuth() bool {
+	return NormalizeMountAuthType(m.AuthType) == MountAuthToken
 }
 
 // NormalizeMountScheme 把用户输入统一成 http / https。

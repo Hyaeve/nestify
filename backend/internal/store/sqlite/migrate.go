@@ -69,11 +69,14 @@ func (s *Store) migrate() error {
 		`CREATE TABLE IF NOT EXISTS webdav_mounts (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
+			provider TEXT NOT NULL DEFAULT 'webdav',
+			auth_type TEXT NOT NULL DEFAULT 'password',
 			scheme TEXT NOT NULL DEFAULT 'http',
 			host TEXT NOT NULL DEFAULT '',
 			port INTEGER NOT NULL DEFAULT 0,
 			username TEXT NOT NULL DEFAULT '',
 			password TEXT NOT NULL DEFAULT '',
+			token TEXT NOT NULL DEFAULT '',
 			base_path TEXT NOT NULL DEFAULT '',
 			enabled INTEGER NOT NULL DEFAULT 1,
 			sort_order INTEGER NOT NULL DEFAULT 0,
@@ -241,6 +244,12 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	log.Printf("sqlite:migrate: ensure webdav_mounts provider columns")
+	if err := s.ensureMountProviderColumns(); err != nil {
+		log.Printf("sqlite:migrate: ensure webdav_mounts provider columns failed: %v", err)
+		return err
+	}
+
 	log.Printf("sqlite:migrate: ensure performance indexes")
 	if err := s.ensurePerformanceIndexes(); err != nil {
 		log.Printf("sqlite:migrate: ensure performance indexes failed: %v", err)
@@ -322,6 +331,50 @@ func (s *Store) ensureSettingsExtendedColumns() error {
 		}
 		if _, err := s.db.Exec(`ALTER TABLE settings ADD COLUMN ` + col.dcl + `;`); err != nil {
 			return fmt.Errorf("add settings %s column: %w", col.name, err)
+		}
+	}
+
+	return nil
+}
+
+// ensureMountProviderColumns 为 webdav_mounts 补齐挂载类型与令牌认证相关的新列。
+// 老库里的历史挂载没有这些列，补上后统一回退为 provider=webdav / auth_type=password。
+func (s *Store) ensureMountProviderColumns() error {
+	existing := map[string]bool{}
+	rows, err := s.db.Query(`PRAGMA table_info(webdav_mounts);`)
+	if err != nil {
+		return fmt.Errorf("query webdav_mounts schema: %w", err)
+	}
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan webdav_mounts schema: %w", err)
+		}
+		existing[strings.ToLower(name)] = true
+	}
+	rows.Close()
+
+	columns := []struct {
+		name string
+		dcl  string
+	}{
+		{"provider", `provider TEXT NOT NULL DEFAULT 'webdav'`},
+		{"auth_type", `auth_type TEXT NOT NULL DEFAULT 'password'`},
+		{"token", `token TEXT NOT NULL DEFAULT ''`},
+	}
+
+	for _, col := range columns {
+		if existing[strings.ToLower(col.name)] {
+			continue
+		}
+		if _, err := s.db.Exec(`ALTER TABLE webdav_mounts ADD COLUMN ` + col.dcl + `;`); err != nil {
+			return fmt.Errorf("add webdav_mounts %s column: %w", col.name, err)
 		}
 	}
 

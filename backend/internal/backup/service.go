@@ -470,7 +470,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 			desc.isWebdav = true
 			desc.mountID = mountID
 			desc.internal = internal
-			desc.client = webdav.NewClient(credential.Mount, credential.Password)
+			desc.client = webdav.NewClient(*credential)
 		}
 		targets = append(targets, desc)
 	}
