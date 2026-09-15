@@ -224,11 +224,13 @@ function handleStrmCommand(command: string) {
 }
 
 /* 编辑按钮：保留 Element Plus `Edit` 的造型（用户点名要这一版），只把偏硬朗的转折磨圆一点。
-   它的网格是 1024，所以描边宽度要按 1024 计 —— 48 单位渲染到 19px 约 0.9px，向外各摊 ~0.45px，
-   配合 round 连接，笔尖与方框转角就从尖角变成小圆弧。 */
+   它的网格是 1024，描边宽度必须按 1024 计 —— 而描边是**整圈外扩**，会连带把笔画加粗，所以只能给极小值：
+     · EP Edit 方框的环厚 64 单位 → 19px 下 1.19px；   24 网格图标 stroke 1.7 → 19px 下 1.35px；
+     · stroke-width 12 → 19px 下仅 +0.22px（1.41px），与其它图标基本等重；
+     · 曾用 48（+0.89px → 2.08px，比其他图标粗 54%），肉眼一看就不协调，别再放大。 */
 .card-action-bar__btn--edit .card-action-bar__icon :deep(svg) {
   stroke: currentColor;
-  stroke-width: 48;
+  stroke-width: 12;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
