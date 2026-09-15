@@ -7,12 +7,13 @@
       :disabled="busy"
       @click.stop="emit('toggle')"
     >
-      <!-- 已启用 = 实心播放三角（正在运行）；已禁用 = 双竖线暂停条。自绘实心图形，语义比圆形徽标更直白。 -->
+      <!-- 已启用 = 圆角实心播放三角（正在运行）；已禁用 = 双圆角竖条（已暂停）。 -->
+      <!-- 三段 Q 命令把三角三个角磨圆，避免小尺寸下尖角扎眼；尺寸按 24 网格撑满，与其它按钮图标等大。 -->
       <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path v-if="enabled" d="M9 6.6 17.6 12 9 17.4z" fill="currentColor" />
+        <path v-if="enabled" d="M9.62 5.7 17.38 10.7Q19.4 12 17.38 13.3L9.62 18.3Q7.6 19.6 7.6 17.2V6.8Q7.6 4.4 9.62 5.7Z" fill="currentColor" />
         <g v-else>
-          <rect x="8.9" y="6.8" width="2.3" height="10.4" rx="1.15" fill="currentColor" />
-          <rect x="12.8" y="6.8" width="2.3" height="10.4" rx="1.15" fill="currentColor" />
+          <rect x="7.3" y="4.4" width="3.5" height="15.2" rx="1.75" fill="currentColor" />
+          <rect x="13.2" y="4.4" width="3.5" height="15.2" rx="1.75" fill="currentColor" />
         </g>
       </svg>
       <span>{{ enabled ? '已启用' : '已禁用' }}</span>
@@ -22,7 +23,8 @@
       <el-dropdown v-if="strmSync" trigger="click" @command="handleStrmCommand">
         <button type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop>
           <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M13.6 2.6 4.9 13.9a.6.6 0 0 0 .47.96h5.1l-.98 6.5a.6.6 0 0 0 1.06.44l8.7-11.3a.6.6 0 0 0-.47-.96h-5.1l.95-6.5a.6.6 0 0 0-1.06-.44z" fill="currentColor" />
+            <rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4.4" />
+            <path d="M9.62 8.47 14.39 11.33Q15.5 12 14.39 12.67L9.62 15.53Q8.5 16.2 8.5 14.9V9.1Q8.5 7.8 9.62 8.47Z" fill="currentColor" />
           </svg>
           <span>{{ executeLabel }}</span>
         </button>
@@ -35,8 +37,7 @@
       </el-dropdown>
 
       <button v-else type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop="emit('execute')">
-        <!-- 「执行」= 实心闪电（立即触发一次，与启用态的播放三角、重新扫描的扫描框都不重样）。 -->
-        <!-- 「重新扫描」用四角扫描框 + 扫描线；两者语义不同，视觉上也要能一眼分开。 -->
+        <!-- 「执行」= 圆角方框 + 实心圆角三角（标准「运行」按钮语义，与启用态的裸三角、备份卡片的扫描框都能分开）。 -->
         <svg v-if="executeIcon === 'rescan'" class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 9.5V6.5A2.5 2.5 0 0 1 6.5 4H9.5" />
           <path d="M14.5 4h3A2.5 2.5 0 0 1 20 6.5v3" />
@@ -45,7 +46,8 @@
           <path d="M4 12h16" />
         </svg>
         <svg v-else class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M13.6 2.6 4.9 13.9a.6.6 0 0 0 .47.96h5.1l-.98 6.5a.6.6 0 0 0 1.06.44l8.7-11.3a.6.6 0 0 0-.47-.96h-5.1l.95-6.5a.6.6 0 0 0-1.06-.44z" fill="currentColor" />
+          <rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4.4" />
+          <path d="M9.62 8.47 14.39 11.33Q15.5 12 14.39 12.67L9.62 15.53Q8.5 16.2 8.5 14.9V9.1Q8.5 7.8 9.62 8.47Z" fill="currentColor" />
         </svg>
         <span>{{ executeLabel }}</span>
       </button>
@@ -75,7 +77,7 @@ withDefaults(
     strmSync?: boolean
     /** 执行按钮文案：规则卡片用「执行」，备份卡片用「重新扫描」。 */
     executeLabel?: string
-    /** 执行按钮图标：'run' = 实心闪电（立即执行）；'rescan' = 四角扫描框（重新扫描）。 */
+    /** 执行按钮图标：'run' = 圆角方框 + 圆角三角（立即执行）；'rescan' = 四角扫描框（重新扫描）。 */
     executeIcon?: 'run' | 'rescan'
   }>(),
   {
@@ -192,11 +194,12 @@ function handleStrmCommand(command: string) {
   background: rgba(176, 90, 80, 0.12);
 }
 
+/* 所有按钮图标统一 19px（含启用/禁用那两枚自绘图形），彼此墨量才一致。 */
 .card-action-bar__icon {
-  width: 17px;
-  height: 17px;
+  width: 19px;
+  height: 19px;
   flex: 0 0 auto;
-  font-size: 17px;
+  font-size: 19px;
 }
 
 .card-action-bar__btn svg.card-action-bar__icon {
