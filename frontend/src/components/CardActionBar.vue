@@ -151,16 +151,16 @@ function handleStrmCommand(command: string) {
 /* 「已启用」= 浅底 + 主色字。字色用主色本身而不是更浅一档，
    否则在浅底上对比太弱、看着发淡；悬浮态再深一档。 */
 .card-action-bar__toggle.is-on {
-  color: #1981a3;
-  border-color: rgba(25, 129, 163, 0.42);
-  background: rgba(25, 129, 163, 0.13);
+  color: #209fee;
+  border-color: rgba(32, 159, 238, 0.42);
+  background: rgba(32, 159, 238, 0.13);
 }
 
 /* 悬浮只比静置态加深一档：原来直接铺满强调色实心块，颜色过重、和卡片的浅色基调冲突。 */
 .card-action-bar__toggle.is-on:hover {
-  color: #074154;
-  border-color: rgba(25, 129, 163, 0.72);
-  background: rgba(25, 129, 163, 0.26);
+  color: #055a8f;
+  border-color: rgba(32, 159, 238, 0.72);
+  background: rgba(32, 159, 238, 0.26);
 }
 
 .card-action-bar__toggle.is-off {
@@ -186,9 +186,9 @@ function handleStrmCommand(command: string) {
 }
 
 .card-action-bar__btn--run:hover {
-  color: #074154;
-  border-color: rgba(25, 129, 163, 0.5);
-  background: rgba(25, 129, 163, 0.12);
+  color: #055a8f;
+  border-color: rgba(32, 159, 238, 0.5);
+  background: rgba(32, 159, 238, 0.12);
 }
 
 .card-action-bar__btn--edit:hover {

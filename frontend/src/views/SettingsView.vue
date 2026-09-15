@@ -650,8 +650,8 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .mount-card:hover {
-  border-color: rgba(25, 129, 163, 0.42);
-  box-shadow: 0 8px 18px rgba(25, 129, 163, 0.08);
+  border-color: rgba(32, 159, 238, 0.42);
+  box-shadow: 0 8px 18px rgba(32, 159, 238, 0.08);
 }
 
 .mount-card--disabled {
@@ -745,8 +745,8 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .mount-card__more:hover {
-  color: #0d5973;
-  background: rgba(25, 129, 163, 0.14);
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.14);
 }
 
 .mount-card__more svg {
@@ -932,7 +932,7 @@ async function handleBackupFileChange(file: UploadFile) {
   border-radius: 999px;
   font-size: 12px;
   line-height: 1;
-  color: #0d5973;
+  color: #0975b8;
   background: #e9f1f4;
 }
 
@@ -946,7 +946,7 @@ async function handleBackupFileChange(file: UploadFile) {
   border-radius: 50%;
   font-size: 11px;
   line-height: 1;
-  color: #0d5973;
+  color: #0975b8;
   background: transparent;
   cursor: pointer;
 }
@@ -1021,14 +1021,14 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 .settings-view-mode-button:hover {
-  color: #0d5973;
-  background: rgba(25, 129, 163, 0.14);
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.14);
 }
 
 .settings-view-mode-button.is-active {
-  color: #0d5973;
-  background: rgba(25, 129, 163, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(25, 129, 163, 0.18), 0 8px 18px rgba(25, 129, 163, 0.1);
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(32, 159, 238, 0.18), 0 8px 18px rgba(32, 159, 238, 0.1);
 }
 
 .settings-view-mode-button:active {
