@@ -12,19 +12,21 @@
   --text-secondary: #8b97a8;
   --text-tertiary: #94a3b8;
   --border-color: rgba(148, 163, 184, 0.18);
-  --accent-color: #3f7f95;
-  --accent-soft: rgba(63, 127, 149, 0.1);
-  /* Element Plus 主色统一成低饱和青蓝（默认 #409eff 太艳），各档浅色要一起给，
+  --accent-color: #1981a3;
+  --accent-soft: rgba(25, 129, 163, 0.1);
+  /* Element Plus 主色统一成青蓝（默认 #409eff 太艳），各档浅色要一起给，
      否则按钮 / 页签 / 开关 / 勾选 / 输入框聚焦这些仍会退回蓝色。
-     r43：用户嫌偏淡，主色由 #6b9fb0 加深到 #3f7f95（同色相提饱和、降明度），
-     配套文字档 #325d6d / 悬浮档 #274c58 / 浅档 #7fb0c3。 */
-  --el-color-primary: #3f7f95;
-  --el-color-primary-light-3: #79a5b5;
-  --el-color-primary-light-5: #9fbfca;
-  --el-color-primary-light-7: #c5d9df;
-  --el-color-primary-light-8: #d9e5ea;
-  --el-color-primary-light-9: #ecf2f4;
-  --el-color-primary-dark-2: #326677;
+     r46：用户两轮反馈「仍偏淡」，主色沿色相 195° 一路提饱和
+     （#6b9fb0 30% → #3f7f95 41% → 现在 #1981a3 73%），明度同步略降；
+     配套文字档 #0d5973 / 悬浮档 #074154 / 浅档 #7bc3db。
+     light-3/5/7/8/9 与 dark-2 按 EP 的 mix(white|black, primary, N/10) 重算。 */
+  --el-color-primary: #1981a3;
+  --el-color-primary-light-3: #5ea7bf;
+  --el-color-primary-light-5: #8cc0d1;
+  --el-color-primary-light-7: #bad9e3;
+  --el-color-primary-light-8: #d1e6ed;
+  --el-color-primary-light-9: #e8f2f6;
+  --el-color-primary-dark-2: #146782;
   --shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.06);
   --app-content-max-width: 100%;
   --app-shell-padding-x: 20px;
@@ -51,16 +53,16 @@
   --text-secondary: #7a8ca3;
   --text-tertiary: #96a6b8;
   --border-color: rgba(148, 163, 184, 0.22);
-  --accent-color: #7fb0c3;
-  --accent-soft: rgba(63, 127, 149, 0.14);
+  --accent-color: #7bc3db;
+  --accent-soft: rgba(25, 129, 163, 0.14);
   /* Apple TV 主题用更浅一档的青蓝，避免和半透明玻璃底叠起来发脏。 */
-  --el-color-primary: #7fb0c3;
-  --el-color-primary-light-3: #a5c8d5;
-  --el-color-primary-light-5: #bfd8e1;
-  --el-color-primary-light-7: #d9e7ed;
-  --el-color-primary-light-8: #e5eff3;
-  --el-color-primary-light-9: #f2f7f9;
-  --el-color-primary-dark-2: #668d9c;
+  --el-color-primary: #7bc3db;
+  --el-color-primary-light-3: #a3d5e6;
+  --el-color-primary-light-5: #bde1ed;
+  --el-color-primary-light-7: #d7edf4;
+  --el-color-primary-light-8: #e5f3f8;
+  --el-color-primary-light-9: #f2f9fb;
+  --el-color-primary-dark-2: #629caf;
   --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
 }
 
@@ -299,7 +301,7 @@ body {
 .el-menu {
   --el-menu-bg-color: transparent;
   --el-menu-text-color: var(--text-secondary);
-  --el-menu-hover-bg-color: rgba(63, 127, 149, 0.08);
+  --el-menu-hover-bg-color: rgba(25, 129, 163, 0.08);
   --el-menu-active-color: var(--accent-color);
   border-right: none;
 }

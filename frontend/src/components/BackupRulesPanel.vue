@@ -1209,7 +1209,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-card:hover {
   border-color: #b6c5c9;
-  box-shadow: 0 10px 22px rgba(63, 127, 149, 0.08);
+  box-shadow: 0 10px 22px rgba(25, 129, 163, 0.08);
 }
 
 .backup-card--disabled {
@@ -1222,7 +1222,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-card--chosen {
   border-color: #8fb2c0;
-  box-shadow: 0 6px 16px rgba(63, 127, 149, 0.12);
+  box-shadow: 0 6px 16px rgba(25, 129, 163, 0.12);
 }
 
 .backup-card--drag {
@@ -1418,11 +1418,11 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-wizard-tab:hover {
-  color: #325d6d;
+  color: #0d5973;
 }
 
 .backup-wizard-tab.is-active {
-  color: #325d6d;
+  color: #0d5973;
   background: #ffffff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
@@ -1521,7 +1521,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #325d6d;
+  color: #0d5973;
   background: #e9f1f4;
 }
 
@@ -1545,7 +1545,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-filter-chip:hover {
   border-color: #b6c5c9;
-  color: #325d6d;
+  color: #0d5973;
 }
 
 /* 扩展名 / 体积规则不作用于文件夹，禁用「文件夹」开关。 */
@@ -1564,21 +1564,21 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 /* 选中态不再铺实心强调色块 + 白字（在白底弹窗里过重、抢视线）；
    改成浅底 + 青蓝字，跟规则卡片「已启用」用同一套低饱和色。 */
 .backup-filter-chip.is-active {
-  color: #274c58;
-  background: rgba(63, 127, 149, 0.18);
-  border-color: rgba(63, 127, 149, 0.55);
+  color: #074154;
+  background: rgba(25, 129, 163, 0.18);
+  border-color: rgba(25, 129, 163, 0.55);
 }
 
 .backup-filter-chip.is-active:hover {
-  color: #274c58;
-  background: rgba(63, 127, 149, 0.3);
-  border-color: rgba(63, 127, 149, 0.78);
+  color: #074154;
+  background: rgba(25, 129, 163, 0.3);
+  border-color: rgba(25, 129, 163, 0.78);
 }
 
 /* 不可切换的开关（扩展名 / 体积规则的「文件夹」）即使值为 true 也按禁用显示，别亮成选中态。 */
 .backup-filter-chip.is-active:disabled {
   color: #b6c5c9;
-  background: rgba(63, 127, 149, 0.08);
+  background: rgba(25, 129, 163, 0.08);
   border-color: #eef2f7;
 }
 
@@ -1621,7 +1621,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   padding: 3px 8px 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  color: #325d6d;
+  color: #0d5973;
   background: #e9f1f4;
 }
 
@@ -1635,7 +1635,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border-radius: 50%;
   font-size: 12px;
   line-height: 1;
-  color: #325d6d;
+  color: #0d5973;
   background: transparent;
   cursor: pointer;
 }

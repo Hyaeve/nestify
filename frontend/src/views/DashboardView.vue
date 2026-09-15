@@ -21,7 +21,7 @@
             :percentage="clampPercentage(systemResource?.nestify_cpu_percent)"
             :show-text="false"
             :stroke-width="6"
-            color="#3f7f95"
+            color="#1981a3"
           />
         </div>
 
@@ -629,16 +629,16 @@ onBeforeUnmount(() => {
   overflow: hidden;
   padding: 30px 36px;
   border-radius: 30px;
-  border: 1px solid rgba(63, 127, 149, 0.2);
+  border: 1px solid rgba(25, 129, 163, 0.2);
   color: #0f172a;
   background:
-    linear-gradient(rgba(63, 127, 149, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(63, 127, 149, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(25, 129, 163, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(25, 129, 163, 0.045) 1px, transparent 1px),
     radial-gradient(circle at 12% 18%, rgba(186, 230, 253, 0.55), transparent 28%),
     radial-gradient(circle at 86% 20%, rgba(224, 231, 255, 0.9), transparent 24%),
     linear-gradient(100deg, #eff8ff 0%, #ffffff 45%, #f4f7ff 100%);
   background-size: 54px 54px, 54px 54px, auto, auto, auto;
-  box-shadow: 0 18px 42px rgba(63, 127, 149, 0.08);
+  box-shadow: 0 18px 42px rgba(25, 129, 163, 0.08);
 }
 
 .dashboard-hero::after {
@@ -668,7 +668,7 @@ onBeforeUnmount(() => {
 
 .dashboard-hero__eyebrow {
   margin-bottom: 10px;
-  color: #325d6d;
+  color: #0d5973;
 }
 
 .dashboard-hero h1 {
@@ -703,7 +703,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   min-width: 164px;
   padding: 12px 14px;
-  border: 1px solid rgba(63, 127, 149, 0.42);
+  border: 1px solid rgba(25, 129, 163, 0.42);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(10px);
@@ -723,8 +723,8 @@ onBeforeUnmount(() => {
   width: 22px;
   height: 22px;
   border-radius: 8px;
-  background: rgba(63, 127, 149, 0.14);
-  color: #325d6d;
+  background: rgba(25, 129, 163, 0.14);
+  color: #0d5973;
   font-size: 13px;
   line-height: 1;
 }
@@ -738,7 +738,7 @@ onBeforeUnmount(() => {
 
 .hero-metric__value {
   margin-left: auto;
-  color: #325d6d;
+  color: #0d5973;
   font-size: 16px;
   font-weight: 900;
   white-space: nowrap;
@@ -756,7 +756,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-metric__progress :deep(.el-progress-bar__outer) {
-  background-color: rgba(63, 127, 149, 0.2);
+  background-color: rgba(25, 129, 163, 0.2);
   border-radius: 999px;
 }
 
@@ -834,7 +834,7 @@ onBeforeUnmount(() => {
 
 .dashboard-panel__eyebrow {
   margin-bottom: 7px;
-  color: #325d6d;
+  color: #0d5973;
 }
 
 .page-section-title {
@@ -851,8 +851,8 @@ onBeforeUnmount(() => {
   min-height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgba(63, 127, 149, 0.14);
-  color: #325d6d;
+  background: rgba(25, 129, 163, 0.14);
+  color: #0d5973;
   font-size: 12px;
   font-weight: 900;
 }
@@ -923,8 +923,8 @@ onBeforeUnmount(() => {
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: #3f7f95;
-  box-shadow: 0 0 0 5px rgba(63, 127, 149, 0.12);
+  background: #1981a3;
+  box-shadow: 0 0 0 5px rgba(25, 129, 163, 0.12);
 }
 
 .summary-item__badges,
@@ -971,12 +971,12 @@ onBeforeUnmount(() => {
 }
 
 .task-preview-item__kind--rule {
-  color: #325d6d;
-  background: rgba(63, 127, 149, 0.14);
+  color: #0d5973;
+  background: rgba(25, 129, 163, 0.14);
 }
 
 .task-preview-item__kind--manual {
-  color: #325d6d;
+  color: #0d5973;
   background: #e9f1f4;
 }
 
@@ -1060,9 +1060,9 @@ onBeforeUnmount(() => {
 
 /* 运行中的任务给一个左侧强调条，与「已完成」的历史记录区分开。 */
 .task-preview-item.is-running {
-  border-color: rgba(63, 127, 149, 0.22);
+  border-color: rgba(25, 129, 163, 0.22);
   background: linear-gradient(180deg, #f8fbff 0%, #f5f9ff 100%);
-  box-shadow: inset 3px 0 0 #7fb0c3;
+  box-shadow: inset 3px 0 0 #7bc3db;
 }
 
 .task-preview-item__meta {

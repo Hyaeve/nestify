@@ -161,7 +161,7 @@ async function handleLogin() {
   height: 64px;
   border-radius: 16px;
   object-fit: cover;
-  box-shadow: 0 18px 42px rgba(63, 127, 149, 0.12);
+  box-shadow: 0 18px 42px rgba(25, 129, 163, 0.12);
 }
 
 .login-brand__title {
@@ -196,8 +196,8 @@ async function handleLogin() {
 
 :deep(.el-input__wrapper.is-focus) {
   box-shadow:
-    0 0 0 1px rgba(63, 127, 149, 0.72) inset,
-    0 10px 28px rgba(63, 127, 149, 0.12);
+    0 0 0 1px rgba(25, 129, 163, 0.72) inset,
+    0 10px 28px rgba(25, 129, 163, 0.12);
 }
 
 .login-button {
@@ -205,8 +205,8 @@ async function handleLogin() {
   min-height: 42px;
   border: 0;
   border-radius: 14px;
-  background: linear-gradient(135deg, #7fb0c3 0%, #3f7f95 100%);
-  box-shadow: 0 16px 34px rgba(63, 127, 149, 0.18);
+  background: linear-gradient(135deg, #7bc3db 0%, #1981a3 100%);
+  box-shadow: 0 16px 34px rgba(25, 129, 163, 0.18);
   font-weight: 800;
 }
 

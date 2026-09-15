@@ -178,7 +178,7 @@ function formatSize(size?: number) {
 .backup-files__title {
   font-size: 14px;
   font-weight: 800;
-  color: #325d6d;
+  color: #0d5973;
 }
 
 .backup-files__filters {
@@ -208,14 +208,14 @@ function formatSize(size?: number) {
 }
 
 .backup-files__filter:hover {
-  color: #325d6d;
-  border-color: rgba(63, 127, 149, 0.5);
+  color: #0d5973;
+  border-color: rgba(25, 129, 163, 0.5);
 }
 
 .backup-files__filter.is-active {
-  color: #325d6d;
-  border-color: rgba(63, 127, 149, 0.55);
-  background: rgba(63, 127, 149, 0.12);
+  color: #0d5973;
+  border-color: rgba(25, 129, 163, 0.55);
+  background: rgba(25, 129, 163, 0.12);
 }
 
 .backup-files__filter-count {
