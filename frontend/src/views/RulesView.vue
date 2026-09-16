@@ -3911,8 +3911,8 @@ onBeforeUnmount(() => {
 /* 后缀标签跟着所在窗口走：媒体文件一种蓝、元数据文件另一种蓝，一眼分得开。 */
 .strm-suffix-editor:has(.strm-preset-button--video) :deep(.el-tag) { color: #0f5c8f; background: rgba(11, 157, 248, 0.16); border-color: rgba(11, 157, 248, 0.42); }
 .strm-suffix-editor:has(.strm-preset-button--image) :deep(.el-tag) { color: #3f45b8; background: rgba(106, 111, 240, 0.15); border-color: rgba(106, 111, 240, 0.44); }
-/* 规则弹窗「保存」按钮：清透青绿，跟默认主色蓝（创建按钮）拉开，也和设置页「保存修改」同一支语义色。 */
-.rule-save-button { --el-button-bg-color: #1fc4ad; --el-button-border-color: #1fc4ad; --el-button-text-color: #ffffff; --el-button-hover-bg-color: #35cfba; --el-button-hover-border-color: #35cfba; --el-button-hover-text-color: #ffffff; --el-button-active-bg-color: #17a894; --el-button-active-border-color: #17a894; --el-button-active-text-color: #ffffff; --el-button-disabled-bg-color: rgba(31, 196, 173, 0.5); --el-button-disabled-border-color: rgba(31, 196, 173, 0.5); --el-button-disabled-text-color: #ffffff; }
+/* 规则弹窗「保存」按钮：清透天青蓝（与设置页「保存设置」同一支），比默认主色蓝再亮一档，别往深蓝走。 */
+.rule-save-button { --el-button-bg-color: #12a9e8; --el-button-border-color: #12a9e8; --el-button-text-color: #ffffff; --el-button-hover-bg-color: #2eb8f0; --el-button-hover-border-color: #2eb8f0; --el-button-hover-text-color: #ffffff; --el-button-active-bg-color: #0d8fc6; --el-button-active-border-color: #0d8fc6; --el-button-active-text-color: #ffffff; --el-button-disabled-bg-color: rgba(18, 169, 232, 0.5); --el-button-disabled-border-color: rgba(18, 169, 232, 0.5); --el-button-disabled-text-color: #ffffff; }
 /* Strm 数值参数行（API 请求间隔 / 最小视频 / 下载线程数）：窄输入框 + 紧随其后的单位。 */
 .strm-option-number { width: 118px; }
 .strm-option-unit { margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary); }
