@@ -93,7 +93,8 @@
 /* —— 文本域右下角的拉伸器 ——
    上面把全局滚动条压到 6px，Chrome 的 resizer 角是「滚动条宽 × 高」的区域，
    于是文本框的拉伸手柄也跟着变成 6px 的小点（内容溢出出现滚动条时更明显）。
-   这里给文本域单独保留常态宽度的滚动条，让手柄恢复常规大小；
+   这里只给文本域恢复常态宽度的滚动条，让手柄回到常规大小；
+   **手柄保持 Chrome 原生样式，不要自绘 `::-webkit-resizer`**（画过三道斜线，被要求还原）。
    thumb 用透明边框 + background-clip 收窄回 6px，视觉上和全局细滚动条一致。 */
 .el-textarea__inner::-webkit-scrollbar,
 textarea::-webkit-scrollbar {
@@ -112,21 +113,6 @@ textarea::-webkit-scrollbar-thumb {
 .el-textarea__inner::-webkit-scrollbar-thumb:hover,
 textarea::-webkit-scrollbar-thumb:hover {
   background-color: rgba(148, 163, 184, 0.45);
-}
-
-/* 手柄统一画成三道斜线，避免不同状态下观感不一致。 */
-.el-textarea__inner::-webkit-resizer,
-textarea::-webkit-resizer {
-  background: linear-gradient(
-    135deg,
-    transparent 0 20%,
-    rgba(100, 116, 139, 0.5) 20% 30%,
-    transparent 30% 44%,
-    rgba(100, 116, 139, 0.5) 44% 54%,
-    transparent 54% 68%,
-    rgba(100, 116, 139, 0.5) 68% 78%,
-    transparent 78% 100%
-  );
 }
 
 body {
