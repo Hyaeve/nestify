@@ -328,28 +328,16 @@ body {
   border-radius: 999px;
 }
 
-/* 「功能模块」多选下拉的选项排版：名称 + 一行截断的说明（原来这些说明只在 hover 的
-   tooltip 里，改成下拉后直接展示）。下拉面板 Teleport 到 body，组件里的 scoped 样式
-   够不着它，所以这条写在全局。 */
-.el-select-dropdown__item .mode-select-option {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.el-select-dropdown__item .mode-select-option__label {
-  flex: 0 0 auto;
-}
-
-.el-select-dropdown__item .mode-select-option__description {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
+/* 「功能模块」胶囊的悬停说明（停留 0.6s 才出）：小字 + 圆角文本框。
+   说明文案里带 \n，用 pre-line 让它换行；EP tooltip 会被 Teleport 到 body，
+   组件里的 scoped 样式够不着它，所以这条写在全局。 */
+.el-popper.mode-chip-tip {
+  max-width: 340px;
+  padding: 8px 12px;
+  border-radius: 12px;
   font-size: 12px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.6;
+  white-space: pre-line;
 }
 
 .el-button {

@@ -401,7 +401,10 @@
 
     <el-dialog v-model="createNamingDialogVisible" :title="editingNamingRuleID ? '编辑命名规则' : '新增命名规则'" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
         <el-form-item class="mode-select-field">
@@ -413,42 +416,47 @@
               </button>
             </span>
           </template>
-          <el-select v-model="createNamingSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
-            <el-option v-for="option in namingScopeOptionKeys" :key="option.key" :label="option.label" :value="option.key">
-              <span class="mode-select-option">
-                <span class="mode-select-option__label">{{ option.label }}</span>
-                <span class="mode-select-option__description">{{ option.description }}</span>
-              </span>
-            </el-option>
-          </el-select>
+          <div class="mode-chip-box">
+            <el-tooltip v-for="option in namingScopeOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
+              <template #content><span class="mode-chip-tip__text">{{ option.description }}</span></template>
+              <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createNamingForm.options, option.key) }" @click="toggleModeOption(createNamingForm.options, option.key)">{{ option.label }}</button>
+            </el-tooltip>
+          </div>
         </el-form-item>
-        <el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item>
-        <el-form-item label="Cron 表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
-        <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item></el-col>
+        </el-row>
       </el-form>
       <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="归档模式">
               <el-select v-model="createForm.archive_mode" :class="['mode-select', `mode-select--${createForm.archive_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="打包模式" value="package" />
                 <el-option label="收集模式" value="collect" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="监控模式">
+              <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+                <el-option label="本地模式" value="local" />
+                <el-option label="兼容模式" value="compatibility" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-form-item label="监控模式">
-          <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
-            <el-option label="本地模式" value="local" />
-            <el-option label="兼容模式" value="compatibility" />
-          </el-select>
-        </el-form-item>
         <el-form-item class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
@@ -458,16 +466,13 @@
               </button>
             </span>
           </template>
-          <el-select v-model="createArchiveSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
-            <el-option v-for="option in createArchiveOptionKeys" :key="option.key" :label="option.label" :value="option.key">
-              <span class="mode-select-option">
-                <span class="mode-select-option__label">{{ option.label }}</span>
-                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
-              </span>
-            </el-option>
-          </el-select>
+          <div class="mode-chip-box">
+            <el-tooltip v-for="option in createArchiveOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
+              <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
+              <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createArchiveOptionSource, option.key) }" @click="toggleModeOption(createArchiveOptionSource, option.key)">{{ option.label }}</button>
+            </el-tooltip>
+          </div>
         </el-form-item>
-        <el-form-item label="Cron 表达式"><el-input v-model="createForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
@@ -500,31 +505,37 @@
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateRule">创建</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="editDialogVisible" title="编辑规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="归档模式">
               <el-select v-model="editForm.archive_mode" :class="['mode-select', `mode-select--${editForm.archive_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="打包模式" value="package" />
                 <el-option label="收集模式" value="collect" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="监控模式">
+              <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+                <el-option label="本地模式" value="local" />
+                <el-option label="兼容模式" value="compatibility" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-form-item label="监控模式">
-          <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
-            <el-option label="本地模式" value="local" />
-            <el-option label="兼容模式" value="compatibility" />
-          </el-select>
-        </el-form-item>
         <el-form-item class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
@@ -534,16 +545,13 @@
               </button>
             </span>
           </template>
-          <el-select v-model="editArchiveSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
-            <el-option v-for="option in editArchiveOptionKeys" :key="option.key" :label="option.label" :value="option.key">
-              <span class="mode-select-option">
-                <span class="mode-select-option__label">{{ option.label }}</span>
-                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
-              </span>
-            </el-option>
-          </el-select>
+          <div class="mode-chip-box">
+            <el-tooltip v-for="option in editArchiveOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
+              <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
+              <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(editArchiveOptionSource, option.key) }" @click="toggleModeOption(editArchiveOptionSource, option.key)">{{ option.label }}</button>
+            </el-tooltip>
+          </div>
         </el-form-item>
-        <el-form-item label="Cron 表达式"><el-input v-model="editForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
@@ -576,31 +584,37 @@
           </button>
           <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createPurifyDialogVisible" title="新增净化规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="规则模式">
               <el-select v-model="createPurifyForm.archive_mode" :class="['mode-select', `mode-select--${createPurifyForm.archive_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="清理模式" value="cleanup" />
                 <el-option label="转换模式" value="transform" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="监控模式">
+              <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+                <el-option label="本地模式" value="local" />
+                <el-option label="兼容模式" value="compatibility" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-form-item label="监控模式">
-          <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
-            <el-option label="本地模式" value="local" />
-            <el-option label="兼容模式" value="compatibility" />
-          </el-select>
-        </el-form-item>
         <el-form-item class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
@@ -610,16 +624,13 @@
               </button>
             </span>
           </template>
-          <el-select v-model="createPurifySelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
-            <el-option v-for="option in createPurifyOptionKeys" :key="option.key" :label="option.label" :value="option.key">
-              <span class="mode-select-option">
-                <span class="mode-select-option__label">{{ option.label }}</span>
-                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
-              </span>
-            </el-option>
-          </el-select>
+          <div class="mode-chip-box">
+            <el-tooltip v-for="option in createPurifyOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
+              <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
+              <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createPurifyOptionSource, option.key) }" @click="toggleModeOption(createPurifyOptionSource, option.key)">{{ option.label }}</button>
+            </el-tooltip>
+          </div>
         </el-form-item>
-        <el-form-item label="Cron 表达式"><el-input v-model="createPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="监控目录">
           <div class="source-dir-editor">
             <div v-if="createPurifyForm.source_dirs.length" class="source-dir-editor__list">
@@ -674,31 +685,37 @@
             <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreatePurifyRule">创建</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="editPurifyDialogVisible" title="编辑净化规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="规则模式">
               <el-select v-model="editPurifyForm.archive_mode" :class="['mode-select', `mode-select--${editPurifyForm.archive_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="清理模式" value="cleanup" />
                 <el-option label="转换模式" value="transform" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="监控模式">
+              <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+                <el-option label="本地模式" value="local" />
+                <el-option label="兼容模式" value="compatibility" />
+              </el-select>
+            </el-form-item>
+          </el-col>
         </el-row>
-        <el-form-item label="监控模式">
-          <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
-            <el-option label="本地模式" value="local" />
-            <el-option label="兼容模式" value="compatibility" />
-          </el-select>
-        </el-form-item>
         <el-form-item class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
@@ -708,16 +725,13 @@
               </button>
             </span>
           </template>
-          <el-select v-model="editPurifySelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
-            <el-option v-for="option in editPurifyOptionKeys" :key="option.key" :label="option.label" :value="option.key">
-              <span class="mode-select-option">
-                <span class="mode-select-option__label">{{ option.label }}</span>
-                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
-              </span>
-            </el-option>
-          </el-select>
+          <div class="mode-chip-box">
+            <el-tooltip v-for="option in editPurifyOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
+              <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
+              <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(editPurifyOptionSource, option.key) }" @click="toggleModeOption(editPurifyOptionSource, option.key)">{{ option.label }}</button>
+            </el-tooltip>
+          </div>
         </el-form-item>
-        <el-form-item label="Cron 表达式"><el-input v-model="editPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="监控目录">
           <div class="source-dir-editor">
             <div v-if="editPurifyForm.source_dirs.length" class="source-dir-editor__list">
@@ -772,27 +786,29 @@
             <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editPurifyForm.run_on_start" /></el-form-item></el-col></el-row>
+        <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createLinkDialogVisible" title="新增链路规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="链路模式">
               <el-select v-model="createLinkForm.link_mode" :class="['mode-select', `mode-select--${createLinkForm.link_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="软链模式" value="soft" />
                 <el-option label="硬链模式" value="hard" />
                 <el-option label="Strm模式" value="strm" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createLinkForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="Cron 表达式"><el-input v-model="createLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createLinkForm.link_mode === 'strm'">
@@ -858,8 +874,8 @@
           <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
+          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="createLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col>
-          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createLinkForm.run_on_start" /></el-form-item></el-col>
           <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="createLinkForm.strm_overwrite" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -868,20 +884,22 @@
 
     <el-dialog v-model="editLinkDialogVisible" title="编辑链路规则" width="640px">
       <el-form label-position="top">
-        <el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="链路模式">
               <el-select v-model="editLinkForm.link_mode" :class="['mode-select', `mode-select--${editLinkForm.link_mode}`]" style="width: 100%">
+                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
                 <el-option label="软链模式" value="soft" />
                 <el-option label="硬链模式" value="hard" />
                 <el-option label="Strm模式" value="strm" />
               </el-select>
             </el-form-item>
           </el-col>
-          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editLinkForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="Cron 表达式"><el-input v-model="editLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editLinkForm.link_mode === 'strm'">
@@ -947,8 +965,8 @@
           <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
+          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="editLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col>
-          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editLinkForm.run_on_start" /></el-form-item></el-col>
           <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="editLinkForm.strm_overwrite" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -1223,8 +1241,8 @@ function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean) {
   return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite }
 }
 
-// 链路规则底部的开关行：Strm 模式下「启用规则 / 立即运行一次（启动后）/ 覆盖生成」三个开关并排（各 8 栅格），
-// 其它模式只有两个开关，保持各占一半。
+// 链路规则底部的开关行：Strm 模式下「实时监控 / 启用规则 / 覆盖生成」三个开关并排（各 8 栅格），
+// 其它模式只有两个开关（实时监控 / 启用规则），保持各占一半。
 function linkSwitchSpan(showOverwrite: boolean) {
   return showOverwrite ? 8 : 12
 }
@@ -1771,10 +1789,12 @@ const editLinkForm = reactive({
 
 const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null, options: { naming_include_files: false, naming_include_dirs: false } })
 
-// —— 「功能模块」多选下拉 ——
-// 历史形态是「折叠面板 + 一排复选框」（mode-config-toggle / mode-option-card），
-// 现在统一改成 el-select 多选 + 上方一个全选按钮。库里仍然把选择存成 options 对象的
-// 布尔位（提交结构不动），而下拉要的是 key 数组，这里做一层双向换算。
+// —— 「功能模块」候选框 ——
+// 历史形态是「折叠面板 + 一排复选框」（mode-config-toggle / mode-option-card），中途一度
+// 改成多选下拉，现在定稿为「候选框 + 胶囊」：每个功能一个胶囊，点一下启用（高亮）、
+// 再点一下停用（灰），悬停 0.6s 才出小字说明（见 .mode-chip-tip）。
+// 库里仍然把选择存成 options 对象的布尔位（提交结构不动）；selection 计算属性只用于
+// 「全选 / 取消全选」按钮的文案判断。
 const namingScopeOptions = [
   { key: 'naming_include_dirs', label: '包含文件夹', description: '将规则集应用于监控路径下的文件夹' },
   { key: 'naming_include_files', label: '包含文件', description: '将规则集应用于监控路径下的文件' },
@@ -1804,6 +1824,16 @@ function modeSelection(resolveOptions: () => ModeOptionsRecord, resolveKeys: () 
 function toggleAllMode(options: ModeOptionsRecord, keys: readonly ModeOptionItem[]) {
   const allSelected = keys.every((option) => options[option.key])
   for (const option of keys) options[option.key] = !allSelected
+}
+
+// 单个「功能模块」胶囊的开关。key 走索引签名，所以调用方传 options 对象本身
+// （模板里计算属性会自动解包），别把数组型的 selection 传进来。
+function toggleModeOption(options: ModeOptionsRecord, key: string) {
+  options[key] = !options[key]
+}
+
+function isModeOptionOn(options: ModeOptionsRecord, key: string) {
+  return Boolean(options[key])
 }
 
 const namingScopeOptionKeys: readonly ModeOptionItem[] = namingScopeOptions
@@ -2135,7 +2165,7 @@ watch(() => createLinkForm.cron_expression, () => syncScheduleFromCron(createLin
 watch(() => editLinkForm.cron_expression, () => syncScheduleFromCron(editLinkForm))
 watch(() => createNamingForm.cron_expression, () => syncScheduleFromCron(createNamingForm))
 
-// Strm 模式默认不勾选「新文件触发」。
+// Strm 模式默认不勾选「实时监控」。
 watch(() => createLinkForm.link_mode, (mode, previous) => {
   if (mode === 'strm' && previous !== 'strm') {
     createLinkForm.monitor_enabled = false
@@ -3614,10 +3644,12 @@ onBeforeUnmount(() => {
 }
 /* —— 模式下拉选择器 ——
    归档模式 / 规则模式 / 链路模式 / 监控模式 原来是 el-radio-group 单选按钮组，
-   现在统一改成 el-select。模式仍各自带颜色（沿用原单选按钮的色相），通过
-   --mode-accent 传给选中项文字，扫一眼就知道当前是什么模式。 */
+   现在统一改成 el-select。模式各自带颜色（沿用原单选按钮的色相），并且选定后不再用
+   纯文字显示，而是走 #label 插槽渲染成「胶囊圆角框」（.mode-pill）—— 几何与配色
+   对齐运行日志页的 .logs-mode-tag，扫一眼就知道当前是什么模式。 */
 .mode-select {
   --mode-accent: var(--el-text-color-primary);
+  --mode-tint: rgba(148, 163, 184, 0.12);
 }
 
 .mode-select :deep(.el-select__selected-item),
@@ -3626,15 +3658,75 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.mode-select--package { --mode-accent: #d58a2f; }
-.mode-select--collect { --mode-accent: #8a74d6; }
-.mode-select--cleanup { --mode-accent: #5f9f45; }
-.mode-select--transform { --mode-accent: #64b9d8; }
-.mode-select--soft { --mode-accent: #c47c98; }
-.mode-select--hard { --mode-accent: #2f3136; }
-.mode-select--strm { --mode-accent: #2f8f9d; }
-.mode-select--local { --mode-accent: #5f9f45; }
-.mode-select--compatibility { --mode-accent: #2f8f9d; }
+/* EP 把 #label 插槽的内容放在绝对定位的 .el-select__placeholder 里，胶囊自己
+   决定高度即可，不会影响 wrapper 的排版。 */
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  padding: 4px 12px;
+  color: var(--mode-accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  background: var(--mode-tint);
+  border: 1px solid currentColor;
+  border-radius: 8px;
+}
+
+.mode-select--package { --mode-accent: #d58a2f; --mode-tint: rgba(213, 138, 47, 0.08); }
+.mode-select--collect { --mode-accent: #8a74d6; --mode-tint: rgba(138, 116, 214, 0.1); }
+.mode-select--cleanup { --mode-accent: #5f9f45; --mode-tint: rgba(95, 159, 69, 0.12); }
+.mode-select--transform { --mode-accent: #64b9d8; --mode-tint: rgba(100, 185, 216, 0.12); }
+.mode-select--soft { --mode-accent: #c47c98; --mode-tint: rgba(196, 124, 152, 0.12); }
+.mode-select--hard { --mode-accent: #2f3136; --mode-tint: rgba(47, 49, 54, 0.08); }
+.mode-select--strm { --mode-accent: #2f8f9d; --mode-tint: rgba(47, 143, 157, 0.12); }
+.mode-select--local { --mode-accent: #3f7fd8; --mode-tint: rgba(63, 127, 216, 0.12); }
+.mode-select--compatibility { --mode-accent: #b5793a; --mode-tint: rgba(181, 121, 58, 0.12); }
+
+/* 「功能模块」候选框：每个功能一个胶囊，点一下启用（浅底深字高亮），再点一下停用
+   （灰底灰字），悬停 0.6s 才出小字说明（.mode-chip-tip，样式写在 styles/index.scss，
+   因为 EP tooltip 会被 Teleport 到 body）。 */
+.mode-chip-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  background: var(--el-fill-color-extra-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+}
+
+.mode-chip {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.mode-chip:hover {
+  color: var(--el-text-color-primary);
+  background: rgba(148, 163, 184, 0.22);
+}
+
+.mode-chip.is-on {
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.14);
+  border-color: rgba(32, 159, 238, 0.45);
+}
+
+.mode-chip.is-on:hover {
+  color: #055a8f;
+  background: rgba(32, 159, 238, 0.22);
+  border-color: rgba(32, 159, 238, 0.62);
+}
 
 /* 「功能模块」多选下拉：标签行右侧挂一个「全选 / 取消全选」按钮。 */
 .mode-select-field :deep(.el-form-item__label) {
