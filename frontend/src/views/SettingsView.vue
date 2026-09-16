@@ -904,46 +904,54 @@ async function handleBackupFileChange(file: UploadFile) {
   font-size: 14px;
 }
 
-/* 「保存修改 / 保存设置 / 添加挂载」三个实心动作按钮：
-   原来统一铺深青 #0e7490（L31），颜色重、发闷；改成清透路线——高饱和（S80+）+
-   中高明度（L48~63）的亮色实心块配白字，像上了色玻璃而不是一块深色板砖。
+/* 「保存修改 / 保存设置 / 添加挂载」三个动作按钮：
+   配色演进：深青实心 #0e7490（L31）→ 被反馈「发闷」；高明度高饱和实心 #1fc4ad 等
+   → 被反馈「辣眼睛」。现在收到中间路线：**浅色底 + 深色字**（同色相淡底 ~.15 +
+   同色淡描边 ~.45 + 深一档的字），既不闷也不刺眼，且仍保有可点按感。
    三个按钮各用一个色相区分作用域（青绿=账户 / 天青=基础设置 / 靛蓝=挂载），
    不再强行同色。颜色仍走 --el-button-* 变量，scoped 选择器带上 data-v 属性后
    权重高于 EP 的 .el-button--primary（含它的 :hover/:active 链式选择器），能覆盖住。 */
 .settings-btn-solid {
-  --el-button-text-color: #ffffff;
-  --el-button-hover-text-color: #ffffff;
-  --el-button-active-text-color: #ffffff;
+  --el-button-text-color: #26323f;
 }
 
 /* 保存修改（登录账户）：青绿。 */
 .settings-btn-solid--account {
-  --el-button-bg-color: #1fc4ad;
-  --el-button-border-color: #1fc4ad;
-  --el-button-hover-bg-color: #3ad2bd;
-  --el-button-hover-border-color: #3ad2bd;
-  --el-button-active-bg-color: #17a894;
-  --el-button-active-border-color: #17a894;
+  --el-button-text-color: #0f8a7a;
+  --el-button-bg-color: rgba(31, 196, 173, 0.15);
+  --el-button-border-color: rgba(31, 196, 173, 0.45);
+  --el-button-hover-text-color: #0b6f62;
+  --el-button-hover-bg-color: rgba(31, 196, 173, 0.26);
+  --el-button-hover-border-color: rgba(31, 196, 173, 0.75);
+  --el-button-active-text-color: #095c51;
+  --el-button-active-bg-color: rgba(31, 196, 173, 0.34);
+  --el-button-active-border-color: rgba(31, 196, 173, 0.85);
 }
 
 /* 保存设置（基础设置）：天青。 */
 .settings-btn-solid--settings {
-  --el-button-bg-color: #12a9e8;
-  --el-button-border-color: #12a9e8;
-  --el-button-hover-bg-color: #35bcf2;
-  --el-button-hover-border-color: #35bcf2;
-  --el-button-active-bg-color: #0d8fc7;
-  --el-button-active-border-color: #0d8fc7;
+  --el-button-text-color: #0b7cae;
+  --el-button-bg-color: rgba(18, 169, 232, 0.14);
+  --el-button-border-color: rgba(18, 169, 232, 0.45);
+  --el-button-hover-text-color: #08638d;
+  --el-button-hover-bg-color: rgba(18, 169, 232, 0.25);
+  --el-button-hover-border-color: rgba(18, 169, 232, 0.75);
+  --el-button-active-text-color: #064f72;
+  --el-button-active-bg-color: rgba(18, 169, 232, 0.33);
+  --el-button-active-border-color: rgba(18, 169, 232, 0.85);
 }
 
 /* 添加挂载（远程挂载）：靛蓝。 */
 .settings-btn-solid--mount {
-  --el-button-bg-color: #5a6fe8;
-  --el-button-border-color: #5a6fe8;
-  --el-button-hover-bg-color: #7487f0;
-  --el-button-hover-border-color: #7487f0;
-  --el-button-active-bg-color: #4759d2;
-  --el-button-active-border-color: #4759d2;
+  --el-button-text-color: #4a56c0;
+  --el-button-bg-color: rgba(90, 111, 232, 0.14);
+  --el-button-border-color: rgba(90, 111, 232, 0.42);
+  --el-button-hover-text-color: #3b45a0;
+  --el-button-hover-bg-color: rgba(90, 111, 232, 0.24);
+  --el-button-hover-border-color: rgba(90, 111, 232, 0.72);
+  --el-button-active-text-color: #313a85;
+  --el-button-active-bg-color: rgba(90, 111, 232, 0.32);
+  --el-button-active-border-color: rgba(90, 111, 232, 0.82);
 }
 
 /* 规则「备份 / 还原」是两种不同性质的动作，各用一种浅色区分开。

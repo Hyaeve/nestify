@@ -404,20 +404,26 @@
         <el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
-        <button type="button" class="mode-config-toggle" @click="namingScopeOptionsExpanded = !namingScopeOptionsExpanded">
-          <div><div class="mode-config-panel__title">功能模块</div></div>
-          <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': namingScopeOptionsExpanded }">⌄</span></div>
-        </button>
-        <el-collapse-transition>
-          <div v-show="namingScopeOptionsExpanded" class="mode-config-panel naming-scope-panel">
-            <el-row :gutter="12">
-              <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_dirs">包含文件夹</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件夹</span></label></el-col>
-              <el-col :span="12"><label class="mode-option-card mode-option-card--compact naming-scope-card"><el-checkbox v-model="createNamingForm.options.naming_include_files">包含文件</el-checkbox><span class="mode-option-card__description">将规则集应用于监控路径下的文件</span></label></el-col>
-            </el-row>
-          </div>
-        </el-collapse-transition>
-        <el-row :gutter="16"><el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="计划执行"><el-switch v-model="createNamingForm.schedule_enabled" /></el-form-item></el-col></el-row>
-        <el-form-item v-if="createNamingForm.schedule_enabled" label="计划表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="例如：0 8 * * *" /></el-form-item>
+        <el-form-item class="mode-select-field">
+          <template #label>
+            <span class="mode-select-field__head">
+              <span>功能模块</span>
+              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createNamingForm.options, namingScopeOptionKeys)">
+                {{ createNamingSelection.length === namingScopeOptionKeys.length ? '取消全选' : '全选' }}
+              </button>
+            </span>
+          </template>
+          <el-select v-model="createNamingSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
+            <el-option v-for="option in namingScopeOptionKeys" :key="option.key" :label="option.label" :value="option.key">
+              <span class="mode-select-option">
+                <span class="mode-select-option__label">{{ option.label }}</span>
+                <span class="mode-select-option__description">{{ option.description }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="新文件触发"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
@@ -427,26 +433,41 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="createForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${createForm.archive_mode}`]"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="归档模式">
+              <el-select v-model="createForm.archive_mode" :class="['mode-select', `mode-select--${createForm.archive_mode}`]" style="width: 100%">
+                <el-option label="打包模式" value="package" />
+                <el-option label="收集模式" value="collect" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
+            <el-option label="本地模式" value="local" />
+            <el-option label="兼容模式" value="compatibility" />
+          </el-select>
         </el-form-item>
-          <button type="button" class="mode-config-toggle" @click="createArchiveOptionsExpanded = !createArchiveOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getModeTitle(createForm.archive_mode) }}</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': createArchiveOptionsExpanded }">⌄</span></div>
-          </button>
-          <el-collapse-transition>
-            <div v-show="createArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="createForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-            </div>
-          </el-collapse-transition>
-        <el-form-item v-if="createForm.schedule_enabled" label="计划表达式"><el-input v-model="createForm.cron_expression" /></el-form-item>
+        <el-form-item class="mode-select-field">
+          <template #label>
+            <span class="mode-select-field__head">
+              <span>{{ getModeTitle(createForm.archive_mode) }}</span>
+              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createArchiveOptionSource, createArchiveOptionKeys)">
+                {{ createArchiveSelection.length === createArchiveOptionKeys.length ? '取消全选' : '全选' }}
+              </button>
+            </span>
+          </template>
+          <el-select v-model="createArchiveSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
+            <el-option v-for="option in createArchiveOptionKeys" :key="option.key" :label="option.label" :value="option.key">
+              <span class="mode-select-option">
+                <span class="mode-select-option__label">{{ option.label }}</span>
+                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="createForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
@@ -488,26 +509,41 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="归档模式"><el-radio-group v-model="editForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${editForm.archive_mode}`]"><el-radio-button value="package">打包模式</el-radio-button><el-radio-button value="collect">收集模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="归档模式">
+              <el-select v-model="editForm.archive_mode" :class="['mode-select', `mode-select--${editForm.archive_mode}`]" style="width: 100%">
+                <el-option label="打包模式" value="package" />
+                <el-option label="收集模式" value="collect" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
+            <el-option label="本地模式" value="local" />
+            <el-option label="兼容模式" value="compatibility" />
+          </el-select>
         </el-form-item>
-          <button type="button" class="mode-config-toggle" @click="editArchiveOptionsExpanded = !editArchiveOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getModeTitle(editForm.archive_mode) }}</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">当前模式</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': editArchiveOptionsExpanded }">⌄</span></div>
-          </button>
-          <el-collapse-transition>
-            <div v-show="editArchiveOptionsExpanded" class="mode-config-panel">
-              <el-row v-if="editForm.archive_mode === 'package'" :gutter="12"><el-col v-for="option in packageModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.package_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-              <el-row v-else :gutter="12"><el-col v-for="option in collectModeOptions" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editForm.collect_options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-            </div>
-          </el-collapse-transition>
-        <el-form-item v-if="editForm.schedule_enabled" label="计划表达式"><el-input v-model="editForm.cron_expression" /></el-form-item>
+        <el-form-item class="mode-select-field">
+          <template #label>
+            <span class="mode-select-field__head">
+              <span>{{ getModeTitle(editForm.archive_mode) }}</span>
+              <button type="button" class="mode-select-field__all" @click="toggleAllMode(editArchiveOptionSource, editArchiveOptionKeys)">
+                {{ editArchiveSelection.length === editArchiveOptionKeys.length ? '取消全选' : '全选' }}
+              </button>
+            </span>
+          </template>
+          <el-select v-model="editArchiveSelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
+            <el-option v-for="option in editArchiveOptionKeys" :key="option.key" :label="option.label" :value="option.key">
+              <span class="mode-select-option">
+                <span class="mode-select-option__label">{{ option.label }}</span>
+                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="editForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
@@ -549,25 +585,41 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="createPurifyForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${createPurifyForm.archive_mode}`]"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="规则模式">
+              <el-select v-model="createPurifyForm.archive_mode" :class="['mode-select', `mode-select--${createPurifyForm.archive_mode}`]" style="width: 100%">
+                <el-option label="清理模式" value="cleanup" />
+                <el-option label="转换模式" value="transform" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="createPurifyForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
+            <el-option label="本地模式" value="local" />
+            <el-option label="兼容模式" value="compatibility" />
+          </el-select>
         </el-form-item>
-          <button type="button" class="mode-config-toggle" @click="createPurifyOptionsExpanded = !createPurifyOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</div></div>
-            <div class="mode-config-toggle__meta"><el-tag :type="createPurifyForm.archive_mode === 'transform' ? 'primary' : 'warning'">{{ createPurifyForm.archive_mode === 'transform' ? '转换模式' : '清理模式' }}</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': createPurifyOptionsExpanded }">⌄</span></div>
-          </button>
-          <el-collapse-transition>
-            <div v-show="createPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(createPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="createPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-            </div>
-          </el-collapse-transition>
-        <el-form-item v-if="createPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="createPurifyForm.cron_expression" /></el-form-item>
+        <el-form-item class="mode-select-field">
+          <template #label>
+            <span class="mode-select-field__head">
+              <span>{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</span>
+              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createPurifyOptionSource, createPurifyOptionKeys)">
+                {{ createPurifySelection.length === createPurifyOptionKeys.length ? '取消全选' : '全选' }}
+              </button>
+            </span>
+          </template>
+          <el-select v-model="createPurifySelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
+            <el-option v-for="option in createPurifyOptionKeys" :key="option.key" :label="option.label" :value="option.key">
+              <span class="mode-select-option">
+                <span class="mode-select-option__label">{{ option.label }}</span>
+                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="createPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="监控目录">
           <div class="source-dir-editor">
             <div v-if="createPurifyForm.source_dirs.length" class="source-dir-editor__list">
@@ -631,25 +683,41 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则模式"><el-radio-group v-model="editPurifyForm.archive_mode" :class="['archive-mode-group', `archive-mode-group--${editPurifyForm.archive_mode}`]"><el-radio-button value="cleanup">清理模式</el-radio-button><el-radio-button value="transform">转换模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editPurifyForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editPurifyForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="规则模式">
+              <el-select v-model="editPurifyForm.archive_mode" :class="['mode-select', `mode-select--${editPurifyForm.archive_mode}`]" style="width: 100%">
+                <el-option label="清理模式" value="cleanup" />
+                <el-option label="转换模式" value="transform" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
         <el-form-item label="执行适配模式">
-          <el-radio-group v-model="editPurifyForm.compatibility_mode" class="uniform-mode-group">
-            <el-radio-button value="local">本地模式</el-radio-button>
-            <el-radio-button value="compatibility">兼容模式</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
+            <el-option label="本地模式" value="local" />
+            <el-option label="兼容模式" value="compatibility" />
+          </el-select>
         </el-form-item>
-          <button type="button" class="mode-config-toggle" @click="editPurifyOptionsExpanded = !editPurifyOptionsExpanded">
-            <div><div class="mode-config-panel__title">{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</div></div>
-            <div class="mode-config-toggle__meta"><el-tag :type="editPurifyForm.archive_mode === 'transform' ? 'primary' : 'warning'">{{ editPurifyForm.archive_mode === 'transform' ? '转换模式' : '清理模式' }}</el-tag><span class="mode-config-toggle__icon" :class="{ 'is-expanded': editPurifyOptionsExpanded }">⌄</span></div>
-          </button>
-          <el-collapse-transition>
-            <div v-show="editPurifyOptionsExpanded" class="mode-config-panel">
-              <el-row :gutter="12"><el-col v-for="option in getPurifyModeOptions(editPurifyForm.archive_mode)" :key="option.key" :span="12"><el-tooltip placement="top" effect="light" :show-after="750" popper-class="mode-option-tooltip"><template #content><div class="mode-option-tooltip__content">{{ formatModeOptionDescription(option.description) }}</div></template><label class="mode-option-card mode-option-card--compact"><el-checkbox v-model="editPurifyForm.options[option.key]">{{ option.label }}</el-checkbox></label></el-tooltip></el-col></el-row>
-            </div>
-          </el-collapse-transition>
-        <el-form-item v-if="editPurifyForm.schedule_enabled" label="计划表达式"><el-input v-model="editPurifyForm.cron_expression" /></el-form-item>
+        <el-form-item class="mode-select-field">
+          <template #label>
+            <span class="mode-select-field__head">
+              <span>{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</span>
+              <button type="button" class="mode-select-field__all" @click="toggleAllMode(editPurifyOptionSource, editPurifyOptionKeys)">
+                {{ editPurifySelection.length === editPurifyOptionKeys.length ? '取消全选' : '全选' }}
+              </button>
+            </span>
+          </template>
+          <el-select v-model="editPurifySelection" multiple clearable collapse-tags collapse-tags-tooltip placeholder="可多选，也可以不选" style="width: 100%">
+            <el-option v-for="option in editPurifyOptionKeys" :key="option.key" :label="option.label" :value="option.key">
+              <span class="mode-select-option">
+                <span class="mode-select-option__label">{{ option.label }}</span>
+                <span class="mode-select-option__description">{{ formatModeOptionDescription(option.description) }}</span>
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="editPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
         <el-form-item label="监控目录">
           <div class="source-dir-editor">
             <div v-if="editPurifyForm.source_dirs.length" class="source-dir-editor__list">
@@ -713,10 +781,18 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="createLinkForm.link_mode" :class="['archive-mode-group', `archive-mode-group--${createLinkForm.link_mode}`]"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="createLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="createLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="链路模式">
+              <el-select v-model="createLinkForm.link_mode" :class="['mode-select', `mode-select--${createLinkForm.link_mode}`]" style="width: 100%">
+                <el-option label="软链模式" value="soft" />
+                <el-option label="硬链模式" value="hard" />
+                <el-option label="Strm模式" value="strm" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createLinkForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item v-if="createLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="createLinkForm.cron_expression" /></el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="createLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createLinkForm.link_mode === 'strm'">
@@ -794,10 +870,18 @@
       <el-form label-position="top">
         <el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
         <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="链路模式"><el-radio-group v-model="editLinkForm.link_mode" :class="['archive-mode-group', `archive-mode-group--${editLinkForm.link_mode}`]"><el-radio-button value="soft">软链模式</el-radio-button><el-radio-button value="hard">硬链模式</el-radio-button><el-radio-button value="strm">Strm模式</el-radio-button></el-radio-group></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="触发方式"><el-space wrap><el-switch v-model="editLinkForm.monitor_enabled" inline-prompt active-text="新文件触发" inactive-text="新文件触发" /><el-switch v-model="editLinkForm.schedule_enabled" inline-prompt active-text="计划执行" inactive-text="计划执行" /></el-space></el-form-item></el-col>
+          <el-col :span="12">
+            <el-form-item label="链路模式">
+              <el-select v-model="editLinkForm.link_mode" :class="['mode-select', `mode-select--${editLinkForm.link_mode}`]" style="width: 100%">
+                <el-option label="软链模式" value="soft" />
+                <el-option label="硬链模式" value="hard" />
+                <el-option label="Strm模式" value="strm" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editLinkForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item v-if="editLinkForm.schedule_enabled" label="计划表达式"><el-input v-model="editLinkForm.cron_expression" /></el-form-item>
+        <el-form-item label="Cron 表达式"><el-input v-model="editLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
         <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editLinkForm.link_mode === 'strm'">
@@ -947,7 +1031,6 @@ type StoredNamingRuleSet = { id: number; name: string; rules: Array<Record<strin
 type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
 type PurifyOptionValues = Record<CleanupOptionValueKey, number>
 
-const defaultCronExpression = '0 8 * * *'
 const pageSizeOptions = [25, 50]
 const ruleMatcherPlaceholder = '一行一个规则：无前缀默认全称匹配文件名，如 漫画；* 前缀匹配文件关键词，如 *漫画；. 前缀匹配扩展名，如 .mp4；/ 前缀匹配文件夹全称，如 /合集；/* 前缀匹配文件夹关键词，如 /*合集；/内容/ 全局全称匹配文件或文件夹，如 /mp4/；/*内容/ 全局关键词匹配文件或文件夹，如 /*mp4/。'
 const archiveRuleMatcherPlaceholder = '文件匹配：待匹配\n文件关键词匹配：*待匹配\n扩展名匹配：.待匹配\n文件夹匹配：/待匹配\n文件夹关键词匹配：/*待匹配\n全局匹配：/待匹配/\n全局关键词匹配：/*待匹配/'
@@ -1488,11 +1571,6 @@ const editPurifyDialogVisible = ref(false)
 const createLinkDialogVisible = ref(false)
 const createNamingDialogVisible = ref(false)
 const editLinkDialogVisible = ref(false)
-const createArchiveOptionsExpanded = ref(false)
-const editArchiveOptionsExpanded = ref(false)
-const namingScopeOptionsExpanded = ref(false)
-const createPurifyOptionsExpanded = ref(false)
-const editPurifyOptionsExpanded = ref(false)
 
 const editingRuleID = ref<number | null>(null)
 const editingPurifyRuleID = ref<number | null>(null)
@@ -1692,6 +1770,67 @@ const editLinkForm = reactive({
 })
 
 const createNamingForm = reactive({ name: '', enabled: true, monitor_enabled: true, schedule_enabled: false, source_dir: '', cron_expression: '', rule_set_id: null as number | null, options: { naming_include_files: false, naming_include_dirs: false } })
+
+// —— 「功能模块」多选下拉 ——
+// 历史形态是「折叠面板 + 一排复选框」（mode-config-toggle / mode-option-card），
+// 现在统一改成 el-select 多选 + 上方一个全选按钮。库里仍然把选择存成 options 对象的
+// 布尔位（提交结构不动），而下拉要的是 key 数组，这里做一层双向换算。
+const namingScopeOptions = [
+  { key: 'naming_include_dirs', label: '包含文件夹', description: '将规则集应用于监控路径下的文件夹' },
+  { key: 'naming_include_files', label: '包含文件', description: '将规则集应用于监控路径下的文件' },
+] as const
+
+type ModeOptionItem = { key: string; label: string; description: string }
+type ModeOptionsRecord = Record<string, boolean | undefined>
+
+function pickModeKeys(options: ModeOptionsRecord, keys: readonly ModeOptionItem[]): string[] {
+  return keys.filter((option) => options[option.key]).map((option) => option.key)
+}
+
+function setModeKeys(options: ModeOptionsRecord, keys: readonly ModeOptionItem[], selected: string[]): void {
+  const chosen = new Set(selected)
+  for (const option of keys) options[option.key] = chosen.has(option.key)
+}
+
+function modeSelection(resolveOptions: () => ModeOptionsRecord, resolveKeys: () => readonly ModeOptionItem[]) {
+  return computed<string[]>({
+    get: () => pickModeKeys(resolveOptions(), resolveKeys()),
+    set: (selected) => setModeKeys(resolveOptions(), resolveKeys(), selected),
+  })
+}
+
+// 「全选」按钮：已全中则整体取消，否则补齐。直接写回 options 对象（和 v-model 同一份数据），
+// 不绕 selection 计算属性传参 —— 模板里 ref 会自动解包，传进去拿不到 .value。
+function toggleAllMode(options: ModeOptionsRecord, keys: readonly ModeOptionItem[]) {
+  const allSelected = keys.every((option) => options[option.key])
+  for (const option of keys) options[option.key] = !allSelected
+}
+
+const namingScopeOptionKeys: readonly ModeOptionItem[] = namingScopeOptions
+const createNamingSelection = modeSelection(
+  () => createNamingForm.options as ModeOptionsRecord,
+  () => namingScopeOptionKeys,
+)
+
+const createArchiveOptionKeys = computed<readonly ModeOptionItem[]>(() => (createForm.archive_mode === 'package' ? packageModeOptions : collectModeOptions))
+const createArchiveOptionSource = computed<ModeOptionsRecord>(
+  () => (createForm.archive_mode === 'package' ? createForm.package_options : createForm.collect_options) as ModeOptionsRecord,
+)
+const createArchiveSelection = modeSelection(() => createArchiveOptionSource.value, () => createArchiveOptionKeys.value)
+
+const editArchiveOptionKeys = computed<readonly ModeOptionItem[]>(() => (editForm.archive_mode === 'package' ? packageModeOptions : collectModeOptions))
+const editArchiveOptionSource = computed<ModeOptionsRecord>(
+  () => (editForm.archive_mode === 'package' ? editForm.package_options : editForm.collect_options) as ModeOptionsRecord,
+)
+const editArchiveSelection = modeSelection(() => editArchiveOptionSource.value, () => editArchiveOptionKeys.value)
+
+const createPurifyOptionKeys = computed<readonly ModeOptionItem[]>(() => getPurifyModeOptions(createPurifyForm.archive_mode))
+const createPurifyOptionSource = computed<ModeOptionsRecord>(() => createPurifyForm.options as ModeOptionsRecord)
+const createPurifySelection = modeSelection(() => createPurifyOptionSource.value, () => createPurifyOptionKeys.value)
+
+const editPurifyOptionKeys = computed<readonly ModeOptionItem[]>(() => getPurifyModeOptions(editPurifyForm.archive_mode))
+const editPurifyOptionSource = computed<ModeOptionsRecord>(() => editPurifyForm.options as ModeOptionsRecord)
+const editPurifySelection = modeSelection(() => editPurifyOptionSource.value, () => editPurifyOptionKeys.value)
 // 非空表示当前命名规则弹窗处于「编辑」状态。
 const editingNamingRuleID = ref<number | null>(null)
 const editingNamingRule = ref<RuleItem | null>(null)
@@ -1980,33 +2119,21 @@ function handleRuleContextMenuSelect(key: string) {
   void duplicateRule(rule, cardContextMenu.type)
 }
 
-function applyDefaultCronOnEnable(enabled: boolean, cronExpression: string) {
-  return enabled && !cronExpression.trim() ? defaultCronExpression : cronExpression
+// 「Cron 表达式」不再配开关：填了就是计划执行，留空就是不启用。
+// schedule_enabled 保留下来当**派生标志**（由 cron 文本推导），这样提交 payload
+// （cron_expression / run_mode）、resolveRunMode 以及既有的读取逻辑都不用改。
+// 注意方向只能是 cron → 标志，反向回写 cron 会和这里互相触发。
+function syncScheduleFromCron(form: { cron_expression: string; schedule_enabled: boolean }) {
+  form.schedule_enabled = form.cron_expression.trim() !== ''
 }
 
-watch(() => createForm.schedule_enabled, (enabled) => {
-  createForm.cron_expression = applyDefaultCronOnEnable(enabled, createForm.cron_expression)
-})
-
-watch(() => editForm.schedule_enabled, (enabled) => {
-  editForm.cron_expression = applyDefaultCronOnEnable(enabled, editForm.cron_expression)
-})
-
-watch(() => createPurifyForm.schedule_enabled, (enabled) => {
-  createPurifyForm.cron_expression = applyDefaultCronOnEnable(enabled, createPurifyForm.cron_expression)
-})
-
-watch(() => editPurifyForm.schedule_enabled, (enabled) => {
-  editPurifyForm.cron_expression = applyDefaultCronOnEnable(enabled, editPurifyForm.cron_expression)
-})
-
-watch(() => createLinkForm.schedule_enabled, (enabled) => {
-  createLinkForm.cron_expression = enabled && !createLinkForm.cron_expression.trim() ? '30 4 * * *' : createLinkForm.cron_expression
-})
-
-watch(() => editLinkForm.schedule_enabled, (enabled) => {
-  editLinkForm.cron_expression = enabled && !editLinkForm.cron_expression.trim() ? '30 4 * * *' : editLinkForm.cron_expression
-})
+watch(() => createForm.cron_expression, () => syncScheduleFromCron(createForm))
+watch(() => editForm.cron_expression, () => syncScheduleFromCron(editForm))
+watch(() => createPurifyForm.cron_expression, () => syncScheduleFromCron(createPurifyForm))
+watch(() => editPurifyForm.cron_expression, () => syncScheduleFromCron(editPurifyForm))
+watch(() => createLinkForm.cron_expression, () => syncScheduleFromCron(createLinkForm))
+watch(() => editLinkForm.cron_expression, () => syncScheduleFromCron(editLinkForm))
+watch(() => createNamingForm.cron_expression, () => syncScheduleFromCron(createNamingForm))
 
 // Strm 模式默认不勾选「新文件触发」。
 watch(() => createLinkForm.link_mode, (mode, previous) => {
@@ -3485,35 +3612,59 @@ onBeforeUnmount(() => {
 .rules-page :deep(.rules-table .el-switch__label.is-inactive) {
   min-width: auto;
 }
-.archive-mode-group,
-.uniform-mode-group {
-  display: inline-flex;
+/* —— 模式下拉选择器 ——
+   归档模式 / 规则模式 / 链路模式 / 执行适配模式 原来是 el-radio-group 单选按钮组，
+   现在统一改成 el-select。模式仍各自带颜色（沿用原单选按钮的色相），通过
+   --mode-accent 传给选中项文字，扫一眼就知道当前是什么模式。 */
+.mode-select {
+  --mode-accent: var(--el-text-color-primary);
+}
+
+.mode-select :deep(.el-select__selected-item),
+.mode-select :deep(.el-select__placeholder) {
+  color: var(--mode-accent);
+  font-weight: 600;
+}
+
+.mode-select--package { --mode-accent: #d58a2f; }
+.mode-select--collect { --mode-accent: #8a74d6; }
+.mode-select--cleanup { --mode-accent: #5f9f45; }
+.mode-select--transform { --mode-accent: #64b9d8; }
+.mode-select--soft { --mode-accent: #c47c98; }
+.mode-select--hard { --mode-accent: #2f3136; }
+.mode-select--strm { --mode-accent: #2f8f9d; }
+.mode-select--local { --mode-accent: #5f9f45; }
+.mode-select--compatibility { --mode-accent: #2f8f9d; }
+
+/* 「功能模块」多选下拉：标签行右侧挂一个「全选 / 取消全选」按钮。 */
+.mode-select-field :deep(.el-form-item__label) {
   width: 100%;
-  max-width: 416px;
 }
 
-.archive-mode-group :deep(.el-radio-button),
-.uniform-mode-group :deep(.el-radio-button) {
-  flex: 1 1 0;
-}
-
-.archive-mode-group :deep(.el-radio-button__inner),
-.uniform-mode-group :deep(.el-radio-button__inner) {
-  display: inline-flex;
+.mode-select-field__head {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
   width: 100%;
-  padding-inline: 18px;
 }
 
-.archive-mode-group--package :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #d58a2f; background: rgba(213, 138, 47, 0.08); border-color: #d58a2f; box-shadow: -1px 0 0 0 #d58a2f; }
-.archive-mode-group--collect :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #8a74d6; background: rgba(138, 116, 214, 0.1); border-color: #8a74d6; box-shadow: -1px 0 0 0 #8a74d6; }
-.archive-mode-group--cleanup :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #5f9f45; background: rgba(95, 159, 69, 0.12); border-color: #5f9f45; box-shadow: -1px 0 0 0 #5f9f45; }
-.archive-mode-group--transform :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #64b9d8; background: rgba(100, 185, 216, 0.12); border-color: #64b9d8; box-shadow: -1px 0 0 0 #64b9d8; }
-.archive-mode-group--soft :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #c47c98; background: rgba(196, 124, 152, 0.12); border-color: #c47c98; box-shadow: -1px 0 0 0 #c47c98; }
-.archive-mode-group--hard :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #2f3136; background: rgba(47, 49, 54, 0.08); border-color: #2f3136; box-shadow: -1px 0 0 0 #2f3136; }
-.archive-mode-group--strm :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) { color: #2f8f9d; background: rgba(47, 143, 157, 0.12); border-color: #2f8f9d; box-shadow: -1px 0 0 0 #2f8f9d; }
+.mode-select-field__all {
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.1);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease;
+}
+
+.mode-select-field__all:hover {
+  color: #055a8f;
+  background: rgba(32, 159, 238, 0.2);
+}
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
@@ -3570,17 +3721,6 @@ onBeforeUnmount(() => {
 .mode-config-toggle__meta { display: flex; align-items: center; gap: 10px; }
 .mode-config-toggle__icon { font-size: 18px; line-height: 1; color: var(--el-text-color-secondary); transition: transform 0.2s ease; }
 .mode-config-toggle__icon.is-expanded { transform: rotate(180deg); }
-.naming-scope-panel { margin-bottom: 18px; }
-.mode-option-card { display: flex; flex-direction: column; gap: 6px; min-height: 92px; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--el-border-color); border-radius: 10px; background: var(--el-bg-color); cursor: pointer; }
-.mode-option-card--compact { min-height: auto; padding: 12px 14px; }
-.naming-scope-card { min-height: 92px; margin-bottom: 0; }
-.naming-scope-card .mode-option-card__description { padding-left: 24px; }
-.mode-option-card:hover { border-color: var(--el-color-primary-light-5); }
-.mode-option-card.is-disabled { cursor: not-allowed; opacity: 0.68; }
-.mode-option-card.is-disabled:hover { border-color: var(--el-border-color); }
-.mode-option-card__description { padding-left: 24px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
-.mode-option-tooltip__content { max-width: 18em; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
-:global(.mode-option-tooltip) { max-width: none; }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }

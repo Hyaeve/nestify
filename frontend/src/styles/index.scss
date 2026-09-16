@@ -36,6 +36,12 @@
   --table-cell-padding-x: 12px;
   --table-cell-padding-y: 12px;
   --control-height: 36px;
+  /* 输入框改「无描边 + 填充底」后的三档底色（静置 / 悬浮 / 聚焦），
+     以及聚焦时那圈淡主色柔光环。 */
+  --control-bg: rgba(148, 163, 184, 0.1);
+  --control-bg-hover: rgba(148, 163, 184, 0.16);
+  --control-bg-focus: rgba(32, 159, 238, 0.08);
+  --control-ring: rgba(32, 159, 238, 0.2);
   --font-size-body: 14px;
   --font-size-title: 18px;
 }
@@ -65,6 +71,11 @@
   --el-color-primary-light-9: #f1f8fc;
   --el-color-primary-dark-2: #5c91b2;
   --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
+  /* appletv 是半透明玻璃底，输入框填充色反过来要比底更白才看得清。 */
+  --control-bg: rgba(255, 255, 255, 0.72);
+  --control-bg-hover: rgba(255, 255, 255, 0.88);
+  --control-bg-focus: rgba(255, 255, 255, 0.94);
+  --control-ring: rgba(32, 159, 238, 0.18);
 }
 
 * {
@@ -230,11 +241,115 @@ body {
   color: var(--text-secondary);
 }
 
+/* —— 胶囊式输入框：无外轮廓边框 ——
+   以前输入框靠 1px inset 描边勾出四周轮廓，现在全项目统一改成
+   「无描边 + 淡填充底 + 全圆角胶囊」：轮廓交给底色承担，聚焦时只加一圈淡主色柔光环，
+   仍然不画边框线。圆角走 EP 自己的 --el-input-border-radius，
+   这样 input / select 与「选择目录」这类 #append 附加块的拼接圆角会一起跟着算，
+   不会出现半截胶囊配方角。 */
+:root {
+  --el-input-border-radius: 999px;
+}
+
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
-  background: var(--bg-elevated);
-  box-shadow: 0 0 0 1px var(--border-color) inset;
+  background-color: var(--control-bg);
+  box-shadow: none;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  background-color: var(--control-bg-hover);
+  box-shadow: none;
+}
+
+/* 多行文本域不做全圆角：两端会被拉成水滴形，用 18px 适中圆角。 */
+.el-textarea__inner {
+  border-radius: 18px;
+  padding: 10px 14px;
+}
+
+.el-input__wrapper.is-focus,
+.el-input__wrapper:focus-within,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus {
+  background-color: var(--control-bg-focus);
+  box-shadow: 0 0 0 3px var(--control-ring);
+}
+
+/* 禁用态同样不描边，只用更淡的填充底区分。 */
+.el-input.is-disabled .el-input__wrapper,
+.el-input-number.is-disabled .el-input__wrapper,
+.el-textarea.is-disabled .el-textarea__inner,
+.el-select__wrapper.is-disabled {
+  background-color: rgba(148, 163, 184, 0.07);
+  box-shadow: none;
+}
+
+/* #append / #prepend 附加块要接着填满胶囊的同一端，否则底色会断开半截。 */
+.el-input-group__append,
+.el-input-group__prepend {
+  border: 0;
+  box-shadow: none;
+  background-color: var(--control-bg);
+}
+
+.el-input-group--append > .el-input-group__append {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
+
+.el-input-group--prepend > .el-input-group__prepend {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+
+/* 附加块里的按钮退成「底上的淡字胶囊」，不然会在胶囊右端多出一个描边小方块。 */
+.el-input-group__append .el-button,
+.el-input-group__prepend .el-button {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: transparent;
+  --el-button-text-color: #0975b8;
+  --el-button-hover-bg-color: rgba(32, 159, 238, 0.16);
+  --el-button-hover-border-color: transparent;
+  --el-button-hover-text-color: #055a8f;
+  --el-button-active-bg-color: rgba(32, 159, 238, 0.24);
+  --el-button-active-border-color: transparent;
+  --el-button-active-text-color: #055a8f;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+}
+
+/* 多选下拉里的已选项也跟着圆起来，否则会在胶囊里嵌一排方角小标签。 */
+.el-select__wrapper .el-tag,
+.el-select__tags .el-tag {
+  border-radius: 999px;
+}
+
+/* 「功能模块」多选下拉的选项排版：名称 + 一行截断的说明（原来这些说明只在 hover 的
+   tooltip 里，改成下拉后直接展示）。下拉面板 Teleport 到 body，组件里的 scoped 样式
+   够不着它，所以这条写在全局。 */
+.el-select-dropdown__item .mode-select-option {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.el-select-dropdown__item .mode-select-option__label {
+  flex: 0 0 auto;
+}
+
+.el-select-dropdown__item .mode-select-option__description {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .el-button {
