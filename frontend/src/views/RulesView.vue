@@ -443,7 +443,7 @@
           </el-col>
           <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="执行适配模式">
+        <el-form-item label="监控模式">
           <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
             <el-option label="本地模式" value="local" />
             <el-option label="兼容模式" value="compatibility" />
@@ -519,7 +519,7 @@
           </el-col>
           <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="执行适配模式">
+        <el-form-item label="监控模式">
           <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
             <el-option label="本地模式" value="local" />
             <el-option label="兼容模式" value="compatibility" />
@@ -595,7 +595,7 @@
           </el-col>
           <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="执行适配模式">
+        <el-form-item label="监控模式">
           <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
             <el-option label="本地模式" value="local" />
             <el-option label="兼容模式" value="compatibility" />
@@ -693,7 +693,7 @@
           </el-col>
           <el-col :span="12"><el-form-item label="新文件触发"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col>
         </el-row>
-        <el-form-item label="执行适配模式">
+        <el-form-item label="监控模式">
           <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
             <el-option label="本地模式" value="local" />
             <el-option label="兼容模式" value="compatibility" />
@@ -3613,7 +3613,7 @@ onBeforeUnmount(() => {
   min-width: auto;
 }
 /* —— 模式下拉选择器 ——
-   归档模式 / 规则模式 / 链路模式 / 执行适配模式 原来是 el-radio-group 单选按钮组，
+   归档模式 / 规则模式 / 链路模式 / 监控模式 原来是 el-radio-group 单选按钮组，
    现在统一改成 el-select。模式仍各自带颜色（沿用原单选按钮的色相），通过
    --mode-accent 传给选中项文字，扫一眼就知道当前是什么模式。 */
 .mode-select {
