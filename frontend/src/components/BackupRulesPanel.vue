@@ -1476,10 +1476,10 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-wizard-tab {
   flex: 1 1 0;
-  padding: 8px 12px;
+  padding: 9px 14px;
   border: none;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: #64748b;
   background: transparent;

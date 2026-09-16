@@ -3902,16 +3902,17 @@ onBeforeUnmount(() => {
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
 .strm-preset-button.is-active { color: #fff; background: var(--preset-accent, #2f8f9d); border-color: var(--preset-accent, #2f8f9d); box-shadow: 0 6px 14px var(--preset-accent-shadow, rgba(47, 143, 157, 0.22)); }
-/* 快捷添加扩展名的图标按钮：四类各一色，故意跳出蓝色家族（视频紫 / 音频红 / 图片黄绿 / 数据蓝）。 */
-.strm-preset-button--video { --preset-accent: #8b5cf6; --preset-accent-tint: rgba(139, 92, 246, 0.13); --preset-accent-shadow: rgba(139, 92, 246, 0.28); }
-.strm-preset-button--audio { --preset-accent: #e8483c; --preset-accent-tint: rgba(232, 72, 60, 0.12); --preset-accent-shadow: rgba(232, 72, 60, 0.26); }
-.strm-preset-button--image { --preset-accent: #7fb01c; --preset-accent-tint: rgba(127, 176, 28, 0.14); --preset-accent-shadow: rgba(127, 176, 28, 0.26); }
-.strm-preset-button--data { --preset-accent: #2f8fd6; --preset-accent-tint: rgba(47, 143, 214, 0.12); --preset-accent-shadow: rgba(47, 143, 214, 0.26); }
+/* 快捷添加扩展名的图标按钮：四类各一色，故意跳出蓝色家族（视频紫 / 音频红 / 图片黄绿 / 数据蓝）。
+   色值统一压在高饱和 + 中高明度（L≈60~68），点亮后是「透亮的色块」而不是沉色。 */
+.strm-preset-button--video { --preset-accent: #9d7bf5; --preset-accent-tint: rgba(157, 123, 245, 0.14); --preset-accent-shadow: rgba(157, 123, 245, 0.24); }
+.strm-preset-button--audio { --preset-accent: #f2665a; --preset-accent-tint: rgba(242, 102, 90, 0.14); --preset-accent-shadow: rgba(242, 102, 90, 0.24); }
+.strm-preset-button--image { --preset-accent: #a4cd44; --preset-accent-tint: rgba(164, 205, 68, 0.16); --preset-accent-shadow: rgba(164, 205, 68, 0.24); }
+.strm-preset-button--data { --preset-accent: #4aa6ea; --preset-accent-tint: rgba(74, 166, 234, 0.14); --preset-accent-shadow: rgba(74, 166, 234, 0.24); }
 /* 后缀标签跟着所在窗口走：媒体文件一种蓝、元数据文件另一种蓝，一眼分得开。 */
 .strm-suffix-editor:has(.strm-preset-button--video) :deep(.el-tag) { color: #0f5c8f; background: rgba(11, 157, 248, 0.16); border-color: rgba(11, 157, 248, 0.42); }
 .strm-suffix-editor:has(.strm-preset-button--image) :deep(.el-tag) { color: #3f45b8; background: rgba(106, 111, 240, 0.15); border-color: rgba(106, 111, 240, 0.44); }
-/* 规则弹窗「保存」按钮：靛蓝实心，跟默认主色蓝（创建按钮）拉开。 */
-.rule-save-button { --el-button-bg-color: #4361ee; --el-button-border-color: #4361ee; --el-button-text-color: #ffffff; --el-button-hover-bg-color: #5a75f2; --el-button-hover-border-color: #5a75f2; --el-button-hover-text-color: #ffffff; --el-button-active-bg-color: #3350d6; --el-button-active-border-color: #3350d6; --el-button-active-text-color: #ffffff; --el-button-disabled-bg-color: rgba(67, 97, 238, 0.5); --el-button-disabled-border-color: rgba(67, 97, 238, 0.5); --el-button-disabled-text-color: #ffffff; }
+/* 规则弹窗「保存」按钮：清透青绿，跟默认主色蓝（创建按钮）拉开，也和设置页「保存修改」同一支语义色。 */
+.rule-save-button { --el-button-bg-color: #1fc4ad; --el-button-border-color: #1fc4ad; --el-button-text-color: #ffffff; --el-button-hover-bg-color: #35cfba; --el-button-hover-border-color: #35cfba; --el-button-hover-text-color: #ffffff; --el-button-active-bg-color: #17a894; --el-button-active-border-color: #17a894; --el-button-active-text-color: #ffffff; --el-button-disabled-bg-color: rgba(31, 196, 173, 0.5); --el-button-disabled-border-color: rgba(31, 196, 173, 0.5); --el-button-disabled-text-color: #ffffff; }
 /* Strm 数值参数行（API 请求间隔 / 最小视频 / 下载线程数）：窄输入框 + 紧随其后的单位。 */
 .strm-option-number { width: 118px; }
 .strm-option-unit { margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary); }

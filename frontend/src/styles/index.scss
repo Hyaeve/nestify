@@ -44,6 +44,9 @@
   --control-bg-hover: rgba(148, 163, 184, 0.16);
   --control-bg-focus: rgba(32, 159, 238, 0.08);
   --control-ring: rgba(32, 159, 238, 0.2);
+  /* 弹窗内输入框的可见边界线（页面上靠浅填充底够用，弹窗里白底上分不出边界）。 */
+  --control-line: rgba(148, 163, 184, 0.55);
+  --control-line-strong: rgba(100, 116, 139, 0.72);
   --font-size-body: 14px;
   --font-size-title: 18px;
 }
@@ -66,20 +69,23 @@
   --border-color: rgba(148, 163, 184, 0.22);
   --accent-color: #73b5de;
   --accent-soft: rgba(32, 159, 238, 0.14);
-  /* Apple TV 主题用更浅一档的青蓝，避免和半透明玻璃底叠起来发脏。 */
-  --el-color-primary: #73b5de;
-  --el-color-primary-light-3: #9dcbe8;
-  --el-color-primary-light-5: #b9daee;
-  --el-color-primary-light-7: #d5e9f5;
-  --el-color-primary-light-8: #e3f0f8;
-  --el-color-primary-light-9: #f1f8fc;
-  --el-color-primary-dark-2: #5c91b2;
+  /* Apple TV 主题原先用一支很浅的青蓝 #73b5de，勾选框 / 开关 / 选中态填上它之后
+     白勾白字糊在色块上，反馈「饱和度太低、看不清」。改成同色系但压到正常明度的一档。 */
+  --el-color-primary: #2f9de6;
+  --el-color-primary-light-3: #63b7ec;
+  --el-color-primary-light-5: #8fcdf2;
+  --el-color-primary-light-7: #bce0f7;
+  --el-color-primary-light-8: #d7ecfa;
+  --el-color-primary-light-9: #eef7fd;
+  --el-color-primary-dark-2: #1f86c9;
   --shadow-soft: 0 18px 44px rgba(102, 148, 184, 0.16);
   /* appletv 是半透明玻璃底，输入框填充色反过来要比底更白才看得清。 */
   --control-bg: rgba(255, 255, 255, 0.72);
   --control-bg-hover: rgba(255, 255, 255, 0.88);
   --control-bg-focus: rgba(255, 255, 255, 0.94);
   --control-ring: rgba(32, 159, 238, 0.18);
+  --control-line: rgba(120, 150, 180, 0.5);
+  --control-line-strong: rgba(90, 120, 150, 0.68);
 }
 
 * {
@@ -289,6 +295,43 @@ body {
 .el-textarea__inner:focus {
   background-color: var(--control-bg-focus);
   box-shadow: 0 0 0 3px var(--control-ring);
+}
+
+/* —— 弹窗里的输入框要看得见边界 ——
+   页面上输入框是「无描边 + 浅填充底」，在灰底上够用；但规则卡片编辑窗口、备份规则向导、
+   目录选择这些弹窗是白底，浅填充底几乎看不见框的边界。这里只在 .el-dialog 作用域内补
+   一圈 1px 描边（包括 #append/#prepend 附加块，否则胶囊会缺半截边），聚焦时换成主色描边 + 柔光环。 */
+.el-dialog .el-input__wrapper,
+.el-dialog .el-select__wrapper,
+.el-dialog .el-textarea__inner,
+.el-dialog .el-input-group__append,
+.el-dialog .el-input-group__prepend {
+  box-shadow: 0 0 0 1px var(--control-line) inset;
+}
+
+.el-dialog .el-input__wrapper:hover,
+.el-dialog .el-select__wrapper:hover,
+.el-dialog .el-input-group__append:hover,
+.el-dialog .el-input-group__prepend:hover {
+  box-shadow: 0 0 0 1px var(--control-line-strong) inset;
+}
+
+.el-dialog .el-input__wrapper.is-focus,
+.el-dialog .el-input__wrapper:focus-within,
+.el-dialog .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--control-ring);
+}
+
+.el-dialog .el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--control-ring);
+}
+
+/* 复选框勾选态：勾选框走一支明确的蓝（不跟着主题主色一起变浅），勾选后的文字保持深色才读得清。 */
+.el-checkbox {
+  --el-checkbox-checked-bg-color: #1289e0;
+  --el-checkbox-checked-input-border-color: #1289e0;
+  --el-checkbox-checked-text-color: #1e293b;
+  --el-checkbox-input-border-color-hover: #1289e0;
 }
 
 /* 禁用态同样不描边，只用更淡的填充底区分。 */
