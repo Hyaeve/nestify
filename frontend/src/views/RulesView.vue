@@ -440,7 +440,7 @@
           <el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item></el-col>
         </el-row>
       </el-form>
-      <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
+      <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :class="{ 'rule-save-button': !!editingNamingRuleID }" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
@@ -598,7 +598,7 @@
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
-      <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
+      <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createPurifyDialogVisible" title="新增净化规则" width="640px">
@@ -800,7 +800,7 @@
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
-      <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
+      <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
     </el-dialog>
 
     <el-dialog v-model="createLinkDialogVisible" title="新增链路规则" width="640px">
@@ -830,8 +830,8 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
-              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button strm-preset-button--video" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button strm-preset-button--audio" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
@@ -844,8 +844,8 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
-              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button strm-preset-button--image" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button strm-preset-button--data" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeCreateMetadataSuffix(suffix)">{{ suffix }}</el-tag>
@@ -921,8 +921,8 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
-              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
+              <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button strm-preset-button--video" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
+              <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button strm-preset-button--audio" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
@@ -935,8 +935,8 @@
           </button>
           <div class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
-              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
-              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button strm-preset-button--image" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
+              <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button strm-preset-button--data" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeEditMetadataSuffix(suffix)">{{ suffix }}</el-tag>
@@ -982,7 +982,7 @@
           <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="editLinkForm.strm_overwrite" /></el-form-item></el-col>
         </el-row>
       </el-form>
-      <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
+      <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
     </el-dialog>
 
     <DirectoryPickerDialog v-model="directoryPickerVisible" title="选择目录" :initial-path="directoryPickerInitialPath" @selected="applyDirectorySelection" />
@@ -3895,11 +3895,23 @@ onBeforeUnmount(() => {
 .source-dir-editor__placeholder { display: flex; align-items: center; width: 100%; min-height: 32px; margin: 0; padding: 0 2px; font-size: 13px; color: var(--el-text-color-secondary); }
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 14px; }
-.strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: #2f8f9d; background: var(--el-bg-color); }
+.strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: var(--preset-accent, #2f8f9d); background: var(--el-bg-color); }
+/* 悬浮：跟着本按钮自己的蓝走，别回落到 EP 主色（否则每种蓝一悬停就变色）。 */
+.strm-preset-button:hover { --el-button-hover-bg-color: var(--preset-accent-tint, var(--el-fill-color-light)); --el-button-hover-text-color: var(--preset-accent, #2f8f9d); --el-button-hover-border-color: var(--preset-accent, #2f8f9d); }
 .strm-preset-button__icon { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
-.strm-preset-button.is-active { color: #fff; background: #2f8f9d; border-color: #2f8f9d; box-shadow: 0 6px 14px rgba(47, 143, 157, 0.22); }
+.strm-preset-button.is-active { color: #fff; background: var(--preset-accent, #2f8f9d); border-color: var(--preset-accent, #2f8f9d); box-shadow: 0 6px 14px var(--preset-accent-shadow, rgba(47, 143, 157, 0.22)); }
+/* 快捷添加扩展名的图标按钮：四个按钮各用一种蓝（媒体组宝蓝 / 天青，元数据组紫蓝 / 湖蓝）。 */
+.strm-preset-button--video { --preset-accent: #1878d4; --preset-accent-tint: rgba(24, 120, 212, 0.12); --preset-accent-shadow: rgba(24, 120, 212, 0.26); }
+.strm-preset-button--audio { --preset-accent: #0fa3e0; --preset-accent-tint: rgba(15, 163, 224, 0.12); --preset-accent-shadow: rgba(15, 163, 224, 0.26); }
+.strm-preset-button--image { --preset-accent: #6a6ff0; --preset-accent-tint: rgba(106, 111, 240, 0.12); --preset-accent-shadow: rgba(106, 111, 240, 0.26); }
+.strm-preset-button--data { --preset-accent: #2f8fd6; --preset-accent-tint: rgba(47, 143, 214, 0.12); --preset-accent-shadow: rgba(47, 143, 214, 0.26); }
+/* 后缀标签跟着所在窗口走：媒体文件一种蓝、元数据文件另一种蓝，一眼分得开。 */
+.strm-suffix-editor:has(.strm-preset-button--video) :deep(.el-tag) { color: #0f5c8f; background: rgba(11, 157, 248, 0.16); border-color: rgba(11, 157, 248, 0.42); }
+.strm-suffix-editor:has(.strm-preset-button--image) :deep(.el-tag) { color: #3f45b8; background: rgba(106, 111, 240, 0.15); border-color: rgba(106, 111, 240, 0.44); }
+/* 规则弹窗「保存」按钮：靛蓝实心，跟默认主色蓝（创建按钮）拉开。 */
+.rule-save-button { --el-button-bg-color: #4361ee; --el-button-border-color: #4361ee; --el-button-text-color: #ffffff; --el-button-hover-bg-color: #5a75f2; --el-button-hover-border-color: #5a75f2; --el-button-hover-text-color: #ffffff; --el-button-active-bg-color: #3350d6; --el-button-active-border-color: #3350d6; --el-button-active-text-color: #ffffff; --el-button-disabled-bg-color: rgba(67, 97, 238, 0.5); --el-button-disabled-border-color: rgba(67, 97, 238, 0.5); --el-button-disabled-text-color: #ffffff; }
 /* Strm 数值参数行（API 请求间隔 / 最小视频 / 下载线程数）：窄输入框 + 紧随其后的单位。 */
 .strm-option-number { width: 118px; }
 .strm-option-unit { margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary); }
