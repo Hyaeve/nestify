@@ -1,50 +1,50 @@
 <template>
-  <div v-if="manifest" class="backup-files">
-    <div class="backup-files__head">
-      <span class="backup-files__title">备份文件</span>
+  <div v-if="manifest" class="run-detail">
+    <div class="run-detail__head">
+      <span class="run-detail__title">{{ panelTitle }}</span>
 
-      <div class="backup-files__filters" role="group" aria-label="备份文件筛选">
+      <div class="run-detail__filters" role="group" aria-label="执行明细筛选">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
-          class="backup-files__filter"
+          class="run-detail__filter"
           :class="{ 'is-active': activeFilter === tab.key }"
           @click="selectFilter(tab.key)"
         >
           {{ tab.label }}
-          <span class="backup-files__filter-count">{{ tab.count }}</span>
+          <span class="run-detail__filter-count">{{ tab.count }}</span>
         </button>
 
-        <!-- 跳过只看数目、不列明细（筛选规则排除 / 目标同名文件会产生海量条目）。 -->
-        <span v-if="skipCount > 0" class="backup-files__stat">
+        <!-- 跳过只看数目、不列明细（筛选规则排除 / 目标已有同名产物会产生海量条目）。 -->
+        <span v-if="skipCount > 0" class="run-detail__stat">
           跳过 <strong>{{ skipCount }}</strong> 项 · 仅统计
         </span>
       </div>
 
-      <span class="backup-files__hint">{{ hintText }}</span>
+      <span class="run-detail__hint">{{ hintText }}</span>
     </div>
 
-    <el-table :data="pagedFiles" class="backup-files__table" size="small" max-height="300" empty-text="本次执行没有该类文件">
+    <el-table :data="pagedFiles" class="run-detail__table" size="small" max-height="300" empty-text="本次执行没有该类文件">
       <el-table-column label="文件" min-width="360">
         <template #default="scope">
-          <div class="backup-files__path">
-            <el-icon class="backup-files__icon">
+          <div class="run-detail__path">
+            <el-icon class="run-detail__icon">
               <Folder v-if="scope.row.dir" />
               <Document v-else />
             </el-icon>
-            <span class="backup-files__name" :title="scope.row.path">{{ scope.row.path }}</span>
+            <span class="run-detail__name" :title="scope.row.path">{{ scope.row.path }}</span>
           </div>
-          <div v-if="scope.row.note" class="backup-files__note">{{ scope.row.note }}</div>
-          <div v-if="scope.row.target" class="backup-files__target" :title="scope.row.target">
+          <div v-if="scope.row.note" class="run-detail__note">{{ scope.row.note }}</div>
+          <div v-if="scope.row.target" class="run-detail__target" :title="scope.row.target">
             → {{ scope.row.target }}
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="结果" width="86" align="center">
+      <el-table-column label="结果" width="112" align="center">
         <template #default="scope">
-          <span class="backup-files__action" :class="actionClass(scope.row.action)">
+          <span class="run-detail__action" :class="actionClass(scope.row.action)">
             {{ actionLabel(scope.row.action) }}
           </span>
         </template>
@@ -52,12 +52,12 @@
 
       <el-table-column label="大小" width="96" align="right">
         <template #default="scope">
-          <span class="backup-files__size">{{ formatSize(scope.row.size) }}</span>
+          <span class="run-detail__size">{{ formatSize(scope.row.size) }}</span>
         </template>
       </el-table-column>
     </el-table>
 
-    <div v-if="filteredFiles.length > filePageSize" class="backup-files__pagination">
+    <div v-if="filteredFiles.length > filePageSize" class="run-detail__pagination">
       <el-pagination
         v-model:current-page="currentPage"
         background
@@ -77,9 +77,11 @@ import {
   backupFileActionClass,
   backupFileActionLabel,
   formatBackupFileSize,
-  type BackupFileAction,
+  runDetailTitle,
+  runFileActionOrder,
   type BackupFileFilter,
   type BackupFileManifest,
+  type RunFileAction,
 } from '../utils/backupDetail'
 
 const props = withDefaults(
@@ -94,14 +96,25 @@ const filePageSize = props.pageSize
 const activeFilter = ref<BackupFileFilter>('all')
 const currentPage = ref(1)
 
+// 面板标题跟随载荷类型：备份 / Strm 与元数据 / 打包产出 …
+const panelTitle = computed(() => runDetailTitle(props.manifest?.kind))
+
+// 页签按载荷里真实出现的动作动态生成：strm 规则看到「生成 Strm / 同步元数据」，
+// 打包规则看到「已打包」，备份规则仍是「已上传 / 失败 / 已删除」。
 const tabs = computed(() => {
-  const counts = props.manifest?.counts
-  return [
-    { key: 'upload' as BackupFileFilter, label: '已上传', count: counts?.upload ?? 0 },
-    { key: 'fail' as BackupFileFilter, label: '失败', count: counts?.fail ?? 0 },
-    { key: 'delete' as BackupFileFilter, label: '已删除', count: counts?.delete ?? 0 },
-    { key: 'all' as BackupFileFilter, label: '全部', count: props.manifest?.total ?? 0 },
-  ]
+  const manifest = props.manifest
+  if (!manifest) {
+    return [] as { key: BackupFileFilter; label: string; count: number }[]
+  }
+  const items = runFileActionOrder
+    .filter((action) => (manifest.counts[action] ?? 0) > 0)
+    .map((action) => ({
+      key: action as BackupFileFilter,
+      label: backupFileActionLabel(action),
+      count: manifest.counts[action] ?? 0,
+    }))
+  items.push({ key: 'all', label: '全部', count: manifest.total })
+  return items
 })
 
 // 「跳过」不参与筛选，只在筛选行旁边显示总数。
@@ -130,11 +143,12 @@ const hintText = computed(() => {
   return manifest.truncated ? `${base}（明细较多，每类仅保留前 200 条）` : base
 })
 
-// 打开新记录时重置筛选：默认展示「已上传」，没有上传则回落到「全部」。
+// 打开新记录时重置筛选：默认落在第一个有内容的动作上，没有明细则回落到「全部」。
 watch(
   () => props.manifest,
   (manifest) => {
-    activeFilter.value = (manifest?.counts.upload ?? 0) > 0 ? 'upload' : 'all'
+    const first = manifest ? runFileActionOrder.find((action) => (manifest.counts[action] ?? 0) > 0) : undefined
+    activeFilter.value = first ?? 'all'
     currentPage.value = 1
   },
   { immediate: true },
@@ -145,11 +159,11 @@ function selectFilter(filter: BackupFileFilter) {
   currentPage.value = 1
 }
 
-function actionLabel(action: BackupFileAction) {
+function actionLabel(action: RunFileAction) {
   return backupFileActionLabel(action)
 }
 
-function actionClass(action: BackupFileAction) {
+function actionClass(action: RunFileAction) {
   return backupFileActionClass(action)
 }
 
@@ -159,7 +173,7 @@ function formatSize(size?: number) {
 </script>
 
 <style scoped>
-.backup-files {
+.run-detail {
   margin-bottom: 16px;
   padding: 14px 16px;
   border: 1px solid var(--el-border-color-lighter);
@@ -167,7 +181,7 @@ function formatSize(size?: number) {
   background: var(--el-bg-color);
 }
 
-.backup-files__head {
+.run-detail__head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -175,13 +189,13 @@ function formatSize(size?: number) {
   margin-bottom: 12px;
 }
 
-.backup-files__title {
+.run-detail__title {
   font-size: 14px;
   font-weight: 800;
   color: #0975b8;
 }
 
-.backup-files__filters {
+.run-detail__filters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -189,7 +203,7 @@ function formatSize(size?: number) {
   min-width: 0;
 }
 
-.backup-files__filter {
+.run-detail__filter {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -207,25 +221,25 @@ function formatSize(size?: number) {
     border-color 0.16s ease;
 }
 
-.backup-files__filter:hover {
+.run-detail__filter:hover {
   color: #0975b8;
   border-color: rgba(32, 159, 238, 0.5);
 }
 
-.backup-files__filter.is-active {
+.run-detail__filter.is-active {
   color: #0975b8;
   border-color: rgba(32, 159, 238, 0.55);
   background: rgba(32, 159, 238, 0.12);
 }
 
-.backup-files__filter-count {
+.run-detail__filter-count {
   font-size: 11px;
   font-weight: 800;
   opacity: 0.75;
 }
 
 /* 「跳过」只报数目：虚线胶囊，区别于可点击的筛选按钮。 */
-.backup-files__stat {
+.run-detail__stat {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -238,35 +252,35 @@ function formatSize(size?: number) {
   white-space: nowrap;
 }
 
-.backup-files__stat strong {
+.run-detail__stat strong {
   font-weight: 800;
   color: #8a8f98;
 }
 
-.backup-files__hint {
+.run-detail__hint {
   flex: 0 0 auto;
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
 
-.backup-files__table {
+.run-detail__table {
   width: 100%;
 }
 
-.backup-files__path {
+.run-detail__path {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.backup-files__icon {
+.run-detail__icon {
   flex: 0 0 auto;
   color: #6f97a6;
   font-size: 15px;
 }
 
-.backup-files__name {
+.run-detail__name {
   min-width: 0;
   font-size: 13px;
   font-weight: 600;
@@ -274,7 +288,7 @@ function formatSize(size?: number) {
   word-break: break-all;
 }
 
-.backup-files__note {
+.run-detail__note {
   margin-top: 2px;
   font-size: 12px;
   line-height: 1.5;
@@ -282,7 +296,7 @@ function formatSize(size?: number) {
   word-break: break-all;
 }
 
-.backup-files__target {
+.run-detail__target {
   margin-top: 2px;
   font-size: 12px;
   line-height: 1.5;
@@ -290,11 +304,11 @@ function formatSize(size?: number) {
   word-break: break-all;
 }
 
-.backup-files__action {
+.run-detail__action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 46px;
+  min-width: 68px;
   padding: 2px 8px;
   border-radius: 8px;
   font-size: 12px;
@@ -302,28 +316,55 @@ function formatSize(size?: number) {
   white-space: nowrap;
 }
 
-.backup-files__action.is-upload {
+/* 结果配色一律「浅底 + 深字」，与项目其它标签保持一致。 */
+.run-detail__action.is-upload {
   color: #2f8f5b;
   background: rgba(47, 143, 91, 0.12);
 }
 
-.backup-files__action.is-fail {
+/* Strm 语义色，与链路模式标识一致。 */
+.run-detail__action.is-strm {
+  color: #2f8f9d;
+  background: rgba(47, 143, 157, 0.13);
+}
+
+.run-detail__action.is-metadata {
+  color: #b07d18;
+  background: rgba(176, 125, 24, 0.13);
+}
+
+.run-detail__action.is-pack {
+  color: #0975b8;
+  background: rgba(32, 159, 238, 0.13);
+}
+
+.run-detail__action.is-move {
+  color: #46708f;
+  background: rgba(70, 112, 143, 0.13);
+}
+
+.run-detail__action.is-fail {
   color: #c4562f;
   background: rgba(196, 86, 47, 0.12);
 }
 
-.backup-files__action.is-delete {
+.run-detail__action.is-delete {
   color: #5f7fa8;
   background: rgba(95, 127, 168, 0.14);
 }
 
-.backup-files__size {
+.run-detail__action.is-skip {
+  color: #8a8f98;
+  background: rgba(138, 143, 152, 0.14);
+}
+
+.run-detail__size {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
 }
 
-.backup-files__pagination {
+.run-detail__pagination {
   display: flex;
   justify-content: flex-end;
   margin-top: 10px;

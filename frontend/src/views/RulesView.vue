@@ -222,7 +222,7 @@
                 </div>
               </div>
             </div>
-            <BackupFileList :manifest="selectedBackupManifest" />
+            <RunDetailList :manifest="selectedRunDetailManifest" />
             <el-table :data="pagedHistoryDetailRows" class="rules-table detail-dialog-table" table-layout="auto" empty-text="暂无明细">
               <el-table-column label="条目" min-width="360">
                 <template #default="scope">
@@ -895,7 +895,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
-import BackupFileList from '../components/BackupFileList.vue'
+import RunDetailList from '../components/RunDetailList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
 import { fetchRun, prepareRuleExecution } from '../api/executions'
@@ -914,7 +914,7 @@ import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
-  parseBackupManifest,
+  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -1523,7 +1523,8 @@ const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
-const selectedBackupDetail = ref<RunHistoryItem | null>(null)
+// 运行详情（detail_json）：各链路共用，不再只服务备份。
+const selectedRunDetail = ref<RunHistoryItem | null>(null)
 const historyDetailPageSize = 25
 const historyDetailCurrentPage = ref(1)
 
@@ -1558,8 +1559,8 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
-// 备份文件明细：本次执行上传/跳过/失败/删除的具体文件清单（来自 detail_json）。
-const selectedBackupManifest = computed(() => parseBackupManifest(selectedBackupDetail.value ?? undefined))
+// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
+const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 const purifyRulesTotal = ref(0)
 
@@ -2650,27 +2651,28 @@ function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
   selectedBackupTask.value = null
-  selectedBackupDetail.value = null
+  selectedRunDetail.value = null
   historyDetailCurrentPage.value = 1
   historyDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
-    void loadSelectedBackupDetail(row)
   }
+  void loadSelectedRunDetail(row)
 }
 
-// 备份文件明细单独拉取：列表接口为避免响应过大不带 detail_json。
-async function loadSelectedBackupDetail(row: HistoryTreeRow) {
-  selectedBackupDetail.value = null
+// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
+// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
+async function loadSelectedRunDetail(row: HistoryTreeRow) {
+  selectedRunDetail.value = null
   const historyID = row.source?.id
-  if (row.archive_mode !== 'backup' || !historyID) {
+  if (!historyID) {
     return
   }
   try {
     const payload = await fetchRunHistoryDetail(historyID)
-    selectedBackupDetail.value = payload.data?.item ?? null
+    selectedRunDetail.value = payload.data?.item ?? null
   } catch {
-    selectedBackupDetail.value = null
+    selectedRunDetail.value = null
   }
 }
 

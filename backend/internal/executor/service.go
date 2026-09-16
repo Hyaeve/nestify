@@ -417,6 +417,11 @@ func ParseTransformRulesJSON(raw string) []string {
 
 func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {
 	item := s.recordHistory(runID, summary, stats)
+	if item == nil {
+		// 运行实例已不存在（例如已被回收）：既无法落库，也不能拿 nil 回填统计，
+		// 否则会直接空指针 panic。
+		return
+	}
 	if stats != nil {
 		stats.ProcessedFiles = item.ProcessedFiles
 		stats.SuccessCount = item.SuccessCount
@@ -425,7 +430,7 @@ func (s *Service) persistRunHistory(runID, summary string, stats *executionStats
 		stats.SizeBytes = item.SizeBytes
 		stats.HistoryEvents++
 	}
-	if item == nil || s.store == nil {
+	if s.store == nil {
 		return
 	}
 	_ = s.store.UpsertRunHistory(*item)
@@ -472,6 +477,11 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 		StartedAt:      run.StartedAt,
 		UpdatedAt:      run.UpdatedAt,
 		FinishedAt:     run.FinishedAt,
+	}
+	// 明细载荷（strm 生成了哪些文件、下载了哪些元数据、打包了哪些文件夹）：
+	// 列表接口会统一清空，详情弹窗按需走 /run-history/detail 拉取。
+	if stats != nil {
+		item.DetailJSON = stats.buildDetailJSON()
 	}
 
 	s.history = append([]model.RunHistoryItem{item}, s.history...)

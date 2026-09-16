@@ -49,14 +49,36 @@ export function resolveBackupDeletedCount(item?: { deleted_count?: number; summa
 // 备份文件明细（run_history.detail_json）
 // ---------------------------------------------------------------------------
 
-export type BackupFileAction = 'upload' | 'skip' | 'fail' | 'delete'
+// 明细动作：备份链路用 upload/skip/fail/delete，strm 链路用 strm/metadata，
+// 打包与归档用 pack/move；失败与跳过是各链路共用的结论性动作。
+export type RunFileAction =
+  | 'upload'
+  | 'skip'
+  | 'fail'
+  | 'delete'
+  | 'strm'
+  | 'metadata'
+  | 'pack'
+  | 'move'
 
-// 明细面板只列「真的动了文件」的三种结果；跳过只显示数目，不参与筛选。
-export type BackupFileFilter = 'all' | 'upload' | 'fail' | 'delete'
+// 兼容旧名：明细面板早期只服务备份链路。
+export type BackupFileAction = RunFileAction
+
+const runFileActions: RunFileAction[] = ['upload', 'skip', 'fail', 'delete', 'strm', 'metadata', 'pack', 'move']
+
+function isRunFileAction(value: unknown): value is RunFileAction {
+  return typeof value === 'string' && (runFileActions as string[]).includes(value)
+}
+
+// 明细面板的筛选页签顺序：先列「这次产出了什么」，再列失败与删除。
+export const runFileActionOrder: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move', 'fail', 'delete']
+
+// 明细面板只列「真的动了文件」的结果；跳过只显示数目，不参与筛选。
+export type BackupFileFilter = 'all' | RunFileAction
 
 export interface BackupFileEntry {
   path: string
-  action: BackupFileAction
+  action: RunFileAction
   size?: number
   target?: string
   note?: string
@@ -64,28 +86,43 @@ export interface BackupFileEntry {
 }
 
 export interface BackupFileManifest {
+  kind: string
   files: BackupFileEntry[]
-  counts: Record<BackupFileAction, number>
+  counts: Record<RunFileAction, number>
   total: number
   truncated: boolean
 }
 
-const emptyActionCounts = (): Record<BackupFileAction, number> => ({
+const emptyActionCounts = (): Record<RunFileAction, number> => ({
   upload: 0,
   skip: 0,
   fail: 0,
   delete: 0,
+  strm: 0,
+  metadata: 0,
+  pack: 0,
+  move: 0,
 })
 
-function normalizeAction(value: unknown): BackupFileAction {
-  if (value === 'skip' || value === 'fail' || value === 'delete') {
-    return value
-  }
-  return 'upload'
+function normalizeAction(value: unknown): RunFileAction {
+  return isRunFileAction(value) ? value : 'upload'
 }
 
-// 解析备份执行的文件明细；无明细（其它模式或历史记录）时返回 null，调用方据此隐藏面板。
-export function parseBackupManifest(item?: { archive_mode?: string; detail_json?: string }): BackupFileManifest | null {
+// 面板标题按链路类型变化：同一份载荷结构被备份、strm、打包等链路共用。
+const runDetailTitles: Record<string, string> = {
+  backup: '备份文件',
+  strm: 'Strm 与元数据',
+  package: '打包产出',
+  collect: '收集明细',
+  archive: '归档明细',
+}
+
+export function runDetailTitle(kind?: string): string {
+  return runDetailTitles[(kind || '').trim()] ?? '执行明细'
+}
+
+// 解析运行明细载荷；无明细（历史记录或该链路尚未采集）时返回 null，调用方据此隐藏面板。
+export function parseRunDetail(item?: { archive_mode?: string; detail_json?: string }): BackupFileManifest | null {
   const raw = item?.detail_json?.trim()
   if (!raw) {
     return null
@@ -102,11 +139,13 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
   }
 
   const payload = parsed as {
+    kind?: unknown
     files?: unknown
     counts?: unknown
     files_total?: unknown
     files_truncated?: unknown
   }
+  const kind = typeof payload.kind === 'string' ? payload.kind.trim() : ''
   const rawFiles = Array.isArray(payload.files) ? payload.files : []
   const files: BackupFileEntry[] = []
 
@@ -138,10 +177,11 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
   const rawCounts = payload.counts
   if (rawCounts && typeof rawCounts === 'object') {
     for (const [key, value] of Object.entries(rawCounts as Record<string, unknown>)) {
-      const action = normalizeAction(key)
-      if (typeof value === 'number' && value > 0) {
-        counts[action] += value
+      // 认不出的动作直接忽略，避免被归到「已上传」污染页签。
+      if (typeof value !== 'number' || value <= 0 || !isRunFileAction(key)) {
+        continue
       }
+      counts[key] += value
     }
   } else {
     for (const file of files) {
@@ -155,10 +195,11 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
   }
 
   // 「共 N 项」只算会被列出的动作：旧记录的 files_total 含跳过，不能直接用。
-  const listedTotal = counts.upload + counts.fail + counts.delete
+  const listedTotal = runFileActionOrder.reduce((total, action) => total + counts[action], 0)
   const total = listedTotal > 0 ? listedTotal : files.length
 
   return {
+    kind,
     files,
     counts,
     total,
@@ -166,20 +207,28 @@ export function parseBackupManifest(item?: { archive_mode?: string; detail_json?
   }
 }
 
-export function backupFileActionLabel(action: BackupFileAction): string {
+export function backupFileActionLabel(action: RunFileAction): string {
   switch (action) {
     case 'skip':
       return '跳过'
     case 'fail':
       return '失败'
     case 'delete':
-      return '删除'
+      return '已删除'
+    case 'strm':
+      return '生成 Strm'
+    case 'metadata':
+      return '同步元数据'
+    case 'pack':
+      return '已打包'
+    case 'move':
+      return '已移动'
     default:
-      return '上传'
+      return '已上传'
   }
 }
 
-export function backupFileActionClass(action: BackupFileAction): string {
+export function backupFileActionClass(action: RunFileAction): string {
   switch (action) {
     case 'skip':
       return 'is-skip'
@@ -187,6 +236,14 @@ export function backupFileActionClass(action: BackupFileAction): string {
       return 'is-fail'
     case 'delete':
       return 'is-delete'
+    case 'strm':
+      return 'is-strm'
+    case 'metadata':
+      return 'is-metadata'
+    case 'pack':
+      return 'is-pack'
+    case 'move':
+      return 'is-move'
     default:
       return 'is-upload'
   }

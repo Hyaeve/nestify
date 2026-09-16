@@ -74,18 +74,36 @@ type RunHistoryItem struct {
 	FinishedAt     *time.Time `json:"finished_at,omitempty"`
 }
 
-// 备份文件明细的动作标识：上传成功 / 跳过 / 失败 / 删除。
+// 明细载荷的动作标识。
+// 备份链路：上传 / 跳过 / 失败 / 删除；其它链路：生成或覆盖 strm / 同步元数据实体文件 /
+// 打包产出压缩包 / 移动文件或目录。前端按动作渲染中文标签与配色。
 const (
 	BackupFileActionUpload = "upload"
 	BackupFileActionSkip   = "skip"
 	BackupFileActionFail   = "fail"
 	BackupFileActionDelete = "delete"
+
+	RunFileActionStrm     = "strm"
+	RunFileActionMetadata = "metadata"
+	RunFileActionPack     = "pack"
+	RunFileActionMove     = "move"
 )
 
-// BackupFileEntry 记录备份执行中单个文件（或文件夹）的处理结果。
-// 写入 run_history.detail_json，供运行日志 / 归巢历史的详情展开查看「备份了什么」。
-// 策划上只收录真的动了文件的结果（上传/失败/删除）；「跳过」只计数、不逐条列明细。
-type BackupFileEntry struct {
+// 明细载荷的类型标识（detail_json.kind），前端据此决定面板标题与筛选页签。
+const (
+	RunDetailKindBackup  = "backup"
+	RunDetailKindStrm    = "strm"
+	RunDetailKindPackage = "package"
+	RunDetailKindCollect = "collect"
+	RunDetailKindArchive = "archive"
+)
+
+// RunFileEntry 记录一次执行中单个文件（或文件夹）的处理结果。
+// Path 是源路径，Target 是落地产物（.strm / 元数据实体文件 / 压缩包）。
+// 写入 run_history.detail_json，供运行日志 / 归巢历史的详情展开查看「到底动了哪些文件」。
+// 设计上只收录真的动了文件的结果（上传 / 生成 / 下载 / 打包 / 失败 / 删除）；
+// 「跳过」只计数、不逐条列明细，否则筛选规则与同名跳过会产生海量条目。
+type RunFileEntry struct {
 	Path   string `json:"path"`
 	Action string `json:"action"`
 	Size   int64  `json:"size,omitempty"`
@@ -94,16 +112,23 @@ type BackupFileEntry struct {
 	Dir    bool   `json:"dir,omitempty"`
 }
 
-// BackupDetail 是备份任务的详情载荷（run_history.detail_json）。
-// Files 为明细列表（上传/失败/删除，每个动作只保留有限条数，见 backup.maxFileEntriesPerAction）；
-// Counts 是采集到的真实数量（含只计数的 skip），FilesTotal 是明细总数（不含跳过），均不受截断影响。
-type BackupDetail struct {
-	Kind           string            `json:"kind"`
-	Files          []BackupFileEntry `json:"files"`
-	Counts         map[string]int    `json:"counts,omitempty"`
-	FilesTotal     int               `json:"files_total"`
-	FilesTruncated bool              `json:"files_truncated,omitempty"`
+// BackupFileEntry 是 RunFileEntry 的历史名称（备份链路沿用），二者完全等价。
+type BackupFileEntry = RunFileEntry
+
+// RunDetail 是运行详情的载荷（run_history.detail_json），备份 / strm / 打包等链路共用。
+// Files 为明细列表（每个动作只保留有限条数，见 backup.maxFileEntriesPerAction 与
+// executor.maxDetailEntriesPerAction）；Counts 是采集到的真实数量（含只计数的 skip），
+// FilesTotal 是明细总数（不含跳过），均不受截断影响。
+type RunDetail struct {
+	Kind           string         `json:"kind"`
+	Files          []RunFileEntry `json:"files"`
+	Counts         map[string]int `json:"counts,omitempty"`
+	FilesTotal     int            `json:"files_total"`
+	FilesTruncated bool           `json:"files_truncated,omitempty"`
 }
+
+// BackupDetail 是 RunDetail 的历史名称（备份链路沿用），二者完全等价。
+type BackupDetail = RunDetail
 
 type RunHistorySummary struct {
 	Total   int `json:"total"`

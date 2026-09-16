@@ -82,6 +82,9 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	minVideoBytes := strmMinVideoBytes(req.OptionValues)
 	client.SetRequestInterval(interval)
 
+	// 明细采集器必须在启动并发列举之前初始化（多线程各自创建会丢明细）。
+	detail := stats.detail(model.RunDetailKindStrm)
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
@@ -121,6 +124,8 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 			return *stats, err
 		}
 	}
+	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
+	detail.recordSkip(stats.SkipCount)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -202,7 +207,7 @@ func (s *Service) walkOpenListStrmRecursive(
 		// 元数据后缀（图片 / 字幕 / nfo）：下载成实体文件，媒体服务器才能读到封面与字幕。
 		// 递归列举本身只有一次 PROPFIND，这里的下载是唯一的额外远端请求。
 		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
-			switch s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite) {
+			switch s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite, stats) {
 			case strmMetadataCopied:
 				stats.ProcessedFiles++
 				stats.SuccessCount++
@@ -239,12 +244,25 @@ func (s *Service) walkOpenListStrmRecursive(
 
 		if err := writeStrmContent(targetPath, client.BuildStrmURL(entry.Path)); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   entry.Path,
+				Action: model.BackupFileActionFail,
+				Target: targetPath,
+				Note:   fmt.Sprintf("创建 Strm 失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("create strm %s failed: %v", targetPath, err))
 			continue
 		}
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   entry.Path,
+			Action: model.RunFileActionStrm,
+			Target: targetPath,
+			Size:   entry.Size,
+			Note:   describeStrmWrite(existed),
+		})
 		if existed {
 			s.appendLog(runID, "info", fmt.Sprintf("overwrote http strm %s", targetPath))
 		} else {
@@ -385,7 +403,7 @@ func (s *Service) processWebdavStrmDir(
 
 		// 元数据后缀：下载成实体文件。下载本身不持锁（可能很慢），只把结果计入统计。
 		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
-			outcome := s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite)
+			outcome := s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite, stats)
 			statsMu.Lock()
 			switch outcome {
 			case strmMetadataCopied:
@@ -430,6 +448,12 @@ func (s *Service) processWebdavStrmDir(
 		if err := writeStrmContent(targetPath, client.BuildStrmURL(entry.Path)); err != nil {
 			statsMu.Lock()
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   entry.Path,
+				Action: model.BackupFileActionFail,
+				Target: targetPath,
+				Note:   fmt.Sprintf("创建 Strm 失败：%v", err),
+			})
 			statsMu.Unlock()
 			s.appendLog(runID, "error", fmt.Sprintf("create strm %s failed: %v", targetPath, err))
 			continue
@@ -438,6 +462,13 @@ func (s *Service) processWebdavStrmDir(
 		statsMu.Lock()
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   entry.Path,
+			Action: model.RunFileActionStrm,
+			Target: targetPath,
+			Size:   entry.Size,
+			Note:   describeStrmWrite(existed),
+		})
 		statsMu.Unlock()
 		if existed {
 			s.appendLog(runID, "info", fmt.Sprintf("overwrote http strm %s", targetPath))
@@ -461,7 +492,8 @@ const (
 //
 // 远端请求由 webdav.Client 内部按「API 请求间隔」节流，
 // 并发路径下每个线程持有独立客户端，因此间隔按线程生效。
-func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client *webdav.Client, entryPath, rootInternal, targetRoot string, overwrite bool) strmMetadataOutcome {
+// 明细由这里直接写入采集器（自带锁），调用方只在 statsMu 内改计数。
+func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client *webdav.Client, entryPath, rootInternal, targetRoot string, overwrite bool, stats *executionStats) strmMetadataOutcome {
 	relative := strings.TrimPrefix(entryPath, rootInternal)
 	relative = strings.TrimLeft(relative, "/")
 	if relative == "" {
@@ -469,21 +501,41 @@ func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client
 	}
 	targetPath := filepath.Join(targetRoot, filepath.FromSlash(relative))
 
+	existed := false
 	if _, err := os.Lstat(targetPath); err == nil {
+		existed = true
 		if !overwrite {
 			s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
 			return strmMetadataSkipped
 		}
 	} else if !os.IsNotExist(err) {
 		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
+		stats.Detail.record(model.RunFileEntry{
+			Path:   entryPath,
+			Action: model.BackupFileActionFail,
+			Target: targetPath,
+			Note:   fmt.Sprintf("检查元数据目标失败：%v", err),
+		})
 		return strmMetadataFailed
 	}
 
 	if err := client.Download(ctx, entryPath, targetPath); err != nil {
 		s.appendLog(runID, "error", fmt.Sprintf("download metadata %s -> %s failed: %v", entryPath, targetPath, err))
+		stats.Detail.record(model.RunFileEntry{
+			Path:   entryPath,
+			Action: model.BackupFileActionFail,
+			Target: targetPath,
+			Note:   fmt.Sprintf("下载元数据失败：%v", err),
+		})
 		return strmMetadataFailed
 	}
 
+	stats.Detail.record(model.RunFileEntry{
+		Path:   entryPath,
+		Action: model.RunFileActionMetadata,
+		Target: targetPath,
+		Note:   describeStrmWrite(existed),
+	})
 	s.appendLog(runID, "info", fmt.Sprintf("downloaded metadata %s -> %s", entryPath, targetPath))
 	return strmMetadataCopied
 }

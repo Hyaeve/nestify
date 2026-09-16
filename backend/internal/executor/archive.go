@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"nestify/backend/internal/model"
 )
 
 var archivePartNumberPattern = regexp.MustCompile(`^0*[1-9]\d*$`)
@@ -31,7 +33,10 @@ type executionStats struct {
 	HistoryEvents       int
 	// MetadataCount 记录 strm 链路里作为实体文件落地的元数据文件数（图片 / 字幕 / nfo）。
 	MetadataCount int
-	Summary       string
+	// Detail 采集「哪些文件生成了 strm / 下载了元数据 / 打出哪些包」的明细，
+	// 序列化后写入 run_history.detail_json（与备份共用同一载荷结构，见 detail.go）。
+	Detail  *runDetailCollector
+	Summary string
 }
 
 type packageStageResult struct {
@@ -57,6 +62,8 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	}
 
 	stats := executionStats{}
+	// 归档 / 打包 / 收集的明细按类型采集：打包链路记「哪个文件夹被打成了哪个压缩包」。
+	stats.detail(describeArchiveDetailKind(req.ArchiveMode))
 
 	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
 	targetDir := filepath.Clean(strings.TrimSpace(req.TargetDir))
@@ -204,6 +211,12 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		archivePath, packErr := createPackageCBZFromFiles(sourceDir, sourceDir, topLevelImageFiles, archiveTargetDir, matchArchiveParentRenameEnabled, false)
 		if packErr != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourceDir,
+				Action: model.BackupFileActionFail,
+				Note:   fmt.Sprintf("打包失败：%v", packErr),
+				Dir:    true,
+			})
 			s.persistRunHistory(runID, fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr), &stats)
 			s.appendLog(runID, "error", fmt.Sprintf("pack root images %s failed: %v", sourceDir, packErr))
 		} else {
@@ -222,6 +235,14 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 			stats.SuccessCount++
 			stats.PackedVolumes++
 			stats.SizeBytes += fileSizeOrZero(archivePath)
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourceDir,
+				Action: model.RunFileActionPack,
+				Target: archivePath,
+				Size:   fileSizeOrZero(archivePath),
+				Note:   "源目录根下的图片",
+				Dir:    true,
+			})
 			s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath), &stats)
 			s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", sourceDir, archivePath))
 		}
@@ -385,6 +406,10 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	overwrite := req.Options["strm_overwrite"]
 	minVideoBytes := strmMinVideoBytes(req.OptionValues)
 
+	// 明细采集器必须在进入 syncStrmDirectory 之前初始化：
+	// 并发路径下两个线程各自创建会丢掉先建那份采集到的明细。
+	detail := stats.detail(model.RunDetailKindStrm)
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
@@ -401,6 +426,8 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats); err != nil {
 		return *stats, err
 	}
+	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
+	detail.recordSkip(stats.SkipCount)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -476,6 +503,11 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		targetPath, relErr := strmTargetPath(rootPath, sourcePath, targetRoot)
 		if relErr != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourcePath,
+				Action: model.BackupFileActionFail,
+				Note:   fmt.Sprintf("解析 Strm 目标路径失败：%v", relErr),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("resolve strm target for %s failed: %v", sourcePath, relErr))
 			return nil
 		}
@@ -490,18 +522,38 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 			}
 		} else if !os.IsNotExist(err) {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourcePath,
+				Action: model.BackupFileActionFail,
+				Target: targetPath,
+				Note:   fmt.Sprintf("检查 Strm 目标失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("inspect strm target %s failed: %v", targetPath, err))
 			return nil
 		}
 
 		if err := writeStrmFile(sourcePath, targetPath); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourcePath,
+				Action: model.BackupFileActionFail,
+				Target: targetPath,
+				Note:   fmt.Sprintf("创建 Strm 失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("create strm %s -> %s failed: %v", targetPath, sourcePath, err))
 			return nil
 		}
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		// 明细里的 Size 取源媒体文件大小：用户据此判断「这条 strm 对应的是哪个视频」。
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.RunFileActionStrm,
+			Target: targetPath,
+			Size:   fileSizeOrZero(sourcePath),
+			Note:   describeStrmWrite(existed),
+		})
 		if existed {
 			s.appendLog(runID, "info", fmt.Sprintf("overwrote strm %s -> %s", targetPath, sourcePath))
 		} else {
@@ -517,6 +569,11 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	relPath, relErr := filepath.Rel(rootPath, sourcePath)
 	if relErr != nil || relPath == "." || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
 		stats.FailureCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.BackupFileActionFail,
+			Note:   fmt.Sprintf("解析元数据目标路径失败：%v", relErr),
+		})
 		s.appendLog(runID, "error", fmt.Sprintf("resolve metadata target for %s failed: %v", sourcePath, relErr))
 		return
 	}
@@ -532,17 +589,35 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 		}
 	} else if !os.IsNotExist(err) {
 		stats.FailureCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.BackupFileActionFail,
+			Target: targetPath,
+			Note:   fmt.Sprintf("检查元数据目标失败：%v", err),
+		})
 		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
 		return
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		stats.FailureCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.BackupFileActionFail,
+			Target: targetPath,
+			Note:   fmt.Sprintf("创建元数据目录失败：%v", err),
+		})
 		s.appendLog(runID, "error", fmt.Sprintf("create metadata parent for %s failed: %v", targetPath, err))
 		return
 	}
 	if err := copyFile(sourcePath, targetPath); err != nil {
 		stats.FailureCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.BackupFileActionFail,
+			Target: targetPath,
+			Note:   fmt.Sprintf("复制元数据失败：%v", err),
+		})
 		s.appendLog(runID, "error", fmt.Sprintf("copy metadata %s -> %s failed: %v", sourcePath, targetPath, err))
 		return
 	}
@@ -550,11 +625,27 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MetadataCount++
+	stats.Detail.record(model.RunFileEntry{
+		Path:   sourcePath,
+		Action: model.RunFileActionMetadata,
+		Target: targetPath,
+		Size:   fileSizeOrZero(sourcePath),
+		Note:   describeStrmWrite(existed),
+	})
 	if existed {
 		s.appendLog(runID, "info", fmt.Sprintf("overwrote metadata %s -> %s", targetPath, sourcePath))
 	} else {
 		s.appendLog(runID, "info", fmt.Sprintf("copied metadata %s -> %s", targetPath, sourcePath))
 	}
+}
+
+// describeStrmWrite 描述一次产物（strm / 元数据实体文件）写入是新建还是覆盖，
+// 用于运行详情里的明细备注。
+func describeStrmWrite(existed bool) string {
+	if existed {
+		return "覆盖已有文件"
+	}
+	return "新建"
 }
 
 func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode string, stats *executionStats) error {
@@ -1138,6 +1229,12 @@ func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, target
 
 	archivePath, err := createPackageCBZFromFiles(rootSourceDir, dirPath, stage.imageFiles, targetDir, parentRenameEnabled, preferPlainParentName)
 	if err != nil {
+		stats.Detail.record(model.RunFileEntry{
+			Path:   dirPath,
+			Action: model.BackupFileActionFail,
+			Note:   fmt.Sprintf("打包失败：%v", err),
+			Dir:    true,
+		})
 		return err
 	}
 	if cleanupSourceAfterArchive {
@@ -1149,16 +1246,28 @@ func (s *Service) finalizePackageDirectory(runID, rootSourceDir, dirPath, target
 	stats.SuccessCount++
 	stats.PackedVolumes++
 	stats.SizeBytes += fileSizeOrZero(archivePath)
+	// 明细记录被打包的文件夹本身（Dir 标记）与产出的压缩包，便于复盘「这次包了哪些目录」。
+	packEntry := model.RunFileEntry{
+		Path:   dirPath,
+		Action: model.RunFileActionPack,
+		Target: archivePath,
+		Size:   fileSizeOrZero(archivePath),
+		Dir:    true,
+	}
 	if sameCleanPath(rootSourceDir, dirPath) {
+		packEntry.Note = "源目录根下的图片"
 		s.persistRunHistory(runID, fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed root images %s -> %s", dirPath, archivePath))
 	} else if filepath.Base(dirPath) == filepath.Base(rootSourceDir) {
+		packEntry.Note = "剧集目录"
 		s.persistRunHistory(runID, fmt.Sprintf("packed series %s -> %s", dirPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed series %s -> %s", dirPath, archivePath))
 	} else {
+		packEntry.Note = "分卷目录"
 		s.persistRunHistory(runID, fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("packed volume %s -> %s", dirPath, archivePath))
 	}
+	stats.Detail.record(packEntry)
 
 	return nil
 }

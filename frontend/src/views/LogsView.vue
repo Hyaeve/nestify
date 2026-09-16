@@ -264,7 +264,7 @@
               </div>
             </div>
           </div>
-          <BackupFileList :manifest="selectedBackupManifest" />
+          <RunDetailList :manifest="selectedRunDetailManifest" />
           <el-table :data="pagedLogDetailRows" class="logs-table logs-detail-table" empty-text="暂无明细">
             <el-table-column label="明细" min-width="520">
               <template #default="scope">
@@ -322,13 +322,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import BackupFileList from '../components/BackupFileList.vue'
+import RunDetailList from '../components/RunDetailList.vue'
 import { fetchBackups, type BackupTask } from '../api/backups'
 import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
-  parseBackupManifest,
+  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -396,7 +396,8 @@ const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
-const selectedBackupDetail = ref<RunHistoryItem | null>(null)
+// 运行详情（detail_json）：各链路共用，不再只服务备份。
+const selectedRunDetail = ref<RunHistoryItem | null>(null)
 const logDetailPageSize = 25
 const logDetailCurrentPage = ref(1)
 
@@ -426,8 +427,8 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
   })
 })
 
-// 备份文件明细：本次执行上传/跳过/失败/删除的具体文件清单（来自 detail_json）。
-const selectedBackupManifest = computed(() => parseBackupManifest(selectedBackupDetail.value ?? undefined))
+// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
+const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 async function loadHistory() {
   loading.value = true
@@ -633,17 +634,18 @@ async function loadSelectedBackupTask(row: LogTreeRow) {
   }
 }
 
-// 备份文件明细单独拉取：列表接口为避免响应过大不带 detail_json。
-async function loadSelectedBackupDetail(row: LogTreeRow) {
-  selectedBackupDetail.value = null
-  if (row.archive_mode !== 'backup' || !row.historyId) {
+// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
+// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
+async function loadSelectedRunDetail(row: LogTreeRow) {
+  selectedRunDetail.value = null
+  if (!row.historyId) {
     return
   }
   try {
     const payload = await fetchRunHistoryDetail(row.historyId)
-    selectedBackupDetail.value = payload.data?.item ?? null
+    selectedRunDetail.value = payload.data?.item ?? null
   } catch {
-    selectedBackupDetail.value = null
+    selectedRunDetail.value = null
   }
 }
 
@@ -651,13 +653,13 @@ function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
   selectedBackupTask.value = null
-  selectedBackupDetail.value = null
+  selectedRunDetail.value = null
   logDetailCurrentPage.value = 1
   logDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
-    void loadSelectedBackupDetail(row)
   }
+  void loadSelectedRunDetail(row)
 }
 
 // 平铺视图里把单条记录包装成「只有一个明细」的任务分组，同样可以打开详情。
