@@ -471,13 +471,13 @@
           <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
-        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="createForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -532,13 +532,13 @@
           <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
-        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="立即运行一次（启动后）"><el-switch v-model="editForm.run_on_start" /></el-form-item></el-col></el-row>
       </el-form>
@@ -573,7 +573,7 @@
             <div v-if="createPurifyForm.source_dirs.length" class="source-dir-editor__list">
               <el-tag v-for="dir in createPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeCreatePurifySourceDir(dir)">{{ dir }}</el-tag>
             </div>
-            <el-empty v-else class="source-dir-editor__empty" description="暂未选择监控目录" :image-size="56" />
+            <p v-else class="source-dir-editor__placeholder">暂未选择监控目录</p>
             <el-button type="primary" plain @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button>
           </div>
         </el-form-item>
@@ -655,7 +655,7 @@
             <div v-if="editPurifyForm.source_dirs.length" class="source-dir-editor__list">
               <el-tag v-for="dir in editPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeEditPurifySourceDir(dir)">{{ dir }}</el-tag>
             </div>
-            <el-empty v-else class="source-dir-editor__empty" description="暂未选择监控目录" :image-size="56" />
+            <p v-else class="source-dir-editor__placeholder">暂未选择监控目录</p>
             <el-button type="primary" plain @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button>
           </div>
         </el-form-item>
@@ -772,14 +772,14 @@
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
           <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col>
@@ -853,14 +853,14 @@
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="10" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
           <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col>
@@ -3586,7 +3586,7 @@ onBeforeUnmount(() => {
 .source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }
 .source-dir-editor__tag { max-width: 100%; }
 .source-dir-editor__tag :deep(.el-tag__content) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-dir-editor__empty { width: 100%; padding: 8px 0; }
+.source-dir-editor__placeholder { display: flex; align-items: center; width: 100%; min-height: 32px; margin: 0; padding: 0 2px; font-size: 13px; color: var(--el-text-color-secondary); }
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: #2f8f9d; background: var(--el-bg-color); }
