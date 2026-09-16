@@ -35,17 +35,20 @@ const (
 )
 
 type taskState struct {
-	Running      bool
-	Status       string
-	Phase        string
-	Progress     string
-	Scanned      int
-	Copied       int
-	Skipped      int
-	Deleted      int
-	Failed       int
-	LastBackupAt string
-	RecentLogs   []string
+	Running bool
+	// CancelRequested 由「扫描」按钮再次点击时置上；execute 的主循环在每个文件前检查它。
+	// 每次 runTask 都会换成全新的 taskState，所以上一轮的标记不会残留。
+	CancelRequested bool
+	Status          string
+	Phase           string
+	Progress        string
+	Scanned         int
+	Copied          int
+	Skipped         int
+	Deleted         int
+	Failed          int
+	LastBackupAt    string
+	RecentLogs      []string
 }
 
 type Service struct {
@@ -225,6 +228,31 @@ func (s *Service) RunTask(taskID int64, forceFull bool) error {
 	return s.runTask(taskID, forceFull, model.TriggerModeManual)
 }
 
+// CancelTask 请求停止正在执行的备份任务。
+// 停止是协作式的：已经在传的那个文件会传完，之后立刻收尾并记为「已停止」，
+// 不会执行「从目标同步删除」——中途停下的 sourceIndex 不完整，继续同步删除会误删目标端文件。
+func (s *Service) CancelTask(taskID int64) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.states[taskID]
+	if !ok || state == nil || !state.Running {
+		return false, fmt.Errorf("该备份任务未在执行中")
+	}
+	state.CancelRequested = true
+	state.Phase = "正在停止"
+	return true, nil
+}
+
+// cancelled 读取停止标记（由 execute 的循环检查点调用）。
+func (s *Service) cancelled(taskID int64) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	state, ok := s.states[taskID]
+	return ok && state != nil && state.CancelRequested
+}
+
 // runTask 与 RunTask 相同，但显式指定触发方式（手动 / 定时 / 监听），
 // 用于在运行日志里标记任务来源。
 func (s *Service) runTask(taskID int64, forceFull bool, triggerMode string) error {
@@ -345,7 +373,14 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 		s.mu.Lock()
 		if state, ok := s.states[task.ID]; ok {
+			// 手动停止优先于「成功 / 失败」判定：不算失败，措辞也换成停止。
+			if state.CancelRequested {
+				status = "cancelled"
+				summary = fmt.Sprintf("已手动停止：扫描 %d，上传 %d，跳过 %d，删除 %d，失败 %d",
+					stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed)
+			}
 			state.Running = false
+			state.CancelRequested = false
 			state.Status = status
 			state.Phase = "已完成"
 			state.Progress = ""
@@ -394,6 +429,10 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		}
 
 		err = filepath.WalkDir(sourceDir, func(currentPath string, entry os.DirEntry, walkErr error) error {
+			// 停止请求优先于一切：SkipAll 让 WalkDir 干净地结束，不再往下扫。
+			if s.cancelled(task.ID) {
+				return filepath.SkipAll
+			}
 			if walkErr != nil {
 				stats.Failed++
 				s.log(task.ID, "读取失败：%s（%v）", currentPath, walkErr)
@@ -482,6 +521,11 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 	sort.Slice(items, func(i, j int) bool { return items[i].relative < items[j].relative })
 
 	for _, item := range items {
+		if s.cancelled(task.ID) {
+			s.log(task.ID, "已收到停止请求，停止上传剩余文件")
+			break
+		}
+
 		fileInfo, statErr := os.Stat(item.absolute)
 		if statErr != nil {
 			continue
@@ -536,13 +580,17 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		}
 	}
 
-	if task.CompletionRule == model.BackupCompletionDeleteSourceDirs {
+	// 停止执行时不做「清理空目录」与「从目标同步删除」：
+	// 中途停下的 sourceIndex 并不完整，拿去同步删除会误删目标端已有的文件。
+	stopped := s.cancelled(task.ID)
+
+	if !stopped && task.CompletionRule == model.BackupCompletionDeleteSourceDirs {
 		for _, sourceDir := range task.SourceDirs {
 			s.pruneEmptyDirs(sourceDir, matcher, stats)
 		}
 	}
 
-	if task.SyncDeleteFromTarget && len(targets) > 0 {
+	if !stopped && task.SyncDeleteFromTarget && len(targets) > 0 {
 		s.setPhase(task.ID, "同步删除目标", "")
 		for _, target := range targets {
 			if target.isWebdav {

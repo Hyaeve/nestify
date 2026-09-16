@@ -65,10 +65,13 @@
           <CardActionBar
             :enabled="task.enabled"
             :busy="updatingIds.has(task.id)"
-            execute-label="重新扫描"
+            execute-label="扫描"
             execute-icon="rescan"
+            :running="isTaskRunning(task.id)"
+            :cancelling="isTaskCancelling(task.id)"
             @toggle="toggleEnabled(task)"
             @execute="rescan(task)"
+            @cancel="stopScan(task)"
             @edit="openEditWizard(task)"
             @remove="removeTask(task)"
           />
@@ -413,10 +416,12 @@ import CardActionBar from './CardActionBar.vue'
 import CardContextMenu, { type CardContextMenuItem } from './CardContextMenu.vue'
 import { syncOverflowTitle } from '../utils/overflowTitle'
 import {
+  cancelBackup,
   createBackup,
   deleteBackup,
   fetchBackupStatus,
   fetchBackups,
+  fetchRunningBackups,
   reorderBackups,
   runBackup,
   setBackupEnabled,
@@ -438,6 +443,46 @@ const backups = ref<BackupTask[]>([])
 const scanningIds = ref<Set<number>>(new Set())
 // 正在提交「启用 / 禁用」请求的任务：用于禁用按钮避免重复点击。
 const updatingIds = ref<Set<number>>(new Set())
+
+// —— 扫描状态常驻 + 二次点击停止 ——
+// 以前点「扫描」只是发一次请求，卡片上看不出任务在跑，也没法叫停。
+// 现在轮询 /api/v1/backups/running（只回运行中的任务），底部按钮常驻显示「扫描中」，
+// 再点一次就发停止请求。
+const runningIds = ref<Set<number>>(new Set())
+const cancellingIds = ref<Set<number>>(new Set())
+
+const runningPollBusyMs = 2000
+const runningPollIdleMs = 8000
+let runningPollTimer: number | undefined
+
+function isTaskRunning(taskId: number) {
+  return runningIds.value.has(taskId)
+}
+
+function isTaskCancelling(taskId: number) {
+  return cancellingIds.value.has(taskId)
+}
+
+async function refreshRunningBackups() {
+  try {
+    const response = await fetchRunningBackups()
+    const next = new Set<number>()
+    for (const item of response.data?.items ?? []) {
+      if (item.running) next.add(item.task_id)
+    }
+    runningIds.value = next
+  } catch {
+    // 轮询失败保留上一次状态，下个周期再试。
+  }
+}
+
+function scheduleRunningPoll() {
+  const delay = runningIds.value.size ? runningPollBusyMs : runningPollIdleMs
+  runningPollTimer = window.setTimeout(async () => {
+    await refreshRunningBackups()
+    scheduleRunningPoll()
+  }, delay)
+}
 
 // —— 资源限制 ——
 const resourceLimitVisible = ref(false)
@@ -531,10 +576,15 @@ let statusTaskId: number | null = null
 
 onMounted(() => {
   void loadBackups()
+  void refreshRunningBackups().then(() => scheduleRunningPoll())
 })
 
 onBeforeUnmount(() => {
   destroyBackupSortable()
+  if (runningPollTimer !== undefined) {
+    window.clearTimeout(runningPollTimer)
+    runningPollTimer = undefined
+  }
 })
 
 async function loadBackups() {
@@ -1014,12 +1064,14 @@ async function toggleEnabled(task: BackupTask) {
   }
 }
 
-// 「重新扫描」= 强制全量扫描：跳过增量时间线，重新遍历全部源文件，
+// 「扫描」= 强制全量扫描：跳过增量时间线，重新遍历全部源文件，
 // 期间照常套用任务自身的筛选规则（后端 matcher := newFilterMatcher(task.FilterRules)）。
+// 提交后立刻返回，卡片按钮转为「扫描中」；再点一次走 stopScan 停止这次执行。
 async function rescan(task: BackupTask) {
   scanningIds.value = new Set(scanningIds.value).add(task.id)
   try {
     await runBackup(task.id, true)
+    await refreshRunningBackups()
     ElMessage.success('已开始全量扫描')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '扫描失败')
@@ -1027,6 +1079,25 @@ async function rescan(task: BackupTask) {
     const next = new Set(scanningIds.value)
     next.delete(task.id)
     scanningIds.value = next
+  }
+}
+
+// 停止正在执行的备份任务：已经在传的那个文件会传完，之后后端立刻收尾。
+async function stopScan(task: BackupTask) {
+  const nextCancelling = new Set(cancellingIds.value)
+  nextCancelling.add(task.id)
+  cancellingIds.value = nextCancelling
+
+  try {
+    await cancelBackup(task.id)
+    await refreshRunningBackups()
+    ElMessage.success('已请求停止扫描')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '停止扫描失败')
+  } finally {
+    const settled = new Set(cancellingIds.value)
+    settled.delete(task.id)
+    cancellingIds.value = settled
   }
 }
 
@@ -1564,24 +1635,25 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   color: #cbd5e1;
 }
 
-/* 选中态：只在选中时点亮成浅黄高亮底 + 黑字，未选中保持白底黑字。
-   原来是「蓝底蓝字」，现在蓝色整块从这组开关上撤掉。 */
+/* 选中态 = 晴空蓝「浅底 + 深字」：底色亮、文字深，在弹窗浅底上既醒目又不糊。
+   色相统一走 #0b9df8（本轮定稿的晴空蓝）。
+   演进：蓝底蓝字（字太深、底太淡）→ 浅黄高亮 + 黑字（被要求改回蓝）→ 现在这一版。 */
 .backup-filter-chip.is-active {
-  color: #1e293b;
-  background: #fde68a;
-  border-color: rgba(217, 154, 0, 0.42);
+  color: #0f5c8f;
+  background: rgba(11, 157, 248, 0.18);
+  border-color: rgba(11, 157, 248, 0.5);
 }
 
 .backup-filter-chip.is-active:hover {
-  color: #1e293b;
-  background: #fcd34d;
-  border-color: rgba(217, 154, 0, 0.6);
+  color: #0a4a73;
+  background: rgba(11, 157, 248, 0.28);
+  border-color: rgba(11, 157, 248, 0.72);
 }
 
 /* 不可切换的开关（扩展名 / 体积规则的「文件夹」）即使值为 true 也按禁用显示，别亮成选中态。 */
 .backup-filter-chip.is-active:disabled {
   color: #b6c5c9;
-  background: rgba(217, 154, 0, 0.08);
+  background: rgba(11, 157, 248, 0.08);
   border-color: #eef2f7;
 }
 

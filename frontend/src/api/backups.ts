@@ -100,6 +100,11 @@ export function runBackup(id: number, forceFull = false) {
   return postJSON<BackupStatusSnapshot>(`/api/v1/backups/${id}/run`, { force_full: forceFull })
 }
 
+/** 停止一个正在执行的备份任务（卡片上的「扫描」按钮再次点击）。 */
+export function cancelBackup(id: number) {
+  return postJSON<Record<string, never>>(`/api/v1/backups/${id}/cancel`, {})
+}
+
 export function setBackupEnabled(id: number, enabled: boolean) {
   return postJSON<BackupTask>(`/api/v1/backups/${id}/enabled`, { enabled })
 }

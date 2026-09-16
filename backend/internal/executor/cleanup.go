@@ -81,6 +81,10 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 }
 
 func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles bool, cleanupRetentionDays int, matchers []fileNameMatcher, whitelist map[string]struct{}, stats *executionStats) {
+	// 手动停止：递归到这里直接不再往下走（返回 void，取消信号由 runExecution 统一收尾）。
+	if s.runAborted(runID) {
+		return
+	}
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++

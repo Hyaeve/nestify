@@ -14,6 +14,10 @@ const (
 	RunStatusRunning   = "running"
 	RunStatusSucceeded = "succeeded"
 	RunStatusFailed    = "failed"
+	// RunStatusCancelled 表示任务被用户手动停止（卡片上的执行 / 扫描按钮再次点击）。
+	// 停止是「协作式」的：执行器在目录递归与文件循环的检查点发现取消信号后自行退出，
+	// 已经在处理的那个文件会写完，不会留下半截产物。
+	RunStatusCancelled = "cancelled"
 )
 
 const (

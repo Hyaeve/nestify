@@ -63,9 +63,12 @@
         :enabled="rule.enabled"
         :busy="busy"
         :strm-sync="strmSync"
+        :running="running"
+        :cancelling="cancelling"
         @toggle="emit('toggle', rule)"
         @execute="emit('execute', rule)"
         @strm-sync="(command) => emit('strm-sync', rule, command)"
+        @cancel="emit('cancel', rule)"
         @edit="emit('edit', rule)"
         @remove="emit('remove', rule)"
       />
@@ -95,6 +98,10 @@ const props = withDefaults(
     cronError?: string
     /** Strm 模式的链路规则：执行按钮改为「增量同步 / 全量同步」下拉。 */
     strmSync?: boolean
+    /** 该规则正在执行：底部执行按钮常驻显示「执行中」，再点一次即停止。 */
+    running?: boolean
+    /** 停止请求已发出、后端还在收尾。 */
+    cancelling?: boolean
   }>(),
   {
     paths: () => [],
@@ -104,6 +111,8 @@ const props = withDefaults(
     cronLoading: false,
     cronError: '',
     strmSync: false,
+    running: false,
+    cancelling: false,
   },
 )
 
@@ -111,6 +120,7 @@ const emit = defineEmits<{
   (e: 'edit', rule: RuleItem): void
   (e: 'execute', rule: RuleItem): void
   (e: 'strm-sync', rule: RuleItem, command: string): void
+  (e: 'cancel', rule: RuleItem): void
   (e: 'remove', rule: RuleItem): void
   (e: 'toggle', rule: RuleItem): void
   (e: 'cron-preview', rule: RuleItem): void

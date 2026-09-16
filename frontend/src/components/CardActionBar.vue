@@ -20,7 +20,22 @@
     </button>
 
     <div class="card-action-bar__actions">
-      <el-dropdown v-if="strmSync" trigger="click" @command="handleStrmCommand">
+      <!-- 执行中：按钮常驻显示状态，再点一次即停止（图标换成实心方块的「停止」语义）。 -->
+      <button
+        v-if="running"
+        type="button"
+        class="card-action-bar__btn card-action-bar__btn--run is-running"
+        :disabled="cancelling"
+        title="点击停止这次执行"
+        @click.stop="emit('cancel')"
+      >
+        <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="6" y="6" width="12" height="12" rx="2.6" fill="currentColor" />
+        </svg>
+        <span>{{ cancelling ? '停止中' : '执行中' }}</span>
+      </button>
+
+      <el-dropdown v-else-if="strmSync" trigger="click" @command="handleStrmCommand">
         <button type="button" class="card-action-bar__btn card-action-bar__btn--run" @click.stop>
           <svg class="card-action-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4.2" y="4.2" width="15.6" height="15.6" rx="4.4" />
@@ -84,14 +99,20 @@ withDefaults(
     strmSync?: boolean
     /** 执行按钮文案：规则卡片用「执行」，备份卡片用「重新扫描」。 */
     executeLabel?: string
-    /** 执行按钮图标：'run' = 圆角方框 + 圆角三角（立即执行）；'rescan' = 四角扫描框（重新扫描）。 */
+    /** 执行按钮图标：'run' = 圆角方框 + 圆角三角（立即执行）；'rescan' = 四角扫描框（扫描）。 */
     executeIcon?: 'run' | 'rescan'
+    /** 该规则 / 任务当前是否正在执行：执行按钮常驻显示「执行中」，再点一次即停止。 */
+    running?: boolean
+    /** 停止请求已发出、后端还在收尾：按钮短暂禁用，避免重复点。 */
+    cancelling?: boolean
   }>(),
   {
     busy: false,
     strmSync: false,
     executeLabel: '执行',
     executeIcon: 'run',
+    running: false,
+    cancelling: false,
   },
 )
 
@@ -99,6 +120,7 @@ const emit = defineEmits<{
   (e: 'toggle'): void
   (e: 'execute'): void
   (e: 'strm-sync', command: string): void
+  (e: 'cancel'): void
   (e: 'edit'): void
   (e: 'remove'): void
 }>()
@@ -190,6 +212,38 @@ function handleStrmCommand(command: string) {
   color: #055a8f;
   border-color: rgba(32, 159, 238, 0.5);
   background: rgba(32, 159, 238, 0.12);
+}
+
+/* 执行中：浅蓝底 + 深蓝字 + 一圈呼吸灯，状态常驻在按钮上；
+   图标这时是实心方块（停止），再点一次即发出停止请求。 */
+.card-action-bar__btn--run.is-running {
+  color: #0f5c8f;
+  border-color: rgba(11, 157, 248, 0.5);
+  background: rgba(11, 157, 248, 0.16);
+  animation: card-action-bar-pulse 1.7s ease-in-out infinite;
+}
+
+.card-action-bar__btn--run.is-running:hover {
+  color: #0a4a73;
+  border-color: rgba(11, 157, 248, 0.74);
+  background: rgba(11, 157, 248, 0.26);
+}
+
+/* 停止请求已发出、后端还在收尾：禁用重复点击，同时停掉呼吸灯免得看着像还在正常跑。 */
+.card-action-bar__btn--run.is-running:disabled {
+  opacity: 0.72;
+  cursor: progress;
+  animation: none;
+}
+
+@keyframes card-action-bar-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(11, 157, 248, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(11, 157, 248, 0);
+  }
 }
 
 .card-action-bar__btn--edit:hover {

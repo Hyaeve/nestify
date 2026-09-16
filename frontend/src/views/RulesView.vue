@@ -34,7 +34,10 @@
           :cron-loading="cronPreviewLoadingRuleId === rule.id"
           :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
           @edit="openRuleCardEdit"
+          :running="isRuleRunning(rule.id)"
+          :cancelling="isRuleCancelling(rule.id)"
           @execute="prepareExecution(rule.id)"
+          @cancel="cancelRuleExecution(rule.id)"
           @remove="removeRule(rule.id, 'archive')"
           @toggle="toggleRuleEnabled(rule)"
           @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
@@ -298,7 +301,10 @@
           :cron-loading="cronPreviewLoadingRuleId === rule.id"
           :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
           @edit="openRuleCardEdit"
+          :running="isRuleRunning(rule.id)"
+          :cancelling="isRuleCancelling(rule.id)"
           @execute="prepareExecution(rule.id)"
+          @cancel="cancelRuleExecution(rule.id)"
           @remove="removeRule(rule.id, 'cleanup')"
           @toggle="toggleRuleEnabled(rule)"
           @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
@@ -346,7 +352,10 @@
           :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
           :strm-sync="rule.link_mode === 'strm'"
           @edit="openRuleCardEdit"
+          :running="isRuleRunning(rule.id)"
+          :cancelling="isRuleCancelling(rule.id)"
           @execute="prepareExecution(rule.id)"
+          @cancel="cancelRuleExecution(rule.id)"
           @strm-sync="(item, command) => handleStrmSyncCommand(item.id, command)"
           @remove="removeRule(rule.id, 'link')"
           @toggle="toggleRuleEnabled(rule)"
@@ -387,7 +396,10 @@
           :cron-loading="cronPreviewLoadingRuleId === rule.id"
           :cron-error="cronPreviewErrorRuleId === rule.id ? cronPreviewErrorMessage || '预览失败' : ''"
           @edit="openRuleCardEdit"
+          :running="isRuleRunning(rule.id)"
+          :cancelling="isRuleCancelling(rule.id)"
           @execute="prepareExecution(rule.id)"
+          @cancel="cancelRuleExecution(rule.id)"
           @remove="removeRule(rule.id, 'naming')"
           @toggle="toggleRuleEnabled(rule)"
           @cron-preview="handleCronPreviewShow(rule.id, rule.cron_expression)"
@@ -1000,7 +1012,7 @@ import BackupRulesPanel from '../components/BackupRulesPanel.vue'
 import RunDetailList from '../components/RunDetailList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
-import { fetchRun, prepareRuleExecution } from '../api/executions'
+import { cancelRun, fetchActiveRuns, prepareRuleExecution, type RunInstance } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
@@ -1437,6 +1449,7 @@ function historyStatusText(status: string) {
   if (status === 'success') return '成功'
   if (status === 'skip') return '跳过'
   if (status === 'failed') return '失败'
+  if (status === 'cancelled') return '已停止'
   return status || '未知'
 }
 
@@ -2743,6 +2756,7 @@ function buildHistoryChildRow(item: RunHistoryItem): HistoryTreeRow {
 function resolveHistoryGroupStatus(items: RunHistoryItem[]) {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'skip')) return 'skip'
+  if (items.some((item) => item.status === 'cancelled')) return 'cancelled'
   return 'success'
 }
 
@@ -3303,47 +3317,82 @@ async function submitUpdateLinkRule() {
   }
 }
 
-const ruleExecutionHistoryWaitMs = 450
-const ruleExecutionHistoryMaxAttempts = 12
+// —— 执行状态常驻 + 二次点击停止 ——
+// 以前点「执行」是「发请求 → 一直等到跑完 → 自动跳到归巢历史」，卡片上看不出在跑，
+// 也没法中途叫停。现在改成：提交后立刻返回，卡片底部按钮常驻显示「执行中」，
+// 再点一次就发停止请求。状态来自 /api/v1/runs/active 轮询
+// （只回未结束的执行，比拉全量 runs 轻）。
+const activeRuns = ref<RunInstance[]>([])
+const cancellingRuleIds = ref<Set<number>>(new Set())
 
-function waitForRuleExecutionHistory() {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ruleExecutionHistoryWaitMs)
-  })
+const activeRunPollRunningMs = 2000
+const activeRunPollIdleMs = 8000
+let activeRunPollTimer: number | undefined
+
+function activeRunForRule(ruleID: number) {
+  return activeRuns.value.find((run) => run.rule_id === ruleID)
 }
 
-async function waitUntilRuleExecutionSettled(runID?: string) {
-  if (!runID) {
-    await waitForRuleExecutionHistory()
-    return
-  }
+function isRuleRunning(ruleID: number) {
+  return activeRunForRule(ruleID) !== undefined
+}
 
-  for (let attempt = 0; attempt < ruleExecutionHistoryMaxAttempts; attempt += 1) {
-    const response = await fetchRun(runID)
-    const status = response.data?.status
-    if (status && status !== 'pending' && status !== 'running') {
-      return
-    }
-    await waitForRuleExecutionHistory()
+function isRuleCancelling(ruleID: number) {
+  return cancellingRuleIds.value.has(ruleID)
+}
+
+async function refreshActiveRuns() {
+  try {
+    const response = await fetchActiveRuns()
+    activeRuns.value = response.data?.items ?? []
+  } catch {
+    // 轮询失败不打断页面：保留上一次的状态，下个周期再试。
   }
+}
+
+function scheduleActiveRunPoll() {
+  // 有任务在跑就 2s 一次（按钮上的状态要跟得上），空闲时降到 8s
+  // —— 监控 / Cron 触发的执行也要能自动点亮「执行中」，所以不能干脆不轮询。
+  const delay = activeRuns.value.length ? activeRunPollRunningMs : activeRunPollIdleMs
+  activeRunPollTimer = window.setTimeout(async () => {
+    await refreshActiveRuns()
+    scheduleActiveRunPoll()
+  }, delay)
 }
 
 async function prepareExecution(ruleID: number, options: Record<string, boolean> = {}) {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await prepareRuleExecution(ruleID, 'once', options)
+    await prepareRuleExecution(ruleID, 'once', options)
+    // 不阻塞、不跳页：把状态刷出来，按钮自己会变成「执行中」。
+    await refreshActiveRuns()
     ElMessage.success('规则执行已启动')
-    await waitUntilRuleExecutionSettled(response.data?.run.id)
-    await loadArchiveRules()
-    await loadPurifyRules()
-    await loadLinkRules()
-    historyCurrentPage.value = 1
-    await switchTab('history')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '规则执行失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function cancelRuleExecution(ruleID: number) {
+  const run = activeRunForRule(ruleID)
+  if (!run) return
+
+  const nextCancelling = new Set(cancellingRuleIds.value)
+  nextCancelling.add(ruleID)
+  cancellingRuleIds.value = nextCancelling
+
+  try {
+    await cancelRun(run.id)
+    ElMessage.success('已请求停止执行')
+    await refreshActiveRuns()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '停止执行失败')
+  } finally {
+    const settled = new Set(cancellingRuleIds.value)
+    settled.delete(ruleID)
+    cancellingRuleIds.value = settled
   }
 }
 
@@ -3459,10 +3508,16 @@ onMounted(() => {
     void switchTab('rules')
   }
   loadAvailableNamingRuleSets()
+
+  void refreshActiveRuns().then(() => scheduleActiveRunPoll())
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('wheel', handleRulesTableWheel)
+  if (activeRunPollTimer !== undefined) {
+    window.clearTimeout(activeRunPollTimer)
+    activeRunPollTimer = undefined
+  }
 })
 </script>
 
@@ -3523,6 +3578,8 @@ onBeforeUnmount(() => {
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }
 .history-status.is-failed { color: #ef4444; }
+/* 手动停止：中性灰蓝，既不亮成「成功」也不红成「失败」。 */
+.history-status.is-cancelled { color: #64748b; }
 .rules-page :deep(.rules-table) {
   width: 100%;
 }
@@ -3724,16 +3781,18 @@ onBeforeUnmount(() => {
   background: rgba(148, 163, 184, 0.22);
 }
 
+/* 勾选态：晴空蓝「浅底 + 深字」。原先的 #0975b8（L37）读起来发闷、饱和度也压得低，
+   换成 #0f5c8f 配 18% 晴空蓝底 —— 亮度够、色相正，勾没勾一眼能分。 */
 .mode-chip.is-on {
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.14);
-  border-color: rgba(32, 159, 238, 0.45);
+  color: #0f5c8f;
+  background: rgba(11, 157, 248, 0.18);
+  border-color: rgba(11, 157, 248, 0.52);
 }
 
 .mode-chip.is-on:hover {
-  color: #055a8f;
-  background: rgba(32, 159, 238, 0.22);
-  border-color: rgba(32, 159, 238, 0.62);
+  color: #0a4a73;
+  background: rgba(11, 157, 248, 0.28);
+  border-color: rgba(11, 157, 248, 0.74);
 }
 
 /* 「功能模块」多选下拉：标签行右侧挂一个「全选 / 取消全选」按钮。 */
@@ -3824,7 +3883,14 @@ onBeforeUnmount(() => {
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }
-.source-dir-editor__tag { max-width: 100%; }
+/* 已添加的监控目录：EP 默认 tag 走主色浅档（appletv 主题下是 #73b5de），
+   压在半透明玻璃底上几乎看不见。这里显式给「浅蓝底 + 深蓝字 + 可见描边」。 */
+.source-dir-editor__tag {
+  max-width: 100%;
+  color: #0f5c8f;
+  background: rgba(11, 157, 248, 0.16);
+  border: 1px solid rgba(11, 157, 248, 0.42);
+}
 .source-dir-editor__tag :deep(.el-tag__content) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-dir-editor__placeholder { display: flex; align-items: center; width: 100%; min-height: 32px; margin: 0; padding: 0 2px; font-size: 13px; color: var(--el-text-color-secondary); }
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }

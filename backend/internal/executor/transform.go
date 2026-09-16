@@ -93,6 +93,10 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 }
 
 func (s *Service) transformDirectory(runID, currentPath, compatibilityMode string, convertTraditional, convertCustom, filterCustom, mergeSameNameDirs bool, rules []renameTransformRule, transformFilters []transformFilterMatcher, stats *executionStats) {
+	// 手动停止：递归到这里直接不再往下走。
+	if s.runAborted(runID) {
+		return
+	}
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++

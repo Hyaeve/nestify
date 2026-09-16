@@ -140,9 +140,30 @@ func (a *apiHandler) handleBackupByID(w http.ResponseWriter, r *http.Request) {
 		a.handleBackupEnabled(w, r, id)
 	case "status":
 		a.handleBackupStatus(w, r, id)
+	case "cancel":
+		a.handleBackupCancel(w, r, id)
 	default:
 		writeJSON(w, http.StatusNotFound, jsonResponse{Success: false, Code: "NOT_FOUND", Message: "未知的备份规则操作"})
 	}
+}
+
+// handleBackupCancel 停止一个正在执行的备份任务（卡片上的「扫描」按钮再次点击）。
+func (a *apiHandler) handleBackupCancel(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		writeMethodNotAllowed(w)
+		return
+	}
+	if a.backups == nil {
+		writeJSON(w, http.StatusServiceUnavailable, jsonResponse{Success: false, Code: "BACKUP_DISABLED", Message: "备份服务不可用"})
+		return
+	}
+
+	if _, err := a.backups.CancelTask(id); err != nil {
+		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "BACKUP_CANCEL_FAILED", Message: err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "已请求停止备份任务"})
 }
 
 func (a *apiHandler) handleBackupResource(w http.ResponseWriter, r *http.Request, id int64) {

@@ -6,6 +6,8 @@
   --bg-panel: rgba(255, 255, 255, 0.96);
   --bg-panel-strong: #ffffff;
   --bg-elevated: #ffffff;
+  /* 弹窗底色单独一档：比 --bg-panel-strong 更「实」，弹窗浮在模糊遮罩上时不能再透出背后的内容。 */
+  --bg-dialog: #ffffff;
   --bg-sidebar: #ffffff;
   --bg-header: rgba(255, 255, 255, 0.94);
   --text-primary: #26323f;
@@ -54,6 +56,8 @@
   --bg-panel: rgba(255, 255, 255, 0.76);
   --bg-panel-strong: rgba(255, 255, 255, 0.88);
   --bg-elevated: rgba(255, 255, 255, 0.94);
+  /* appletv 是玻璃主题，面板都很透；弹窗必须几乎不透明，否则背后的卡片会透上来。 */
+  --bg-dialog: rgba(255, 255, 255, 0.97);
   --bg-sidebar: rgba(255, 255, 255, 0.72);
   --bg-header: rgba(255, 255, 255, 0.7);
   --text-primary: #253241;
@@ -187,8 +191,17 @@ body {
     box-shadow 0.25s ease;
 }
 
+/* 弹窗遮罩做高斯模糊：背后的卡片 / 表格被糊掉，视线自然落到弹窗上。
+   遮罩本身只轻微调淡（EP 默认是 50% 黑，压得太暗反而看不出模糊），
+   叠上模糊后画面是「毛玻璃压暗」而不是「纯黑幕布」。 */
+.el-overlay {
+  --el-overlay-color-lighter: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
 .el-dialog {
-  --el-dialog-bg-color: var(--bg-panel-strong);
+  --el-dialog-bg-color: var(--bg-dialog);
   border: 1px solid var(--border-color);
   border-radius: var(--panel-radius);
   overflow: hidden;

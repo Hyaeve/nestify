@@ -119,6 +119,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		cleanupSourceAfterArchive = collectRemoveSourceEnabled
 	}
 	err = processEntriesForMode(req.CompatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		entryPath := filepath.Join(sourceDir, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			if err := s.trashFilteredArchiveItem(runID, sourceDir, entryPath, true, &stats); err != nil {
@@ -332,6 +335,9 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 
 	sortEntriesNaturally(entries)
 	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		sourcePath := filepath.Join(currentPath, entry.Name())
 		relPath, relErr := filepath.Rel(rootPath, sourcePath)
 		if relErr != nil {
@@ -463,6 +469,9 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 
 	sortEntriesNaturally(entries)
 	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		sourcePath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
@@ -487,7 +496,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		// 元数据（图片 / 字幕 / nfo）必须以实体文件出现在目标目录：
 		// 生成 .strm 后媒体服务器读到的是一个地址，封面与字幕都会失效。
 		if isStrmMetadataFile(entry.Name(), strmExtensions, metadataExtensions) {
-			s.syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot, overwrite, stats)
+			s.syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot, stats)
 			return nil
 		}
 
@@ -565,7 +574,9 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 
 // syncStrmMetadataFile 把命中「元数据后缀」的源文件复制到目标目录：
 // 目标保持与源相同的相对路径与文件名（poster.jpg 依旧是 poster.jpg，而不是 poster.strm）。
-func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot string, overwrite bool, stats *executionStats) {
+//
+// 元数据**不参与「覆盖生成」**：目标端已经有这个文件就跳过。见 strmMetadataTargetState。
+func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot string, stats *executionStats) {
 	relPath, relErr := filepath.Rel(rootPath, sourcePath)
 	if relErr != nil || relPath == "." || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
 		stats.FailureCount++
@@ -579,23 +590,21 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	}
 
 	targetPath := filepath.Join(targetRoot, relPath)
-	existed := false
-	if _, err := os.Lstat(targetPath); err == nil {
-		existed = true
-		if !overwrite {
-			stats.SkipCount++
-			s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
-			return
-		}
-	} else if !os.IsNotExist(err) {
+	skip, existed, stateErr := strmMetadataTargetState(targetPath)
+	if stateErr != nil {
 		stats.FailureCount++
 		stats.Detail.record(model.RunFileEntry{
 			Path:   sourcePath,
 			Action: model.BackupFileActionFail,
 			Target: targetPath,
-			Note:   fmt.Sprintf("检查元数据目标失败：%v", err),
+			Note:   fmt.Sprintf("检查元数据目标失败：%v", stateErr),
 		})
-		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
+		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, stateErr))
+		return
+	}
+	if skip {
+		stats.SkipCount++
+		s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
 		return
 	}
 
@@ -639,6 +648,28 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	}
 }
 
+// strmMetadataTargetState 判断目标端已有的元数据实体文件该怎么处理，返回 (skip, existed, err)：
+//   - skip=true：文件已存在且非空 → 跳过。元数据（封面 / 字幕 / nfo）**不受「覆盖生成」影响**，
+//     本地已经有了就不该再下/再写一遍 —— 「覆盖生成」是给 .strm 用的语义。
+//   - skip=false 且 existed=true：文件在但长度为 0，是上一次下载/复制中断留下的空壳，
+//     必须重写，否则永远读不出内容（这类残file不能当成「已经有了」）。
+func strmMetadataTargetState(targetPath string) (skip bool, existed bool, err error) {
+	info, statErr := os.Lstat(targetPath)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return false, false, nil
+		}
+		return false, false, statErr
+	}
+	if info.IsDir() {
+		return false, true, nil
+	}
+	if info.Size() > 0 {
+		return true, true, nil
+	}
+	return false, true, nil
+}
+
 // describeStrmWrite 描述一次产物（strm / 元数据实体文件）写入是新建还是覆盖，
 // 用于运行详情里的明细备注。
 func describeStrmWrite(existed bool) string {
@@ -660,6 +691,9 @@ func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode 
 
 	sortEntriesNaturally(entries)
 	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
 			return s.removeExistingStrmFiles(runID, entryPath, compatibilityMode, stats)
@@ -814,6 +848,9 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootD
 	}
 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		entryPath := filepath.Join(seriesPath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
@@ -926,6 +963,9 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootD
 	}
 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		entryPath := filepath.Join(volumePath, entry.Name())
 		if entry.IsDir() && matchesFileName(entry.Name(), true, matchers) {
 			if err := s.trashFilteredArchiveItem(runID, rootSourceDir, entryPath, true, stats); err != nil {
@@ -1176,6 +1216,9 @@ func (s *Service) scanAndStagePackageEntries(runID, rootSourceDir, dirPath, comp
 	result.matchedFiles = make([]os.DirEntry, 0, len(entries))
 
 	err = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
+		if s.runAborted(runID) {
+			return errRunCancelled
+		}
 		entryPath := filepath.Join(dirPath, entry.Name())
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {

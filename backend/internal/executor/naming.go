@@ -43,6 +43,10 @@ func (s *Service) executeNamingRule(runID string, req ExecuteRuleRequest) (execu
 	rules := parseNamingRules(req.TransformRules)
 	order := 0
 	for _, entry := range entries {
+		// 手动停止：重命名是一个个文件的事，检查点放在循环头，已改名的不会被回滚。
+		if s.runAborted(runID) {
+			break
+		}
 		if (entry.IsDir() && !includeDirs) || (!entry.IsDir() && !includeFiles) {
 			continue
 		}

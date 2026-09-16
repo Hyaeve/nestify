@@ -82,9 +82,11 @@ func TestExecuteStrmRuleCopiesMetadataAsRealFiles(t *testing.T) {
 	}
 }
 
-// TestExecuteStrmRuleSkipsExistingMetadataWithoutOverwrite 确认元数据的
-// 「已存在即跳过 / 覆盖生成」语义与 strm 保持一致。
-func TestExecuteStrmRuleSkipsExistingMetadataWithoutOverwrite(t *testing.T) {
+// TestExecuteStrmRuleNeverOverwritesExistingMetadata 锁定元数据的落地语义：
+// 目标端已经有同名元数据实体文件就**跳过**，即使开了「覆盖生成」也不改写 ——
+// 「覆盖生成」是给 .strm 用的，元数据（封面 / 字幕 / nfo）本地有了就不该再写一遍。
+// 唯一的例外是 0 字节空壳：那是上一次复制 / 下载中断留下的，必须重写。
+func TestExecuteStrmRuleNeverOverwritesExistingMetadata(t *testing.T) {
 	sourceDir := t.TempDir()
 	targetDir := t.TempDir()
 
@@ -102,22 +104,38 @@ func TestExecuteStrmRuleSkipsExistingMetadataWithoutOverwrite(t *testing.T) {
 		t.Fatalf("executeStrmRule 出错: %v", err)
 	}
 	if got := readStrmFixture(t, filepath.Join(targetDir, "S01E01.nfo")); got != "old-nfo" {
-		t.Fatalf("未启用覆盖生成时不应改写已存在的元数据，实际 %q", got)
+		t.Fatalf("已存在的元数据不应被改写，实际 %q", got)
 	}
 	if stats.MetadataCount != 0 || stats.SkipCount != 1 {
 		t.Fatalf("统计应为 MetadataCount=0 / SkipCount=1，实际 %d / %d", stats.MetadataCount, stats.SkipCount)
 	}
 
+	// 开了「覆盖生成」也不改写元数据（只对 .strm 生效）。
 	request.Options = map[string]bool{"strm_overwrite": true}
 	stats, err = service.executeStrmRule("run-overwrite", request, sourceDir, targetDir, &executionStats{})
 	if err != nil {
 		t.Fatalf("executeStrmRule(覆盖生成) 出错: %v", err)
 	}
+	if got := readStrmFixture(t, filepath.Join(targetDir, "S01E01.nfo")); got != "old-nfo" {
+		t.Fatalf("覆盖生成也不应改写已存在的元数据，实际 %q", got)
+	}
+	if stats.MetadataCount != 0 || stats.SkipCount != 1 {
+		t.Fatalf("覆盖生成下统计应为 MetadataCount=0 / SkipCount=1，实际 %d / %d", stats.MetadataCount, stats.SkipCount)
+	}
+
+	// 0 字节空壳（上次中断）必须重写，否则永远读不出内容。
+	if err := os.WriteFile(filepath.Join(targetDir, "S01E01.nfo"), nil, 0o644); err != nil {
+		t.Fatalf("写入空壳元数据失败: %v", err)
+	}
+	stats, err = service.executeStrmRule("run-repair", request, sourceDir, targetDir, &executionStats{})
+	if err != nil {
+		t.Fatalf("executeStrmRule(修复空壳) 出错: %v", err)
+	}
 	if got := readStrmFixture(t, filepath.Join(targetDir, "S01E01.nfo")); got != "new-nfo" {
-		t.Fatalf("覆盖生成时应改写元数据，实际 %q", got)
+		t.Fatalf("0 字节残file应被重写，实际 %q", got)
 	}
 	if stats.MetadataCount != 1 {
-		t.Fatalf("覆盖生成后 MetadataCount = %d, want 1", stats.MetadataCount)
+		t.Fatalf("修复空壳后 MetadataCount = %d, want 1", stats.MetadataCount)
 	}
 }
 

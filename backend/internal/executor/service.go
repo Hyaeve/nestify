@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -30,6 +31,10 @@ type Service struct {
 	cronRunner       *cron.Cron
 	watchCancels     map[int64]context.CancelFunc
 	activeRules      map[int64]struct{}
+
+	// 手动停止：runID -> 可取消上下文（见 cancel.go）。
+	runContexts map[string]context.Context
+	runCancels  map[string]context.CancelFunc
 }
 
 func NewService(store *sqlite.Store) *Service {
@@ -40,6 +45,8 @@ func NewService(store *sqlite.Store) *Service {
 		history:      make([]model.RunHistoryItem, 0),
 		watchCancels: make(map[int64]context.CancelFunc),
 		activeRules:  make(map[int64]struct{}),
+		runContexts:  make(map[string]context.Context),
+		runCancels:   make(map[string]context.CancelFunc),
 	}
 }
 
@@ -227,7 +234,15 @@ func (s *Service) appendLog(runID, level, message string) {
 }
 
 func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
+	// 为这次执行登记一个可取消上下文：卡片上的执行按钮再次点击时，
+	// CancelRun 会 cancel 它，执行器在循环检查点退出。
+	runCtx, runCancel := context.WithCancel(context.Background())
+	// 必须在起 goroutine 之前登记：否则刚提交就被点「停止」时还查不到上下文。
+	s.registerRunContext(runID, runCtx, runCancel)
+
 	go func() {
+		defer s.releaseRunContext(runID)
+		defer runCancel()
 		defer s.unmarkRuleActive(req.RuleID)
 
 		s.mu.Lock()
@@ -247,12 +262,17 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		}
 
 		stats, execErr := s.executeRuleWithSourceDirs(runID, req)
-		if execErr != nil && stats.FailureCount == 0 {
+		// 手动停止优先于「失败 / 成功」判定：取消信号会让执行器返回 errRunCancelled，
+		// 那不是失败，不能计进失败数，否则历史里会显示成一片红。
+		cancelled := s.runAborted(runID) || errors.Is(execErr, errRunCancelled)
+		if !cancelled && execErr != nil && stats.FailureCount == 0 {
 			stats.FailureCount = 1
 		}
 
 		finalStatus := model.RunStatusSucceeded
-		if stats.FailureCount > 0 || execErr != nil {
+		if cancelled {
+			finalStatus = model.RunStatusCancelled
+		} else if stats.FailureCount > 0 || execErr != nil {
 			finalStatus = model.RunStatusFailed
 		}
 
@@ -269,21 +289,26 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 		}
 		s.mu.Unlock()
 
-		if execErr != nil {
+		switch {
+		case cancelled:
+			stats.Summary = fmt.Sprintf("已手动停止：成功 %d，跳过 %d，失败 %d", stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			s.appendLog(runID, "warn", stats.Summary)
+		case execErr != nil:
 			s.appendLog(runID, "error", execErr.Error())
-		} else {
+		default:
 			s.appendLog(runID, "info", prepared.Summary)
 			s.appendLog(runID, "info", stats.Summary)
 			s.appendLog(runID, "info", "执行完成")
 		}
 
 		if req.RuleID > 0 && s.store != nil {
+			// 规则卡片的「上次执行结果」仍按实际处理的文件数落库（停止不是失败）。
 			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
 		}
 		if stats.HistoryEvents == 0 {
 			s.persistRunHistory(runID, stats.Summary, &stats)
 		}
-		if execErr != nil {
+		if execErr != nil && !cancelled {
 			return
 		}
 	}()
@@ -301,6 +326,10 @@ func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest
 	aggregated := executionStats{}
 	var lastErr error
 	for index, sourceDir := range sourceDirs {
+		// 多监控目录是一个个串行跑的：每个目录开始前检查一次取消信号。
+		if s.runAborted(runID) {
+			break
+		}
 		currentReq := req
 		currentReq.SourceDir = sourceDir
 		currentReq.SourceDirs = []string{sourceDir}
@@ -458,6 +487,10 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 		skipCount = stats.SkipCount
 		failureCount = stats.FailureCount
 		sizeBytes = stats.SizeBytes
+	}
+	// 手动停止优先：历史里要能一眼看出「这条是我按停的」，而不是被算成成功或失败。
+	if run.Status == model.RunStatusCancelled {
+		status = model.RunStatusCancelled
 	}
 
 	item := model.RunHistoryItem{

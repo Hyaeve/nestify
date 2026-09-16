@@ -867,6 +867,44 @@ func (a *apiHandler) handleRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 只回尚未结束的执行：卡片上的「执行中」状态由前端轮询这个接口拿到，
+	// 比拉全量 runs（包含全部历史实例）轻，语义也更清楚。
+	if path == "active" {
+		if r.Method != http.MethodGet {
+			writeMethodNotAllowed(w)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, jsonResponse{
+			Success: true,
+			Code:    "OK",
+			Message: "Active runs loaded",
+			Data: map[string]any{
+				"items": a.executor.ActiveRuns(),
+			},
+		})
+		return
+	}
+
+	// 停止正在执行的任务（卡片上的执行 / 同步按钮再次点击）。
+	if strings.HasSuffix(path, "/cancel") {
+		if r.Method != http.MethodPost {
+			writeMethodNotAllowed(w)
+			return
+		}
+		runID := strings.Trim(strings.TrimSuffix(path, "/cancel"), "/")
+		if runID == "" {
+			writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_RUN_ID", Message: "缺少执行标识"})
+			return
+		}
+		if _, err := a.executor.CancelRun(runID); err != nil {
+			writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "RUN_CANCEL_FAILED", Message: err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "已请求停止执行"})
+		return
+	}
+
 	if strings.HasSuffix(path, "/logs") {
 		if r.Method != http.MethodGet {
 			writeMethodNotAllowed(w)

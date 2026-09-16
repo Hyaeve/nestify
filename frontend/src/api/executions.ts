@@ -88,6 +88,16 @@ export function fetchRuns() {
   return getJSON<RunsListPayload>('/api/v1/runs/')
 }
 
+/** 只回尚未结束的执行：卡片上的「执行中」状态靠轮询它拿到。 */
+export function fetchActiveRuns() {
+  return getJSON<RunsListPayload>('/api/v1/runs/active')
+}
+
+/** 停止一次正在执行的规则任务（卡片上的执行按钮再次点击）。 */
+export function cancelRun(runID: string) {
+  return postJSON<Record<string, never>>(`/api/v1/runs/${runID}/cancel`, {})
+}
+
 export function fetchRunLogs(runID: string) {
   return getJSON<RunLogsPayload>(`/api/v1/runs/${runID}/logs`)
 }

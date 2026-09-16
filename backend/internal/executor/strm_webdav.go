@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,6 +115,10 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	if client.SupportsRecursiveList() {
 		listed, recursiveErr := s.walkOpenListStrmRecursive(context.Background(), runID, client, internalPath, targetDir, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats)
 		recursiveUsed = listed
+		// 手动停止不是「递归列举不可用」，别回落成逐目录列举（那样会白跑一遍）。
+		if errors.Is(recursiveErr, errRunCancelled) {
+			return *stats, errRunCancelled
+		}
 		if recursiveErr != nil {
 			s.appendLog(runID, "warn", fmt.Sprintf("OpenList 原生递归列举不可用（%v），回落为逐目录列举", recursiveErr))
 		}
@@ -189,6 +194,9 @@ func (s *Service) walkOpenListStrmRecursive(
 		len(entries), time.Since(started).Round(time.Millisecond)))
 
 	for _, entry := range entries {
+		if s.runAborted(runID) {
+			return true, errRunCancelled
+		}
 		if matchesFileName(entry.Name, entry.IsDir, matchers) || isUnderFilteredDir(entry.Path, matchers) {
 			stats.SkipCount++
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
@@ -207,7 +215,7 @@ func (s *Service) walkOpenListStrmRecursive(
 		// 元数据后缀（图片 / 字幕 / nfo）：下载成实体文件，媒体服务器才能读到封面与字幕。
 		// 递归列举本身只有一次 PROPFIND，这里的下载是唯一的额外远端请求。
 		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
-			switch s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite, stats) {
+			switch s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, stats) {
 			case strmMetadataCopied:
 				stats.ProcessedFiles++
 				stats.SuccessCount++
@@ -343,7 +351,11 @@ func (s *Service) walkWebdavStrm(
 				if !ok {
 					return
 				}
-				s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
+				// 停止时仍然要把队列里的目录逐个 pop + done 掉再退出：
+				// 直接 return 会让 pending 永远归不了零，其它线程会卡死在 cond.Wait()。
+				if !s.runAborted(runID) {
+					s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
+				}
 				queue.done()
 			}
 		}(workers[index])
@@ -381,6 +393,9 @@ func (s *Service) processWebdavStrmDir(
 	}
 
 	for _, entry := range entries {
+		if s.runAborted(runID) {
+			return
+		}
 		if matchesFileName(entry.Name, entry.IsDir, matchers) {
 			statsMu.Lock()
 			stats.SkipCount++
@@ -403,7 +418,7 @@ func (s *Service) processWebdavStrmDir(
 
 		// 元数据后缀：下载成实体文件。下载本身不持锁（可能很慢），只把结果计入统计。
 		if isStrmMetadataFile(entry.Name, strmExtensions, metadataExtensions) {
-			outcome := s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, overwrite, stats)
+			outcome := s.downloadStrmMetadata(ctx, runID, client, entry.Path, rootInternal, targetRoot, stats)
 			statsMu.Lock()
 			switch outcome {
 			case strmMetadataCopied:
@@ -490,10 +505,13 @@ const (
 // downloadStrmMetadata 把远端元数据文件（图片 / 字幕 / nfo）下载到目标目录，
 // 保持与源相同的相对路径与文件名（poster.jpg 依旧是 poster.jpg，而不是 poster.strm）。
 //
+// 元数据**不参与「覆盖生成」**：本地已经有这个文件就跳过，不再重新下载。
+// 只有 0 字节的残file（上次下载中断）才会重下，见 strmMetadataTargetState。
+//
 // 远端请求由 webdav.Client 内部按「API 请求间隔」节流，
 // 并发路径下每个线程持有独立客户端，因此间隔按线程生效。
 // 明细由这里直接写入采集器（自带锁），调用方只在 statsMu 内改计数。
-func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client *webdav.Client, entryPath, rootInternal, targetRoot string, overwrite bool, stats *executionStats) strmMetadataOutcome {
+func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client *webdav.Client, entryPath, rootInternal, targetRoot string, stats *executionStats) strmMetadataOutcome {
 	relative := strings.TrimPrefix(entryPath, rootInternal)
 	relative = strings.TrimLeft(relative, "/")
 	if relative == "" {
@@ -501,22 +519,20 @@ func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client
 	}
 	targetPath := filepath.Join(targetRoot, filepath.FromSlash(relative))
 
-	existed := false
-	if _, err := os.Lstat(targetPath); err == nil {
-		existed = true
-		if !overwrite {
-			s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
-			return strmMetadataSkipped
-		}
-	} else if !os.IsNotExist(err) {
-		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, err))
+	skip, existed, stateErr := strmMetadataTargetState(targetPath)
+	if stateErr != nil {
+		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, stateErr))
 		stats.Detail.record(model.RunFileEntry{
 			Path:   entryPath,
 			Action: model.BackupFileActionFail,
 			Target: targetPath,
-			Note:   fmt.Sprintf("检查元数据目标失败：%v", err),
+			Note:   fmt.Sprintf("检查元数据目标失败：%v", stateErr),
 		})
 		return strmMetadataFailed
+	}
+	if skip {
+		s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
+		return strmMetadataSkipped
 	}
 
 	if err := client.Download(ctx, entryPath, targetPath); err != nil {

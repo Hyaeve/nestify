@@ -535,15 +535,21 @@ function statusLabel(status: string) {
   if (status === 'failed') {
     return '错误'
   }
+  if (status === 'cancelled') {
+    return '已停止'
+  }
   return '跳过'
 }
 
-function statusTagType(status: string): 'success' | 'danger' | 'warning' {
+function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info' {
   if (status === 'success') {
     return 'success'
   }
   if (status === 'failed') {
     return 'danger'
+  }
+  if (status === 'cancelled') {
+    return 'info'
   }
   return 'warning'
 }
@@ -569,6 +575,7 @@ function logTriggerText(item: { archive_mode?: string; trigger_mode: string }) {
 function resolveLogGroupStatus(items: RunHistoryItem[]) {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'skip')) return 'skip'
+  if (items.some((item) => item.status === 'cancelled')) return 'cancelled'
   return 'success'
 }
 
