@@ -350,6 +350,22 @@ body {
   height: 36px;
 }
 
+/* —— 配色收敛：蓝色只留给「开关」和「备份向导栏目字」——
+   1) 所有开关统一用「晴空蓝」#0b9df8（比主色 #209fee 再纯一档，开关状态一眼可辨）。
+      index.scss 在主入口里 import 于 element-plus 之后，同权重规则靠顺序就能压住；
+   2) 描边按钮（.is-plain）的文字由主色改成黑字。EP 把变量写在
+      `.el-button--primary.is-plain` 上，所以要写足三层类名才压得住；
+   3) 备份筛选胶囊的选中态由「蓝底蓝字」改成浅黄高亮 + 黑字。 */
+.el-switch {
+  --el-switch-on-color: #0b9df8;
+}
+
+.el-button.el-button--primary.is-plain {
+  --el-button-text-color: #1e293b;
+  --el-button-hover-text-color: #1e293b;
+  --el-button-active-text-color: #1e293b;
+}
+
 .el-input__wrapper,
 .el-select__wrapper,
 .el-textarea__inner,

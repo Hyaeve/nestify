@@ -17,7 +17,7 @@
           <div>
             <div class="rules-card__title">归档规则</div>
           </div>
-          <el-button type="primary" round @click="openCreateDialog">+ 添加规则</el-button>
+          <el-button class="add-rule-button" type="primary" round @click="openCreateDialog">+ 添加规则</el-button>
         </div>
       </template>
 
@@ -281,7 +281,7 @@
           <div>
             <div class="rules-card__title">净化规则</div>
           </div>
-          <el-button type="primary" round @click="openCreatePurifyDialog">+ 添加规则</el-button>
+          <el-button class="add-rule-button" type="primary" round @click="openCreatePurifyDialog">+ 添加规则</el-button>
         </div>
       </template>
 
@@ -328,7 +328,7 @@
           <div>
             <div class="rules-card__title">链路规则</div>
           </div>
-          <el-button type="primary" round @click="openCreateLinkDialog">+ 添加规则</el-button>
+          <el-button class="add-rule-button" type="primary" round @click="openCreateLinkDialog">+ 添加规则</el-button>
         </div>
       </template>
 
@@ -3607,6 +3607,14 @@ onBeforeUnmount(() => {
 .rules-table-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.34); border-radius: 999px; }
 .rules-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.48); }
 .rules-table--wide, .naming-rules-table { min-width: 1380px; }
+/* 实心「+ 添加规则」按钮：文字改黑，底色不动（本轮只要求改字体色）。
+   EP 把 --el-button-text-color 写在 .el-button--primary 上（权重 0,1,0），
+   这里是 scoped 选择器（0,2,0），可以稳稳压住。 */
+.add-rule-button {
+  --el-button-text-color: #1e293b;
+  --el-button-hover-text-color: #1e293b;
+  --el-button-active-text-color: #1e293b;
+}
 .naming-add-button { color: #fff; border-color: #0f9f87; background: #0f9f87; }
 .naming-add-button:hover { color: #fff; border-color: #0c8a75; background: #0c8a75; }
 .rule-action--naming { color: #0f9f87; }

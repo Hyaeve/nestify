@@ -1418,11 +1418,12 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 }
 
 .backup-wizard-tab:hover {
-  color: #0975b8;
+  color: #0b9df8;
 }
 
+/* 栏目字（备份向导的分步页签）统一用「晴空蓝」，和开关同一支蓝。 */
 .backup-wizard-tab.is-active {
-  color: #0975b8;
+  color: #0b9df8;
   background: #ffffff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
@@ -1515,13 +1516,15 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   margin-bottom: 12px;
 }
 
+/* 筛选规则的「名称 / 扩展名 / 正则 / 体积」类型标签：和下面的扩展名胶囊同一族，
+   文字统一改黑，不再走蓝色。 */
 .backup-filter-row__type {
   flex: 0 0 auto;
   padding: 2px 8px;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #0975b8;
+  color: #1e293b;
   background: #e9f1f4;
 }
 
@@ -1536,7 +1539,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   font-size: 12px;
-  color: #64748b;
+  color: #1e293b;
   background: #fff;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1545,7 +1548,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
 
 .backup-filter-chip:hover {
   border-color: #b6c5c9;
-  color: #0975b8;
+  color: #1e293b;
 }
 
 /* 扩展名 / 体积规则不作用于文件夹，禁用「文件夹」开关。 */
@@ -1561,24 +1564,24 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   color: #cbd5e1;
 }
 
-/* 选中态不再铺实心强调色块 + 白字（在白底弹窗里过重、抢视线）；
-   改成浅底 + 青蓝字，跟规则卡片「已启用」用同一套低饱和色。 */
+/* 选中态：只在选中时点亮成浅黄高亮底 + 黑字，未选中保持白底黑字。
+   原来是「蓝底蓝字」，现在蓝色整块从这组开关上撤掉。 */
 .backup-filter-chip.is-active {
-  color: #055a8f;
-  background: rgba(32, 159, 238, 0.18);
-  border-color: rgba(32, 159, 238, 0.55);
+  color: #1e293b;
+  background: #fde68a;
+  border-color: rgba(217, 154, 0, 0.42);
 }
 
 .backup-filter-chip.is-active:hover {
-  color: #055a8f;
-  background: rgba(32, 159, 238, 0.3);
-  border-color: rgba(32, 159, 238, 0.78);
+  color: #1e293b;
+  background: #fcd34d;
+  border-color: rgba(217, 154, 0, 0.6);
 }
 
 /* 不可切换的开关（扩展名 / 体积规则的「文件夹」）即使值为 true 也按禁用显示，别亮成选中态。 */
 .backup-filter-chip.is-active:disabled {
   color: #b6c5c9;
-  background: rgba(32, 159, 238, 0.08);
+  background: rgba(217, 154, 0, 0.08);
   border-color: #eef2f7;
 }
 
@@ -1614,6 +1617,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   flex-wrap: wrap;
 }
 
+/* 扩展名胶囊：文字改黑（底色不动）。 */
 .backup-filter-tag {
   display: inline-flex;
   align-items: center;
@@ -1621,7 +1625,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   padding: 3px 8px 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  color: #0975b8;
+  color: #1e293b;
   background: #e9f1f4;
 }
 
@@ -1635,7 +1639,7 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   border-radius: 50%;
   font-size: 12px;
   line-height: 1;
-  color: #0975b8;
+  color: #1e293b;
   background: transparent;
   cursor: pointer;
 }
