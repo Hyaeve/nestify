@@ -3896,16 +3896,16 @@ onBeforeUnmount(() => {
 .strm-suffix-editor { display: flex; flex-direction: column; gap: 10px; margin: -4px 0 16px; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
 .strm-suffix-editor__actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .strm-preset-button { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; color: var(--preset-accent, #2f8f9d); background: var(--el-bg-color); }
-/* 悬浮：跟着本按钮自己的蓝走，别回落到 EP 主色（否则每种蓝一悬停就变色）。 */
+/* 悬浮：跟着本按钮自己的色走，别回落到 EP 主色（否则每个按钮一悬停就变色）。 */
 .strm-preset-button:hover { --el-button-hover-bg-color: var(--preset-accent-tint, var(--el-fill-color-light)); --el-button-hover-text-color: var(--preset-accent, #2f8f9d); --el-button-hover-border-color: var(--preset-accent, #2f8f9d); }
 .strm-preset-button__icon { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .strm-suffix-editor__tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 32px; }
 .strm-suffix-editor__input { width: 150px; }
 .strm-preset-button.is-active { color: #fff; background: var(--preset-accent, #2f8f9d); border-color: var(--preset-accent, #2f8f9d); box-shadow: 0 6px 14px var(--preset-accent-shadow, rgba(47, 143, 157, 0.22)); }
-/* 快捷添加扩展名的图标按钮：四个按钮各用一种蓝（媒体组宝蓝 / 天青，元数据组紫蓝 / 湖蓝）。 */
-.strm-preset-button--video { --preset-accent: #1878d4; --preset-accent-tint: rgba(24, 120, 212, 0.12); --preset-accent-shadow: rgba(24, 120, 212, 0.26); }
-.strm-preset-button--audio { --preset-accent: #0fa3e0; --preset-accent-tint: rgba(15, 163, 224, 0.12); --preset-accent-shadow: rgba(15, 163, 224, 0.26); }
-.strm-preset-button--image { --preset-accent: #6a6ff0; --preset-accent-tint: rgba(106, 111, 240, 0.12); --preset-accent-shadow: rgba(106, 111, 240, 0.26); }
+/* 快捷添加扩展名的图标按钮：四类各一色，故意跳出蓝色家族（视频紫 / 音频红 / 图片黄绿 / 数据蓝）。 */
+.strm-preset-button--video { --preset-accent: #8b5cf6; --preset-accent-tint: rgba(139, 92, 246, 0.13); --preset-accent-shadow: rgba(139, 92, 246, 0.28); }
+.strm-preset-button--audio { --preset-accent: #e8483c; --preset-accent-tint: rgba(232, 72, 60, 0.12); --preset-accent-shadow: rgba(232, 72, 60, 0.26); }
+.strm-preset-button--image { --preset-accent: #7fb01c; --preset-accent-tint: rgba(127, 176, 28, 0.14); --preset-accent-shadow: rgba(127, 176, 28, 0.26); }
 .strm-preset-button--data { --preset-accent: #2f8fd6; --preset-accent-tint: rgba(47, 143, 214, 0.12); --preset-accent-shadow: rgba(47, 143, 214, 0.26); }
 /* 后缀标签跟着所在窗口走：媒体文件一种蓝、元数据文件另一种蓝，一眼分得开。 */
 .strm-suffix-editor:has(.strm-preset-button--video) :deep(.el-tag) { color: #0f5c8f; background: rgba(11, 157, 248, 0.16); border-color: rgba(11, 157, 248, 0.42); }
