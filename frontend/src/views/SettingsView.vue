@@ -10,7 +10,7 @@
         <section class="settings-panel settings-panel--account">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">登录账户</div>
-            <el-button type="primary" class="settings-btn-lg settings-btn-solid" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid settings-btn-solid--account" :loading="submitting" @click="submitAdminChange">保存修改</el-button>
           </div>
           <el-form label-position="top" @submit.prevent="submitAdminChange">
             <el-form-item label="账户">
@@ -31,7 +31,7 @@
         <section class="settings-panel settings-panel--basic">
           <div class="settings-panel__title-row">
             <div class="settings-panel__title">基础设置</div>
-            <el-button type="primary" class="settings-btn-lg settings-btn-solid" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid settings-btn-solid--settings" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </div>
           <el-form label-position="top" class="settings-basic-form">
             <div class="settings-field-card">
@@ -132,7 +132,7 @@
         <section class="settings-panel settings-panel--mounts">
           <div class="settings-panel__header">
             <div class="settings-panel__title">远程挂载</div>
-            <el-button type="primary" class="settings-btn-lg settings-btn-solid" @click="openAddMount">添加挂载</el-button>
+            <el-button type="primary" class="settings-btn-lg settings-btn-solid settings-btn-solid--mount" @click="openAddMount">添加挂载</el-button>
           </div>
 
           <div v-if="mounts.length === 0" class="mounts-empty">
@@ -905,19 +905,45 @@ async function handleBackupFileChange(file: UploadFile) {
 }
 
 /* 「保存修改 / 保存设置 / 添加挂载」三个实心动作按钮：
-   原来走 EP 主色 #209fee（明度 53%）铺满底，看着偏淡、饱和度不够，
-   改成深青 #0e7490（H193 S82 L31，白字对比 5.36）。颜色仍走 --el-button-*
-   变量，scoped 选择器带上 data-v 属性后权重高于 EP 的 .el-button--primary，能覆盖住。 */
+   原来统一铺深青 #0e7490（L31），颜色重、发闷；改成清透路线——高饱和（S80+）+
+   中高明度（L48~63）的亮色实心块配白字，像上了色玻璃而不是一块深色板砖。
+   三个按钮各用一个色相区分作用域（青绿=账户 / 天青=基础设置 / 靛蓝=挂载），
+   不再强行同色。颜色仍走 --el-button-* 变量，scoped 选择器带上 data-v 属性后
+   权重高于 EP 的 .el-button--primary（含它的 :hover/:active 链式选择器），能覆盖住。 */
 .settings-btn-solid {
   --el-button-text-color: #ffffff;
-  --el-button-bg-color: #0e7490;
-  --el-button-border-color: #0e7490;
   --el-button-hover-text-color: #ffffff;
-  --el-button-hover-bg-color: #2b859d;
-  --el-button-hover-border-color: #2b859d;
   --el-button-active-text-color: #ffffff;
-  --el-button-active-bg-color: #0a576c;
-  --el-button-active-border-color: #0a576c;
+}
+
+/* 保存修改（登录账户）：青绿。 */
+.settings-btn-solid--account {
+  --el-button-bg-color: #1fc4ad;
+  --el-button-border-color: #1fc4ad;
+  --el-button-hover-bg-color: #3ad2bd;
+  --el-button-hover-border-color: #3ad2bd;
+  --el-button-active-bg-color: #17a894;
+  --el-button-active-border-color: #17a894;
+}
+
+/* 保存设置（基础设置）：天青。 */
+.settings-btn-solid--settings {
+  --el-button-bg-color: #12a9e8;
+  --el-button-border-color: #12a9e8;
+  --el-button-hover-bg-color: #35bcf2;
+  --el-button-hover-border-color: #35bcf2;
+  --el-button-active-bg-color: #0d8fc7;
+  --el-button-active-border-color: #0d8fc7;
+}
+
+/* 添加挂载（远程挂载）：靛蓝。 */
+.settings-btn-solid--mount {
+  --el-button-bg-color: #5a6fe8;
+  --el-button-border-color: #5a6fe8;
+  --el-button-hover-bg-color: #7487f0;
+  --el-button-hover-border-color: #7487f0;
+  --el-button-active-bg-color: #4759d2;
+  --el-button-active-border-color: #4759d2;
 }
 
 /* 规则「备份 / 还原」是两种不同性质的动作，各用一种浅色区分开。
