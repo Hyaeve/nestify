@@ -243,7 +243,7 @@
           <div class="logs-detail-summary">
             <div>
               <div class="logs-detail-summary__title">{{ selectedLogGroup.title }}</div>
-              <div class="logs-detail-summary__desc">{{ selectedLogGroup.description }}</div>
+              <div class="logs-detail-summary__desc">{{ selectedLogGroupSummary }}</div>
             </div>
             <div class="logs-detail-summary__tags">
               <el-tag class="logs-level-tag" :type="statusTagType(selectedLogGroup.status)" effect="light">{{ statusLabel(selectedLogGroup.status) }}</el-tag>
@@ -263,41 +263,6 @@
                 </div>
               </div>
             </div>
-          </div>
-          <RunDetailList :manifest="selectedRunDetailManifest" />
-          <el-table :data="pagedLogDetailRows" class="logs-table logs-detail-table" empty-text="暂无明细">
-            <el-table-column label="明细" min-width="520">
-              <template #default="scope">
-                <div class="logs-message logs-message--child">
-                  <div class="logs-message__title">{{ scope.row.title }}</div>
-                  <div class="logs-message__meta">
-                    <span>{{ scope.row.description }}</span>
-                  </div>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="级别" width="120" align="center">
-              <template #default="scope">
-                <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="数量" width="110" align="center">
-              <template #default="scope">{{ scope.row.processed_files }}</template>
-            </el-table-column>
-            <el-table-column label="时间" min-width="180">
-              <template #default="scope">
-                <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div v-if="selectedLogGroupChildren.length > logDetailPageSize" class="logs-detail-pagination">
-            <el-pagination
-              v-model:current-page="logDetailCurrentPage"
-              background
-              layout="total, prev, pager, next"
-              :page-size="logDetailPageSize"
-              :total="selectedLogGroupChildren.length"
-            />
           </div>
         </template>
       </el-dialog>
@@ -322,13 +287,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import RunDetailList from '../components/RunDetailList.vue'
 import { fetchBackups, type BackupTask } from '../api/backups'
-import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
-  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -337,13 +300,11 @@ import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '..
 
 type LogsViewMode = 'flat' | 'tree'
 type LogTreeRow = RunHistoryItem & {
+  // 分组行 / 平铺行的 id 都加了前缀，仅用于表格 row-key。
   id: string
-  // 原始运行日志 ID：分组行 / 平铺行的 id 都加了前缀，拉取明细时要用它。
-  historyId: string
   title: string
   description: string
   is_group: boolean
-  children?: LogTreeRow[]
 }
 
 function createDefaultHistorySummary(): RunHistorySummary {
@@ -396,10 +357,6 @@ const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
-// 运行详情（detail_json）：各链路共用，不再只服务备份。
-const selectedRunDetail = ref<RunHistoryItem | null>(null)
-const logDetailPageSize = 25
-const logDetailCurrentPage = ref(1)
 
 const totalLogs = computed(() => historySummary.value.total)
 const todayLogs = computed(() => historySummary.value.today)
@@ -407,10 +364,16 @@ const successLogs = computed(() => historySummary.value.success)
 const failedLogs = computed(() => historySummary.value.failed)
 const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
-const selectedLogGroupChildren = computed(() => selectedLogGroup.value?.children ?? [])
-const pagedLogDetailRows = computed(() => {
-  const start = (logDetailCurrentPage.value - 1) * logDetailPageSize
-  return selectedLogGroupChildren.value.slice(start, start + logDetailPageSize)
+// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列条目明细。
+const selectedLogGroupSummary = computed(() => {
+  const group = selectedLogGroup.value
+  if (!group) {
+    return ''
+  }
+  const success = Math.max(0, Number(group.success_count || 0))
+  const skipped = Math.max(0, Number(group.skip_count || 0))
+  const failed = Math.max(0, Number(group.failure_count || 0))
+  return `${group.rule_name || '手动任务'} · ${logTriggerText(group)} · 成功 ${success} / 警告 ${skipped} / 错误 ${failed}`
 })
 // 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
 const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
@@ -426,9 +389,6 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
-
-// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
-const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 async function loadHistory() {
   loading.value = true
@@ -579,17 +539,6 @@ function resolveLogGroupStatus(items: RunHistoryItem[]) {
   return 'success'
 }
 
-function buildLogChildRow(item: RunHistoryItem): LogTreeRow {
-  return {
-    ...item,
-    historyId: item.id,
-    id: `item-${item.id}`,
-    title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
-    description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)} · 成功 ${item.success_count} / 警告 ${item.skip_count} / 错误 ${item.failure_count}`,
-    is_group: false,
-  }
-}
-
 function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
   const groups = new Map<string, RunHistoryItem[]>()
   for (const item of items) {
@@ -612,7 +561,6 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
     return {
       ...first,
       id: `group-${key}`,
-      historyId: first.id,
       status: resolveLogGroupStatus(groupItems),
       processed_files: processed,
       success_count: success,
@@ -621,7 +569,6 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
       title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
       description: `${first.rule_name || '手动任务'} · ${logTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
-      children: groupItems.map(buildLogChildRow),
     }
   })
 }
@@ -641,44 +588,25 @@ async function loadSelectedBackupTask(row: LogTreeRow) {
   }
 }
 
-// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
-// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
-async function loadSelectedRunDetail(row: LogTreeRow) {
-  selectedRunDetail.value = null
-  if (!row.historyId) {
-    return
-  }
-  try {
-    const payload = await fetchRunHistoryDetail(row.historyId)
-    selectedRunDetail.value = payload.data?.item ?? null
-  } catch {
-    selectedRunDetail.value = null
-  }
-}
-
+// 详情窗口只展示任务级摘要（标题 + 一行统计 + 状态标签），不再罗列文件级明细。
 function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
   selectedBackupTask.value = null
-  selectedRunDetail.value = null
-  logDetailCurrentPage.value = 1
   logDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
   }
-  void loadSelectedRunDetail(row)
 }
 
-// 平铺视图里把单条记录包装成「只有一个明细」的任务分组，同样可以打开详情。
+// 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
 function openLogItemDetail(item: RunHistoryItem) {
   openLogDetailDialog({
     ...item,
     id: `single-${item.id}`,
-    historyId: item.id,
     title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
     description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)}`,
     is_group: true,
-    children: [buildLogChildRow(item)],
   })
 }
 
@@ -1176,6 +1104,8 @@ onMounted(async () => {
 .logs-detail-summary__desc {
   margin-top: 6px;
   color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.6;
 }
 
@@ -1184,16 +1114,6 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-.logs-detail-table {
-  margin-top: 8px;
-}
-
-.logs-detail-pagination {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
 }
 
 /* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
@@ -1262,11 +1182,6 @@ onMounted(async () => {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-}
-
-.logs-message--child {
-  padding-left: 6px;
-  border-left: 3px solid #e2e8f0;
 }
 
 .logs-message__title {

@@ -204,7 +204,7 @@
             <div class="detail-dialog-summary">
               <div>
                 <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
-                <div class="detail-dialog-summary__desc">{{ selectedHistoryGroup.description }}</div>
+                <div class="detail-dialog-summary__desc">{{ selectedHistoryGroupSummary }}</div>
               </div>
               <div class="detail-dialog-summary__tags">
                 <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
@@ -224,42 +224,6 @@
                   </div>
                 </div>
               </div>
-            </div>
-            <RunDetailList :manifest="selectedRunDetailManifest" />
-            <el-table :data="pagedHistoryDetailRows" class="rules-table detail-dialog-table" table-layout="auto" empty-text="暂无明细">
-              <el-table-column label="条目" min-width="360">
-                <template #default="scope">
-                  <div class="history-rule history-rule--child">
-                    <div class="history-rule__title">{{ scope.row.title }}</div>
-                    <div class="history-rule__desc">{{ scope.row.description }}</div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="100">
-                <template #default="scope">
-                  <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column label="统计" width="140">
-                <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
-              </el-table-column>
-              <el-table-column label="大小" width="120">
-                <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
-              </el-table-column>
-              <el-table-column label="操作" width="90">
-                <template #default="scope">
-                  <el-button link type="danger" @click="removeHistoryDetailItem(scope.row)">删除</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            <div v-if="selectedHistoryGroupChildren.length > historyDetailPageSize" class="detail-dialog-pagination">
-              <el-pagination
-                v-model:current-page="historyDetailCurrentPage"
-                background
-                layout="total, prev, pager, next"
-                :page-size="historyDetailPageSize"
-                :total="selectedHistoryGroupChildren.length"
-              />
             </div>
           </template>
         </el-dialog>
@@ -1009,7 +973,6 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
-import RunDetailList from '../components/RunDetailList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
 import { cancelRun, fetchActiveRuns, prepareRuleExecution, type RunInstance } from '../api/executions'
@@ -1019,7 +982,6 @@ import {
   deleteRunHistoryItem,
   emptyRunHistory,
   fetchRunHistory,
-  fetchRunHistoryDetail,
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
@@ -1028,7 +990,6 @@ import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
-  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -1052,7 +1013,6 @@ type HistoryTreeRow = RunHistoryItem & {
   description: string
   is_group: boolean
   source?: RunHistoryItem
-  children?: HistoryTreeRow[]
 }
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | 'createNaming.source_dir' | null
 type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'backup' | 'history'
@@ -1632,10 +1592,6 @@ const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
-// 运行详情（detail_json）：各链路共用，不再只服务备份。
-const selectedRunDetail = ref<RunHistoryItem | null>(null)
-const historyDetailPageSize = 25
-const historyDetailCurrentPage = ref(1)
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1649,10 +1605,16 @@ const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
-const selectedHistoryGroupChildren = computed(() => selectedHistoryGroup.value?.children ?? [])
-const pagedHistoryDetailRows = computed(() => {
-  const start = (historyDetailCurrentPage.value - 1) * historyDetailPageSize
-  return selectedHistoryGroupChildren.value.slice(start, start + historyDetailPageSize)
+// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列条目明细。
+const selectedHistoryGroupSummary = computed(() => {
+  const group = selectedHistoryGroup.value
+  if (!group) {
+    return ''
+  }
+  const success = Math.max(0, Number(group.success_count || 0))
+  const skipped = Math.max(0, Number(group.skip_count || 0))
+  const failed = Math.max(0, Number(group.failure_count || 0))
+  return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)} · 成功 ${success} / 警告 ${skipped} / 错误 ${failed}`
 })
 // 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
 const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
@@ -1668,8 +1630,6 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
-// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
-const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 const purifyRulesTotal = ref(0)
 
@@ -2742,17 +2702,6 @@ function buildHistoryGroupKey(item: RunHistoryItem) {
   return [item.rule_id ?? 'manual', item.rule_name || '', item.trigger_mode || '', item.archive_mode || '', item.link_mode || '', item.started_at || ''].join('|')
 }
 
-function buildHistoryChildRow(item: RunHistoryItem): HistoryTreeRow {
-  return {
-    ...item,
-    id: `item-${item.id}`,
-    title: formatRunHistorySummary(item.summary) || item.summary || '未记录具体条目',
-    description: `${item.rule_name || '未知规则'} · ${historyTriggerText(item)} · ${formatDateTime(item.started_at)}`,
-    is_group: false,
-    source: item,
-  }
-}
-
 function resolveHistoryGroupStatus(items: RunHistoryItem[]) {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'skip')) return 'skip'
@@ -2798,7 +2747,6 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
       title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
       description: `${first.rule_name || '未知规则'} · ${historyTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
-      children: groupItems.map(buildHistoryChildRow),
     }
   })
 }
@@ -2818,36 +2766,18 @@ async function loadSelectedBackupTask(row: HistoryTreeRow) {
   }
 }
 
+// 详情窗口只展示任务级摘要（标题 + 一行统计 + 状态/模式标签），不再罗列条目明细。
 function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
   selectedBackupTask.value = null
-  selectedRunDetail.value = null
-  historyDetailCurrentPage.value = 1
   historyDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
   }
-  void loadSelectedRunDetail(row)
 }
 
-// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
-// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
-async function loadSelectedRunDetail(row: HistoryTreeRow) {
-  selectedRunDetail.value = null
-  const historyID = row.source?.id
-  if (!historyID) {
-    return
-  }
-  try {
-    const payload = await fetchRunHistoryDetail(historyID)
-    selectedRunDetail.value = payload.data?.item ?? null
-  } catch {
-    selectedRunDetail.value = null
-  }
-}
-
-// 平铺视图里把单条记录包装成「只有一个明细」的任务分组，同样可以打开详情。
+// 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
 function openHistoryItemDetail(item: RunHistoryItem) {
   openHistoryDetailDialog({
     ...item,
@@ -2856,24 +2786,7 @@ function openHistoryItemDetail(item: RunHistoryItem) {
     description: `${item.rule_name || '未知规则'} · ${historyTriggerText(item)}`,
     is_group: true,
     source: item,
-    children: [buildHistoryChildRow(item)],
   })
-}
-
-async function removeHistoryDetailItem(row: HistoryTreeRow) {
-  const sourceID = row.source?.id
-  if (!sourceID) return
-  await removeHistoryItem(sourceID)
-  const remainingRows = selectedHistoryGroupChildren.value.filter((item) => item.source?.id !== sourceID)
-  if (remainingRows.length === 0) {
-    historyDetailDialogVisible.value = false
-    selectedHistoryGroup.value = null
-    return
-  }
-  const maxPage = Math.max(1, Math.ceil(remainingRows.length / historyDetailPageSize))
-  if (historyDetailCurrentPage.value > maxPage) {
-    historyDetailCurrentPage.value = maxPage
-  }
 }
 
 function triggerModeText(mode?: string) {
@@ -3556,7 +3469,6 @@ onBeforeUnmount(() => {
 .history-search :deep(.el-input) { width: 260px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
-.history-rule--child { padding-left: 6px; border-left: 3px solid var(--el-border-color-lighter); }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
 .history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
 .history-tree-table :deep(.el-table__row) { cursor: pointer; }
@@ -3565,10 +3477,8 @@ onBeforeUnmount(() => {
 .history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
 .detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; padding: 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 18px; background: var(--el-fill-color-extra-light); }
 .detail-dialog-summary__title { font-size: 16px; font-weight: 800; color: var(--el-text-color-primary); }
-.detail-dialog-summary__desc { margin-top: 6px; line-height: 1.6; color: var(--el-text-color-secondary); }
+.detail-dialog-summary__desc { margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.6; color: var(--el-text-color-secondary); }
 .detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.detail-dialog-table { margin-top: 8px; }
-.detail-dialog-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 /* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
 .detail-backup { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 16px; background: var(--el-bg-color); }
 .detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
