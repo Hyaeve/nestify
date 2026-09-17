@@ -557,11 +557,22 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		targets = append(targets, desc)
 	}
 
+	// 「删除源文件」类完成规则只在**所有配置目标都可用**时才执行：
+	// 目标解析失败 / 挂载停用的会被剔除出 targets，此时源文件并没有真正落到每个目标，
+	// 删掉就是数据丢失。
+	canDeleteSources := canDeleteSourceAfterCopy(task.CompletionRule, len(targets), len(task.TargetDirs))
+	if isSourceDeletingRule(task.CompletionRule) && !canDeleteSources {
+		s.log(task.ID, "完成规则「删除源文件」已跳过：目标路径不完整或不可用，避免误删源文件")
+	}
+
 	items := make([]sourceItem, 0, len(sourceIndex))
 	for relative, absolute := range sourceIndex {
 		items = append(items, sourceItem{relative: relative, absolute: absolute})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].relative < items[j].relative })
+
+	// 待删除的源文件：整轮复制结束后统一处理，不在复制循环里「复制一个删一个」。
+	pendingDeletes := make([]pendingSourceDelete, 0, len(items))
 
 	for _, item := range items {
 		if s.cancelled(task.ID) {
@@ -580,10 +591,13 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 			continue
 		}
 
+		// 逐个目标复制；任一目标失败，这个源文件都不允许按完成规则删除。
+		allTargetsOK := true
 		for _, target := range targets {
 			if target.isWebdav {
 				if err := s.copyOneWebdav(task, target, item, fileInfo, stats); err != nil {
 					stats.Failed++
+					allTargetsOK = false
 					s.log(task.ID, "上传失败：%s（%v）", item.relative, err)
 					stats.recordFile(model.BackupFileEntry{
 						Path:   filepath.ToSlash(item.relative),
@@ -597,6 +611,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 				destination := filepath.Join(target.raw, item.relative)
 				if err := s.copyOne(task, item.relative, item.absolute, destination, fileInfo, stats); err != nil {
 					stats.Failed++
+					allTargetsOK = false
 					s.log(task.ID, "复制失败：%s（%v）", item.relative, err)
 					stats.recordFile(model.BackupFileEntry{
 						Path:   filepath.ToSlash(item.relative),
@@ -609,23 +624,28 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 			}
 		}
 
-		if (task.CompletionRule == model.BackupCompletionDeleteSource || task.CompletionRule == model.BackupCompletionDeleteSourceDirs) && len(targets) > 0 {
-			if err := os.Remove(item.absolute); err == nil {
-				stats.Deleted++
-				stats.recordFile(model.BackupFileEntry{
-					Path:   filepath.ToSlash(item.relative),
-					Action: model.BackupFileActionDelete,
-					Size:   fileInfo.Size(),
-					Note:   "按完成规则删除源文件",
-				})
-				delete(sourceIndex, item.relative)
-			}
+		// 完成规则（删除源文件）**不在循环里立即删**：多源 / 多目标时，
+		// 「复制一个删一个」会让尚未写完的目标永远拿不到这个文件，而源文件删掉就补不回来。
+		// 这里只把「本轮确实写到了所有目标」的文件登记起来，等整轮复制结束后统一删。
+		if canDeleteSources && allTargetsOK {
+			pendingDeletes = append(pendingDeletes, pendingSourceDelete{
+				relative: item.relative,
+				absolute: item.absolute,
+				size:     fileInfo.Size(),
+			})
 		}
 	}
 
-	// 停止执行时不做「清理空目录」与「从目标同步删除」：
-	// 中途停下的 sourceIndex 并不完整，拿去同步删除会误删目标端已有的文件。
+	// 停止执行时不做「删除源文件 / 清理空目录 / 从目标同步删除」：
+	// 中途停下的结果并不完整（sourceIndex 可能只扫了一部分），
+	// 继续收尾动作会误删源文件 / 目标端已有文件。
 	stopped := s.cancelled(task.ID)
+
+	// 收尾动作严格按「复制 → 删除源文件 → 清理空目录 → 从目标同步删除」的顺序。
+	if !stopped && len(pendingDeletes) > 0 {
+		s.setPhase(task.ID, "删除源文件", fmt.Sprintf("共 %d 个文件", len(pendingDeletes)))
+		s.deleteBackedUpSources(task, pendingDeletes, stats)
+	}
 
 	if !stopped && task.CompletionRule == model.BackupCompletionDeleteSourceDirs {
 		for _, sourceDir := range task.SourceDirs {
@@ -992,6 +1012,63 @@ func sourceKey(prefix, relative string) string {
 type sourceItem struct {
 	relative string
 	absolute string
+}
+
+// isSourceDeletingRule 判断完成规则是否会删除源文件。
+func isSourceDeletingRule(completionRule string) bool {
+	return completionRule == model.BackupCompletionDeleteSource ||
+		completionRule == model.BackupCompletionDeleteSourceDirs
+}
+
+// canDeleteSourceAfterCopy 判断是否具备「按完成规则删除源文件」的前提条件。
+//
+// 必须**所有配置的目标都可用**才允许删除：目标解析失败 / 挂载停用的会被剔除出
+// usableTargets，此时源文件并没有真正落到每个目标，删掉就是数据丢失。
+func canDeleteSourceAfterCopy(completionRule string, usableTargets, configuredTargets int) bool {
+	if !isSourceDeletingRule(completionRule) {
+		return false
+	}
+	return usableTargets > 0 && usableTargets == configuredTargets
+}
+
+// pendingSourceDelete 是一个「已成功写到所有目标、等待按完成规则删除」的源文件。
+type pendingSourceDelete struct {
+	// relative 是目标端相对路径（多源任务带源目录名前缀），仅用于运行明细展示。
+	relative string
+	absolute string
+	size     int64
+}
+
+// deleteBackedUpSources 在整轮复制（所有源 × 所有目标）结束后统一删除源文件。
+//
+// 为什么必须等整轮结束：多源 / 多目标时每个文件要写到 N 个目标，循环里
+// 「复制一个删一个」会让还没写完的目标拿不到文件，而源文件删掉就补不回来。
+// 传进来的清单已经保证了「每个目标都写成功」，任一目标失败的文件不会出现在这里。
+//
+// 这里**不把条目从 sourceIndex 移除**：删源只是「本机副本不要了」，
+// 目标端刚写好的那份仍是有效备份，必须留在清单里，
+// 否则紧随其后的「从目标同步删除」会把它当成陈旧文件删掉。
+func (s *Service) deleteBackedUpSources(task model.BackupTask, pending []pendingSourceDelete, stats *runStats) {
+	for _, item := range pending {
+		if err := os.Remove(item.absolute); err != nil {
+			stats.Failed++
+			stats.recordFile(model.BackupFileEntry{
+				Path:   filepath.ToSlash(item.relative),
+				Action: model.BackupFileActionFail,
+				Size:   item.size,
+				Note:   "按完成规则删除源文件失败：" + err.Error(),
+			})
+			continue
+		}
+
+		stats.Deleted++
+		stats.recordFile(model.BackupFileEntry{
+			Path:   filepath.ToSlash(item.relative),
+			Action: model.BackupFileActionDelete,
+			Size:   item.size,
+			Note:   "按完成规则删除源文件",
+		})
+	}
 }
 
 // targetDesc 描述一个备份目标（本地目录或 WebDAV 挂载）。

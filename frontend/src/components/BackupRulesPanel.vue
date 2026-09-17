@@ -149,7 +149,9 @@
             <div class="backup-form-hint">实时监控源文件夹的变化，检测到变更时自动触发备份。</div>
           </el-form-item>
           <el-form-item label="完成规则">
-            <div class="backup-form-hint backup-form-hint--top">备份完成后对源文件执行的操作。</div>
+            <div class="backup-form-hint backup-form-hint--top">
+              备份完成后对源文件执行的操作。多个源 / 多个目标时，会等全部源与全部目标都复制完成后统一执行，不是复制一个删一个。
+            </div>
             <el-select v-model="wizardForm.completion_rule" style="width: 100%">
               <el-option label="无操作" value="none" />
               <el-option label="删除源文件" value="delete_source" />
@@ -171,7 +173,7 @@
         <el-form label-position="top">
           <el-form-item>
             <el-checkbox v-model="wizardForm.sync_delete_from_target">从目标同步删除</el-checkbox>
-            <div class="backup-form-hint">从源文件夹删除文件时同步删除目标中的文件。</div>
+            <div class="backup-form-hint">从源文件夹删除文件时同步删除目标中的文件。本轮备份成功的文件不受影响 —— 即使源文件已被完成规则删除，目标端那份也会保留。</div>
           </el-form-item>
           <el-form-item>
             <el-checkbox v-model="wizardForm.force_full_scan">启动时强制完整扫描</el-checkbox>
