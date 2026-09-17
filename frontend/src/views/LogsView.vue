@@ -199,7 +199,11 @@
         </el-table>
 
         <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无运行日志" @row-click="openLogDetailDialog">
-          <el-table-column label="折叠任务" min-width="520">
+          <!-- 「折叠任务」原来是唯一的弹性列，会把表格剩余宽度全部吃掉（实测 854px），
+               后面的列因此被顶到很远。改成定宽后，剩余宽度交给末尾的弹性空列。
+               780 = 表格宽 1364 − 后面四列 510 − 右边留白 74（与归巢历史折叠表同款留白），
+               时间及其后各列因此整体左移 74px。 -->
+          <el-table-column label="折叠任务" width="780">
             <template #default="scope">
               <button type="button" class="logs-detail-card" @click.stop="openLogDetailDialog(scope.row)">
                 <span class="logs-detail-card__title">{{ scope.row.title }}</span>
@@ -231,6 +235,9 @@
           <el-table-column label="数量" width="110" align="center">
             <template #default="scope">{{ scope.row.processed_files }}</template>
           </el-table-column>
+          <!-- 收尾的弹性空列：专门吃掉表格的剩余宽度。少了它，剩余宽度会被摊回上面各列，
+               「折叠任务」又会被撑宽，后面的列就跟着往回跑。 -->
+          <el-table-column min-width="1" />
         </el-table>
       </div>
 
@@ -1088,6 +1095,13 @@ onMounted(async () => {
 .logs-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); }
 
 .logs-tree-table :deep(.el-table__row) { cursor: pointer; }
+
+/* 折叠任务列：文字整体往右挪一档（表头与内容一起挪，保持对齐）。
+   为了让后面几列往左靠，任务列宽度由 min-width 改成了定宽，见模板注释。
+   注意 `.logs-tree-table` 本身就是 el-table 根元素，选择器里**不能再写 `.el-table`**
+   （那要求 el-table 是它的后代，永远匹配不上）。 */
+.logs-tree-table :deep(th:first-child .cell),
+.logs-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
 
 .logs-detail-card {
   display: flex;
