@@ -170,7 +170,7 @@
         </el-table>
 
         <el-table v-else v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" @row-click="openHistoryDetailDialog">
-          <el-table-column label="折叠任务" min-width="420">
+          <el-table-column label="折叠任务" width="620">
             <template #default="scope">
               <button type="button" class="history-detail-card" @click.stop="openHistoryDetailDialog(scope.row)">
                 <span class="history-detail-card__title">{{ scope.row.title }}</span>
@@ -199,6 +199,9 @@
           <el-table-column label="统计" width="140">
             <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
           </el-table-column>
+          <!-- 收尾的弹性空列：专门吃掉表格的剩余宽度。少了它，剩余宽度会被摊回上面各列，
+               「折叠任务」又会被撑宽，后面的列就跟着往回跑。 -->
+          <el-table-column min-width="1" />
         </el-table>
 
         <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
@@ -3514,6 +3517,12 @@ onBeforeUnmount(() => {
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
 .history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
 .history-tree-table :deep(.el-table__row) { cursor: pointer; }
+/* 折叠任务列：文字整体往右挪一档（表头与内容一起挪，保持对齐）。
+   为了让后面几列往左靠，任务列宽度由 min-width 改成了定宽，见模板注释。
+   注意 `.history-tree-table` 本身就是 el-table 根元素，选择器里**不能再写 `.el-table`**
+   （那要求 el-table 是它的后代，永远匹配不上）。 */
+.history-tree-table :deep(th:first-child .cell),
+.history-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
 .history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; }
 .history-detail-card__title { font-weight: 700; color: var(--el-text-color-primary); }
 .history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
