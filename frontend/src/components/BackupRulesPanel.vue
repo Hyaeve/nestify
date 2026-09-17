@@ -1393,13 +1393,20 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   transition:
     color 0.16s ease,
     background-color 0.16s ease,
-    border-color 0.16s ease;
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
+/* 悬浮高亮：改成「浅底 + 深字 + 同色细描边 + 柔光环」的磨砂玻璃，
+   不再铺一块实心 #5f7fa8 —— 实心块就是「不清透、发闷」的根源
+   （与全站选中/勾选态的统一公式一致：浅底 + 深字，而非实心反白）。 */
 .backup-card__mode:hover {
-  color: #fff;
-  border-color: #5f7fa8;
-  background: #5f7fa8;
+  color: #37567e;
+  border-color: rgba(95, 127, 168, 0.62);
+  background: rgba(95, 127, 168, 0.24);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  backdrop-filter: blur(8px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 0 0 3px rgba(95, 127, 168, 0.14);
 }
 
 .backup-card__body {

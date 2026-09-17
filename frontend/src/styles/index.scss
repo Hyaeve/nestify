@@ -406,48 +406,55 @@ body {
   height: 36px;
 }
 
-/* —— 各规则页右上角「+ 添加规则 / + 添加备份」：统一「白字 + 清透亮蓝胶囊」——
-   归档 / 净化 / 链路 / 备份四处共用这一支（命名规则那条仍是自己的专色绿，见 RulesView）：
-   1) 白字：之前只有归档 / 净化 / 链路被改成黑字（上一轮「按钮文字去蓝改黑」），
-      而命名 / 备份一直是白字，几页并排一看就花了 —— 这里统一回白字；
-   2) 清透：底色从偏沉的主色 #209fee 换成更透亮的天青蓝 #12a9e8，并叠一层顶部白色高光
-      与柔和外发光，圆角框看起来是「透亮的玻璃胶囊」而不是一块实色。
+/* —— 各规则页右上角「+ 添加规则 / + 添加备份」：统一「冰蓝磨砂玻璃胶囊」——
+   归档 / 净化 / 链路 / 备份四处共用这一支（命名规则那条是同款工艺的专色绿，见 RulesView）：
+   1) 底色不再是实色块，改用 16% 半透明冰蓝 + backdrop-filter 模糊，再叠一层顶部白色高光
+      与蓝色细描边 —— 呈现「毛玻璃」的透亮观感，而不是一块沉色；
+   2) 字色随之由白改深蓝 #0b5c8a：浅底上白字会糊成一片，深蓝才读得清。
    挂 `.el-button` 前缀是为了同权重下稳压 `.el-button--primary`（与样式表先后顺序无关）。 */
 .el-button.add-rule-button {
-  --el-button-bg-color: #12a9e8;
-  --el-button-border-color: #12a9e8;
-  --el-button-text-color: #ffffff;
-  --el-button-hover-bg-color: #2eb8f0;
-  --el-button-hover-border-color: #2eb8f0;
-  --el-button-hover-text-color: #ffffff;
-  --el-button-active-bg-color: #0d8fc6;
-  --el-button-active-border-color: #0d8fc6;
-  --el-button-active-text-color: #ffffff;
-  --el-button-disabled-bg-color: rgba(18, 169, 232, 0.45);
-  --el-button-disabled-border-color: rgba(18, 169, 232, 0.45);
-  --el-button-disabled-text-color: #ffffff;
-  background-image: linear-gradient(180deg, #3ab7f2 0%, #12a9e8 62%, #0ea3e2 100%);
-  border-color: #12a9e8;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px rgba(18, 169, 232, 0.24);
+  --el-button-bg-color: rgba(18, 169, 232, 0.16);
+  --el-button-border-color: rgba(18, 169, 232, 0.5);
+  --el-button-text-color: #0b5c8a;
+  --el-button-hover-bg-color: rgba(18, 169, 232, 0.3);
+  --el-button-hover-border-color: rgba(18, 169, 232, 0.78);
+  --el-button-hover-text-color: #0a4a73;
+  --el-button-active-bg-color: rgba(18, 169, 232, 0.38);
+  --el-button-active-border-color: rgba(18, 169, 232, 0.86);
+  --el-button-active-text-color: #083f5e;
+  --el-button-disabled-bg-color: rgba(18, 169, 232, 0.07);
+  --el-button-disabled-border-color: rgba(18, 169, 232, 0.22);
+  --el-button-disabled-text-color: rgba(11, 92, 138, 0.42);
+  background-image: none;
+  background-color: rgba(18, 169, 232, 0.16);
+  border-color: rgba(18, 169, 232, 0.5);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  backdrop-filter: blur(10px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 16px rgba(18, 169, 232, 0.1);
 }
 
 .el-button.add-rule-button:hover,
 .el-button.add-rule-button:focus-visible {
-  background-image: linear-gradient(180deg, #55c3f6 0%, #29b5ef 62%, #1dadeb 100%);
-  border-color: #2eb8f0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48), 0 8px 20px rgba(18, 169, 232, 0.3);
+  background-image: none;
+  background-color: rgba(18, 169, 232, 0.3);
+  border-color: rgba(18, 169, 232, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 20px rgba(18, 169, 232, 0.18);
 }
 
 .el-button.add-rule-button:active {
-  background-image: linear-gradient(180deg, #0f9ede 0%, #0d8fc6 100%);
-  border-color: #0d8fc6;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 3px 10px rgba(18, 169, 232, 0.24);
+  background-image: none;
+  background-color: rgba(18, 169, 232, 0.38);
+  border-color: rgba(18, 169, 232, 0.86);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 3px 10px rgba(18, 169, 232, 0.14);
 }
 
-/* 禁用态不发光：EP 只换背景色，渐变与光晕要显式撤掉。 */
+/* 禁用态不发光：EP 只换背景色，模糊与光晕要显式撤掉。 */
 .el-button.add-rule-button.is-disabled {
   background-image: none;
+  background-color: rgba(18, 169, 232, 0.07);
   box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* —— 配色收敛：蓝色只留给「开关」和「备份向导栏目字」——

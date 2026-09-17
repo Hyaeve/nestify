@@ -3665,22 +3665,31 @@ onBeforeUnmount(() => {
 .rules-table-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.48); }
 .rules-table--wide, .naming-rules-table { min-width: 1380px; }
 /* 「+ 添加规则」按钮的配色统一收在全局 styles/index.scss（.el-button.add-rule-button）：
-   白字 + 清透亮蓝胶囊，归档 / 净化 / 链路 / 备份四处共用。这里不再单独覆盖文字色。 */
-/* 命名规则那条添加按钮保持自己的专色绿（命名语义色不动），但表面处理跟四处蓝按钮
-   统一成「顶部高光 + 柔和外发光」的清透玻璃胶囊，不再是一块平铺的实色。 */
+   冰蓝磨砂玻璃胶囊，归档 / 净化 / 链路 / 备份四处共用。这里不再单独覆盖文字色。 */
+/* 命名规则那条添加按钮保持自己的专色绿（命名语义色不动），但工艺跟四处蓝按钮完全一致：
+   半透明浅底 + 磨砂模糊 + 顶部白色高光 + 同色细描边，字色改对应的深绿（浅底上白字会糊）。 */
 .naming-add-button {
-  color: #fff;
-  border-color: #0f9f87;
-  background: #0f9f87;
-  background-image: linear-gradient(180deg, #1ab29b 0%, #0f9f87 62%, #0d9780 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 6px 16px rgba(15, 159, 135, 0.22);
+  color: #0c6d5c;
+  border-color: rgba(15, 159, 135, 0.48);
+  background: rgba(15, 159, 135, 0.14);
+  background-image: none;
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  backdrop-filter: blur(10px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 6px 16px rgba(15, 159, 135, 0.1);
 }
 .naming-add-button:hover {
-  color: #fff;
-  border-color: #0c8a75;
-  background: #0c8a75;
-  background-image: linear-gradient(180deg, #24c1a8 0%, #13a68e 62%, #0c8a75 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 8px 20px rgba(15, 159, 135, 0.28);
+  color: #0a5748;
+  border-color: rgba(15, 159, 135, 0.76);
+  background: rgba(15, 159, 135, 0.26);
+  background-image: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 20px rgba(15, 159, 135, 0.18);
+}
+.naming-add-button:active {
+  color: #084c40;
+  border-color: rgba(15, 159, 135, 0.86);
+  background: rgba(15, 159, 135, 0.34);
+  background-image: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 3px 10px rgba(15, 159, 135, 0.14);
 }
 .rule-action--naming { color: #0f9f87; }
 .rule-action__execute-icon--naming { stroke-width: 1.75; }
