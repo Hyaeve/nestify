@@ -3523,7 +3523,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .rules-page { display: flex; flex-direction: column; gap: 16px; }
-.rules-tabs { display: flex; gap: 32px; padding: 0 4px; border-bottom: 1px solid var(--el-border-color-lighter); }
+/* 顶部栏目是纯导航：禁掉双击选字（双击页签只切换，不留下文字选中高亮）。 */
+.rules-tabs { display: flex; gap: 32px; padding: 0 4px; border-bottom: 1px solid var(--el-border-color-lighter); user-select: none; -webkit-user-select: none; }
 .rules-tabs__item { position: relative; padding: 12px 0; font-size: 15px; background: transparent; border: 0; cursor: pointer; color: var(--el-text-color-regular); transition: color 0.2s ease; }
 /* 页签选中态用比主色更深一档的青蓝（同色相 H203，明度 53%→46%）：
    #209fee 做 15px 文字在白底上偏飘，加深后才「有颜色」。 */
@@ -3532,10 +3533,10 @@ onBeforeUnmount(() => {
 .rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: #098ee1; border-radius: 999px; }
 .rules-tabs__item--naming.is-active { color: #0f9f87; }
 .rules-tabs__item--naming.is-active::after { background: #0f9f87; }
-/* 归巢历史单独走琥珀金，与规则类页签的青蓝区分开。 */
-.rules-tabs__item--history:hover { color: #d99a00; }
-.rules-tabs__item--history.is-active { color: #d99a00; }
-.rules-tabs__item--history.is-active::after { background: #d99a00; }
+/* 归巢历史单独走琥珀金，与规则类页签的青蓝区分开（轮 69 由 #d99a00 提亮到 #e8a90c）。 */
+.rules-tabs__item--history:hover { color: #e8a90c; }
+.rules-tabs__item--history.is-active { color: #e8a90c; }
+.rules-tabs__item--history.is-active::after { background: #e8a90c; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
