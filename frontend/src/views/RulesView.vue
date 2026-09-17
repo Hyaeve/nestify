@@ -225,6 +225,7 @@
                 </div>
               </div>
             </div>
+            <RunDetailList :manifest="selectedRunDetailManifest" />
           </template>
         </el-dialog>
 
@@ -973,6 +974,7 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
+import RunDetailList from '../components/RunDetailList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
 import { cancelRun, fetchActiveRuns, prepareRuleExecution, type RunInstance } from '../api/executions'
@@ -982,6 +984,7 @@ import {
   deleteRunHistoryItem,
   emptyRunHistory,
   fetchRunHistory,
+  fetchRunHistoryDetail,
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
@@ -990,6 +993,7 @@ import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
+  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -1592,6 +1596,8 @@ const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
+// 运行详情（detail_json）：各链路共用，不再只服务备份。
+const selectedRunDetail = ref<RunHistoryItem | null>(null)
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1605,7 +1611,7 @@ const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
-// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列条目明细。
+// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列「明细条目」列表（文件级明细保留）。
 const selectedHistoryGroupSummary = computed(() => {
   const group = selectedHistoryGroup.value
   if (!group) {
@@ -1630,6 +1636,8 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
+// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
+const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 const purifyRulesTotal = ref(0)
 
@@ -2766,14 +2774,32 @@ async function loadSelectedBackupTask(row: HistoryTreeRow) {
   }
 }
 
-// 详情窗口只展示任务级摘要（标题 + 一行统计 + 状态/模式标签），不再罗列条目明细。
+// 详情窗口 = 任务级摘要（标题 + 一行统计 + 状态/模式标签）+ 备份规则信息 + 文件级执行明细。
 function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
   selectedBackupTask.value = null
+  selectedRunDetail.value = null
   historyDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
+  }
+  void loadSelectedRunDetail(row)
+}
+
+// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
+// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
+async function loadSelectedRunDetail(row: HistoryTreeRow) {
+  selectedRunDetail.value = null
+  const historyID = row.source?.id
+  if (!historyID) {
+    return
+  }
+  try {
+    const payload = await fetchRunHistoryDetail(historyID)
+    selectedRunDetail.value = payload.data?.item ?? null
+  } catch {
+    selectedRunDetail.value = null
   }
 }
 

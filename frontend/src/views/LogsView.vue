@@ -264,6 +264,7 @@
               </div>
             </div>
           </div>
+          <RunDetailList :manifest="selectedRunDetailManifest" />
         </template>
       </el-dialog>
 
@@ -287,11 +288,13 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import RunDetailList from '../components/RunDetailList.vue'
 import { fetchBackups, type BackupTask } from '../api/backups'
-import { clearRunHistory, fetchRunHistory, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
+import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
+  parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
 } from '../utils/backupDetail'
@@ -302,6 +305,8 @@ type LogsViewMode = 'flat' | 'tree'
 type LogTreeRow = RunHistoryItem & {
   // 分组行 / 平铺行的 id 都加了前缀，仅用于表格 row-key。
   id: string
+  // 原始运行日志 id：拉取执行明细（detail_json）时要用它。
+  historyId: string
   title: string
   description: string
   is_group: boolean
@@ -357,6 +362,8 @@ const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
+// 运行详情（detail_json）：各链路共用，不再只服务备份。
+const selectedRunDetail = ref<RunHistoryItem | null>(null)
 
 const totalLogs = computed(() => historySummary.value.total)
 const todayLogs = computed(() => historySummary.value.today)
@@ -364,7 +371,7 @@ const successLogs = computed(() => historySummary.value.success)
 const failedLogs = computed(() => historySummary.value.failed)
 const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
-// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列条目明细。
+// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列「明细条目」列表（文件级明细保留）。
 const selectedLogGroupSummary = computed(() => {
   const group = selectedLogGroup.value
   if (!group) {
@@ -389,6 +396,8 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
+// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
+const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 async function loadHistory() {
   loading.value = true
@@ -561,6 +570,7 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
     return {
       ...first,
       id: `group-${key}`,
+      historyId: first.id,
       status: resolveLogGroupStatus(groupItems),
       processed_files: processed,
       success_count: success,
@@ -588,15 +598,32 @@ async function loadSelectedBackupTask(row: LogTreeRow) {
   }
 }
 
-// 详情窗口只展示任务级摘要（标题 + 一行统计 + 状态标签），不再罗列文件级明细。
+// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
+// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
+async function loadSelectedRunDetail(row: LogTreeRow) {
+  selectedRunDetail.value = null
+  if (!row.historyId) {
+    return
+  }
+  try {
+    const payload = await fetchRunHistoryDetail(row.historyId)
+    selectedRunDetail.value = payload.data?.item ?? null
+  } catch {
+    selectedRunDetail.value = null
+  }
+}
+
+// 详情窗口 = 任务级摘要（标题 + 一行统计 + 状态标签）+ 备份规则信息 + 文件级执行明细。
 function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
   selectedBackupTask.value = null
+  selectedRunDetail.value = null
   logDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
   }
+  void loadSelectedRunDetail(row)
 }
 
 // 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
@@ -604,6 +631,7 @@ function openLogItemDetail(item: RunHistoryItem) {
   openLogDetailDialog({
     ...item,
     id: `single-${item.id}`,
+    historyId: item.id,
     title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
     description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)}`,
     is_group: true,
