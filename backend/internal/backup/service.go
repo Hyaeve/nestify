@@ -434,8 +434,14 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 	s.log(task.ID, "开始备份「%s」", task.Name)
 
-	// 收集源文件清单（相对路径 -> 源绝对路径），供同步删除使用。
+	// 收集源文件清单（「目标端相对路径」-> 源绝对路径），供同步删除使用。
+	//
+	// 键是**目标端**的相对路径：单源任务就是「相对源目录的路径」（保持既有目标结构不变）；
+	// 多源任务会多一层「源目录名」前缀（见 sourceDirPrefixes）—— 否则两个源里同名相对
+	// 路径（例如都有 电影/流浪地球.mkv）会互相覆盖，后者静默盖掉前者的键，
+	// 目标端只剩一个文件，等于悄悄丢了数据。
 	sourceIndex := make(map[string]string)
+	sourcePrefixes := sourceDirPrefixes(task.SourceDirs)
 	totalSources := len(task.SourceDirs)
 	// 筛选规则命中的目录 / 文件只累计数目：逐条打日志会把「最近日志」整屏刷成
 	// 「按筛选规则跳过…」，用户只需要知道跳过了多少（明细里也只有一个 skip 计数）。
@@ -444,6 +450,12 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 	for index, sourceDir := range task.SourceDirs {
 		s.setPhase(task.ID, "扫描源目录", fmt.Sprintf("%d/%d", index+1, totalSources))
+
+		// 多源任务：说明该源落到目标下的哪一层子目录，方便对照目标端结构。
+		if prefix := sourcePrefixes[index]; prefix != "" {
+			s.log(task.ID, "多源备份：源目录「%s」备份到目标下的「%s」子目录",
+				filepath.Base(filepath.Clean(sourceDir)), prefix)
+		}
 
 		info, err := os.Stat(sourceDir)
 		if err != nil || !info.IsDir() {
@@ -486,6 +498,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 				return nil
 			}
 
+			// 筛选规则一律按「相对源目录的路径」判定，与目标端前缀无关。
 			if matcher.excluded(relative, entry.Name(), false, fileInfo.Size()) {
 				stats.Skipped++
 				skippedFiles++
@@ -498,7 +511,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 				return nil
 			}
 
-			sourceIndex[relative] = currentPath
+			sourceIndex[sourceKey(sourcePrefixes[index], relative)] = currentPath
 			return nil
 		})
 		if err != nil {
@@ -930,6 +943,49 @@ func (s *runStats) buildBackupDetailJSON() string {
 	}
 
 	return string(encoded)
+}
+
+// sourceDirPrefixes 为每个源目录计算它在目标端的前缀目录名。
+//
+// 单源返回全空串 —— 目标结构保持原样（源里的相对路径直接落在目标根下），
+// 不动既有任务的布局。多源才启用前缀：每个源在目标端各占一层以「源目录名」命名的
+// 子目录，这样「多个源 -> 一个目标」「多个源 -> 多个目标」都不会因为跨源同名相对
+// 路径互相覆盖（每个目标仍然会收到全部源，只是分目录存放）。
+//
+// 源目录名重复时（例如 /mnt/a/电影 与 /mnt/b/电影）按出现顺序追加 -2、-3… 后缀，
+// 去重按大小写不敏感处理（Windows / macOS 目标端不区分大小写）。
+func sourceDirPrefixes(sourceDirs []string) []string {
+	prefixes := make([]string, len(sourceDirs))
+	if len(sourceDirs) <= 1 {
+		return prefixes
+	}
+
+	taken := make(map[string]struct{}, len(sourceDirs))
+	for index, dir := range sourceDirs {
+		base := filepath.Base(filepath.Clean(strings.TrimSpace(dir)))
+		if base == "" || base == "." || base == string(filepath.Separator) {
+			base = fmt.Sprintf("源%d", index+1)
+		}
+
+		name := base
+		for suffix := 2; ; suffix++ {
+			if _, exists := taken[strings.ToLower(name)]; !exists {
+				break
+			}
+			name = fmt.Sprintf("%s-%d", base, suffix)
+		}
+		taken[strings.ToLower(name)] = struct{}{}
+		prefixes[index] = name
+	}
+	return prefixes
+}
+
+// sourceKey 拼出源文件在目标端的相对路径：单源（prefix 为空）保持原样，多源加一层前缀。
+func sourceKey(prefix, relative string) string {
+	if prefix == "" {
+		return relative
+	}
+	return filepath.Join(prefix, relative)
 }
 
 // sourceItem 是一个待复制的源文件条目。
