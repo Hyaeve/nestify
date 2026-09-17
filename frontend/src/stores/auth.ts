@@ -40,5 +40,15 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       this.initialized = true
     },
+    /**
+     * 会话失效（容器重启 / 会话过期）时清空本地登录态。
+     *
+     * initialized 保持 true：已经确认未登录，不必再发一次会话检查；
+     * 否则路由守卫会「查会话 → 401 → 又跳登录」地往复一次。
+     */
+    clearSession() {
+      this.user = null
+      this.initialized = true
+    },
   },
 })

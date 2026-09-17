@@ -1,4 +1,4 @@
-import { getJSON } from './http'
+import { getJSON, haltRequest, handleSessionExpired } from './http'
 import type { ApiResponse } from './http'
 
 export interface HealthPayload {
@@ -90,6 +90,10 @@ export async function updateSettings(payload: UpdateSettingsPayload) {
   })
 
   const result = (await response.json()) as ApiResponse<SettingsPayload>
+  if (handleSessionExpired(response, result)) {
+    return haltRequest<ApiResponse<SettingsPayload>>()
+  }
+
   if (!response.ok) {
     throw new Error(result.message || '保存系统设置失败')
   }
@@ -107,6 +111,10 @@ export async function restartSystem() {
   })
 
   const payload = (await response.json()) as ApiResponse<null>
+  if (handleSessionExpired(response, payload)) {
+    return haltRequest<ApiResponse<null>>()
+  }
+
   if (!response.ok) {
     throw new Error(payload.message || '重启系统失败')
   }
@@ -125,6 +133,10 @@ export async function exportRulesBackup() {
 
   if (!response.ok) {
     const payload = (await response.json()) as ApiResponse<null>
+    if (handleSessionExpired(response, payload)) {
+      return haltRequest<Blob>()
+    }
+
     throw new Error(payload.message || '导出规则备份失败')
   }
 
@@ -143,10 +155,13 @@ export async function importRulesBackup(payload: RuleBackupPayload) {
   })
 
   const result = (await response.json()) as ApiResponse<{ count: number }>
+  if (handleSessionExpired(response, result)) {
+    return haltRequest<ApiResponse<{ count: number }>>()
+  }
+
   if (!response.ok) {
     throw new Error(result.message || '导入规则备份失败')
   }
 
   return result
 }
-

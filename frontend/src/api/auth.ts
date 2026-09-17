@@ -1,4 +1,4 @@
-import type { ApiResponse } from './http'
+import { haltRequest, handleSessionExpired, type ApiResponse } from './http'
 
 export interface SessionUser {
   id: number
@@ -77,6 +77,10 @@ export function updateAdminAccount(payload: UpdateAdminAccountPayload) {
     body: JSON.stringify(payload),
   }).then(async (response) => {
     const data = (await response.json()) as ApiResponse<SessionUser>
+    if (handleSessionExpired(response, data)) {
+      return haltRequest<ApiResponse<SessionUser>>()
+    }
+
     if (!response.ok) {
       throw new Error(data.message || '更新管理员账号失败')
     }

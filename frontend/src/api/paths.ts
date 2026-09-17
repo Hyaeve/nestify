@@ -1,4 +1,4 @@
-import { getJSON, postJSON, type ApiResponse } from './http'
+import { getJSON, haltRequest, handleSessionExpired, postJSON, type ApiResponse } from './http'
 
 export interface BrowseRoot {
   name: string
@@ -193,6 +193,10 @@ export async function uploadFiles(destinationPath: string, files: File[], relati
   })
 
   const payload = (await response.json()) as ApiResponse<FileMutationResult>
+  if (handleSessionExpired(response, payload)) {
+    return haltRequest<ApiResponse<FileMutationResult>>()
+  }
+
   if (!response.ok) {
     throw new Error(payload.message || `Request failed with status ${response.status}`)
   }

@@ -1,4 +1,4 @@
-import { deleteJSON, getJSON } from './http'
+import { deleteJSON, getJSON, haltRequest, handleSessionExpired } from './http'
 
 export interface CronPreviewPayload {
   expression: string
@@ -134,6 +134,9 @@ export function createRule(payload: CreateRulePayload) {
 		body: JSON.stringify(payload),
 	}).then(async (response) => {
     const data = await response.json()
+    if (handleSessionExpired(response, data)) {
+      return haltRequest<unknown>()
+    }
     if (!response.ok) {
       throw new Error(data.message || 'Create rule failed')
     }
@@ -152,6 +155,9 @@ export function updateRule(id: number, payload: UpdateRulePayload) {
 		body: JSON.stringify(payload),
 	}).then(async (response) => {
     const data = await response.json()
+    if (handleSessionExpired(response, data)) {
+      return haltRequest<unknown>()
+    }
     if (!response.ok) {
       throw new Error(data.message || 'Update rule failed')
     }
@@ -170,6 +176,9 @@ export function reorderRules(payload: RuleReorderItem[]) {
 		body: JSON.stringify(payload),
 	}).then(async (response) => {
 		const data = await response.json()
+		if (handleSessionExpired(response, data)) {
+			return haltRequest<unknown>()
+		}
 		if (!response.ok) {
 			throw new Error(data.message || 'Reorder rules failed')
 		}
