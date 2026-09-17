@@ -208,9 +208,11 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="级别" width="120" align="center">
+          <!-- 时间紧跟在「折叠任务」后面，只到月日与时分秒：标题行已经不重复时间，
+               列里再带上年份只是噪音。列序与归巢历史的折叠表保持一致。 -->
+          <el-table-column label="时间" width="150" align="center">
             <template #default="scope">
-              <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+              <span class="logs-time">{{ formatMonthDayTime(scope.row.started_at) }}</span>
             </template>
           </el-table-column>
 
@@ -220,14 +222,14 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="数量" width="110" align="center">
-            <template #default="scope">{{ scope.row.processed_files }}</template>
+          <el-table-column label="级别" width="120" align="center">
+            <template #default="scope">
+              <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
+            </template>
           </el-table-column>
 
-          <el-table-column label="时间" min-width="180">
-            <template #default="scope">
-              <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
-            </template>
+          <el-table-column label="数量" width="110" align="center">
+            <template #default="scope">{{ scope.row.processed_files }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -483,6 +485,20 @@ function formatDateTime(value: string) {
   return date.toLocaleString('zh-CN', { hour12: false })
 }
 
+// 折叠列表的「时间」列：只到月日与时分秒（9/17 20:15:03）。
+// 折叠条目标题里已经不放时间了，列里再带上年份只是噪音。
+function formatMonthDayTime(value?: string) {
+  if (!value) {
+    return '—'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+  const pad = (input: number) => String(input).padStart(2, '0')
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
 function statusLabel(status: string) {
   if (status === 'success') {
     return '成功'
@@ -527,6 +543,18 @@ function logTriggerText(item: { archive_mode?: string; trigger_mode: string }) {
   return triggerModeText(item.trigger_mode)
 }
 
+// 折叠条目副行的触发措辞：统一带上「触发」二字
+//（实时监控触发 / 计划扫描触发 / 手动执行触发），与归巢历史同一套说法。
+function logTriggerPhrase(item?: { trigger_mode?: string }) {
+  if (item?.trigger_mode === 'watch') {
+    return '实时监控触发'
+  }
+  if (item?.trigger_mode === 'cron') {
+    return '计划扫描触发'
+  }
+  return '手动执行触发'
+}
+
 function resolveLogGroupStatus(items: RunHistoryItem[]) {
   if (items.some((item) => item.status === 'failed')) return 'failed'
   if (items.some((item) => item.status === 'skip')) return 'skip'
@@ -562,8 +590,11 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
       success_count: success,
       skip_count: skipped,
       failure_count: failed,
-      title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
-      description: `${first.rule_name || '手动任务'} · ${logTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      // 标题 = 「是什么任务 + 这条规则的自定义名」（如「备份任务 · 剧集追更备份」）：
+      // 时间不放在这里，它在右侧的独立列里，两边重复没意义。
+      title: `${historyModeLabel(first)}任务 · ${first.rule_name || '手动任务'}`,
+      // 副行给「触发方式 + 操作量 + 明细条数」，折叠起来也看得出这次干了多少活。
+      description: `${logTriggerPhrase(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
     }
   })
@@ -598,13 +629,14 @@ function openLogDetailDialog(row: LogTreeRow) {
 }
 
 // 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
+// 标题 / 副行与折叠模式保持同一套措辞，免得同一个任务在两个视图里长得不一样。
 function openLogItemDetail(item: RunHistoryItem) {
   openLogDetailDialog({
     ...item,
     id: `single-${item.id}`,
     historyId: item.id,
-    title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
-    description: `${item.rule_name || '手动任务'} · ${logTriggerText(item)}`,
+    title: `${historyModeLabel(item)}任务 · ${item.rule_name || '手动任务'}`,
+    description: `${logTriggerPhrase(item)} · 操作 ${Math.max(0, Number(item.processed_files || 0))} 个文件或文件夹`,
     is_group: true,
   })
 }
