@@ -114,14 +114,13 @@
             </span>
           </div>
           <div class="history-search">
+            <!-- 搜索框回车即搜，不再挂「搜索 / 重置」按钮：清空有自带的小叉，回车就是提交。 -->
             <el-input
               v-model="historyKeywordInput"
               clearable
-              placeholder="关键词搜索（规则名 / 摘要）"
+              placeholder="关键词搜索（规则名 / 摘要），回车搜索"
               @keyup.enter="handleHistorySearch"
             />
-            <el-button type="primary" @click="handleHistorySearch">搜索</el-button>
-            <el-button @click="resetHistorySearch">重置</el-button>
           </div>
         </div>
 
@@ -205,7 +204,7 @@
               <div class="detail-dialog-summary__main">
                 <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
                 <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
-                     右上角不再挂「成功 / 失败」标签——一条执行里成功、警告、错误本来就同在一行。 -->
+                     右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、错误本来就同在一行。 -->
                 <div class="detail-dialog-summary__desc">
                   <span class="detail-summary__leading">{{ selectedHistoryGroupLeading }}</span>
                   <span class="detail-summary__sep">·</span>
@@ -223,20 +222,6 @@
               </div>
               <div class="detail-dialog-summary__tags">
                 <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
-              </div>
-            </div>
-            <div v-if="selectedBackupDetailRows.length" class="detail-backup">
-              <div class="detail-backup__head">
-                <span class="detail-backup__title">备份详情</span>
-                <span v-if="!selectedBackupTask" class="detail-backup__hint">对应的备份规则卡片已不存在，仅展示本次执行记录</span>
-              </div>
-              <div class="detail-backup__grid">
-                <div v-for="row in selectedBackupDetailRows" :key="row.label" class="detail-backup__row">
-                  <span class="detail-backup__label">{{ row.label }}</span>
-                  <div class="detail-backup__values">
-                    <span v-for="(value, index) in row.values" :key="`${row.label}-${index}`" class="detail-backup__value" :title="value">{{ value }}</span>
-                  </div>
-                </div>
               </div>
             </div>
             <RunDetailList :manifest="selectedRunDetailManifest" :filter-key="detailFilterKey" />
@@ -1003,14 +988,10 @@ import {
   type RunHistorySummary,
 } from '../api/runHistory'
 import { fetchSettings } from '../api/system'
-import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
-  buildBackupDetailRows,
   buildRunDetailSummarySegments,
   parseRunDetail,
-  resolveBackupDeletedCount,
-  type BackupDetailRow,
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
@@ -1611,7 +1592,6 @@ const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'nami
 const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
-const selectedBackupTask = ref<BackupTask | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
 const selectedRunDetail = ref<RunHistoryItem | null>(null)
 // 标题下统计项里点中的那一项：null = 不筛选，列出全部文件明细。
@@ -1631,7 +1611,7 @@ const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 警告 / 错误不再是死文本，
+// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 错误不再是死文本，
 // 而是后面的可点击统计项（见 selectedHistoryGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedHistoryGroupLeading = computed(() => {
@@ -1641,7 +1621,7 @@ const selectedHistoryGroupLeading = computed(() => {
   }
   return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)}`
 })
-// 统计项：成功 / 警告 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
+// 统计项：成功 / 跳过 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedHistoryGroupSegments = computed(() =>
   buildRunDetailSummarySegments(selectedHistoryGroup.value ?? {}, selectedRunDetailManifest.value),
 )
@@ -1649,20 +1629,6 @@ const selectedHistoryGroupSegments = computed(() =>
 function toggleDetailFilter(key: RunDetailSummaryKey) {
   detailFilterKey.value = detailFilterKey.value === key ? null : key
 }
-// 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
-const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
-  const group = selectedHistoryGroup.value
-  if (!group || group.archive_mode !== 'backup') {
-    return []
-  }
-  return buildBackupDetailRows(selectedBackupTask.value, {
-    triggerMode: group.trigger_mode,
-    deletedCount: resolveBackupDeletedCount(group),
-    successCount: group.success_count,
-    skipCount: group.skip_count,
-    failureCount: group.failure_count,
-  })
-})
 
 const purifyRulesTotal = ref(0)
 
@@ -2704,13 +2670,6 @@ function handleHistorySearch() {
   void loadHistory()
 }
 
-function resetHistorySearch() {
-  historyKeywordInput.value = ''
-  historyKeyword.value = ''
-  historyCurrentPage.value = 1
-  void loadHistory()
-}
-
 function handleHistorySortChange() {
 	historyCurrentPage.value = 1
 	void loadHistory()
@@ -2784,33 +2743,16 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
   })
 }
 
-// 备份任务的详情需要现场拉取对应的备份规则卡片信息（源/目标/删除策略等）。
-async function loadSelectedBackupTask(row: HistoryTreeRow) {
-  selectedBackupTask.value = null
-  if (row.archive_mode !== 'backup' || row.rule_id == null) {
-    return
-  }
-  try {
-    const payload = await fetchBackups()
-    const items = payload.data?.items ?? []
-    selectedBackupTask.value = items.find((task) => task.id === row.rule_id) ?? null
-  } catch {
-    selectedBackupTask.value = null
-  }
-}
-
-// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 备份规则信息 + 文件级执行明细。
+// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 文件级执行明细。
+// 备份任务的规则卡片（源 / 目标 / 扫描配置 / 删除策略）不在这里重复一遍：
+// 那一整块就是备份卡片本身，照搬过来只会把明细挤下去。
 function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
-  selectedBackupTask.value = null
   selectedRunDetail.value = null
   // 换一条记录就回到「不筛选」，免得把上一条的筛选态带过来。
   detailFilterKey.value = null
   historyDetailDialogVisible.value = true
-  if (row.archive_mode === 'backup') {
-    void loadSelectedBackupTask(row)
-  }
   void loadSelectedRunDetail(row)
 }
 
@@ -3518,8 +3460,8 @@ onBeforeUnmount(() => {
 .history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
 .history-sort-order-button:not(.is-disabled):hover { color: #0975b8; border-color: rgba(32, 159, 238, 0.42); background: rgba(32, 159, 238, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
 .history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.history-search { display: flex; align-items: center; gap: 8px; }
-.history-search :deep(.el-input) { width: 260px; }
+.history-search { display: flex; align-items: center; }
+.history-search :deep(.el-input) { width: 320px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
@@ -3536,16 +3478,6 @@ onBeforeUnmount(() => {
 /* 前缀文字与可点击的统计项排在一行，靠 gap 分隔，窄了自动换行。 */
 .detail-dialog-summary__desc { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--el-text-color-secondary); }
 .detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况（同样是不伸缩的顶块） */
-.detail-backup { flex: 0 0 auto; margin-bottom: 8px; padding: 10px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-bg-color); }
-.detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
-.detail-backup__title { font-size: 14px; font-weight: 800; color: #0975b8; }
-.detail-backup__hint { font-size: 12px; color: var(--el-text-color-secondary); }
-.detail-backup__grid { display: flex; flex-direction: column; gap: 8px; }
-.detail-backup__row { display: flex; align-items: flex-start; gap: 12px; }
-.detail-backup__label { flex: 0 0 88px; font-size: 13px; font-weight: 600; color: var(--el-text-color-secondary); }
-.detail-backup__values { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.detail-backup__value { font-size: 13px; line-height: 1.6; color: var(--el-text-color-primary); word-break: break-all; }
 .history-status { display: inline-flex; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; transform: rotate(-8deg); }
 .history-status.is-success { color: #22c55e; }
 .history-status.is-skip { color: #f59e0b; }

@@ -38,7 +38,21 @@ const (
 	// 监控每 5 秒轮询一次，源目录持续写入时若每次都新建记录，
 	// 归巢历史 / 任务日志会被几十条「上传 0，跳过 N」刷满。
 	watchHistoryMergeWindow = 10 * time.Minute
+	// backupRetryRounds 是失败文件的重试轮数（首轮复制不算在内，共 1 + 2 次尝试）。
+	backupRetryRounds = 2
 )
+
+// backupRetryInterval 是失败重试每轮之间的等待时间。
+//
+// 为什么是「等一会儿再试」而不是立刻重试：备份失败绝大多数是目标端临时不可写
+// （SMB / WebDAV 抖动、对端限流、磁盘刚写满又清理出空间），
+// 立刻原样重试基本还是同一个错误，隔一段时间才有意义。
+//
+// 声明成变量而不是常量：测试需要把它压到毫秒级（10 分钟没法等），生产路径不会改写它。
+var backupRetryInterval = 10 * time.Minute
+
+// copyToTargetHook 仅供测试注入目标端抖动（第一次失败、重试成功），生产路径恒为 nil。
+var copyToTargetHook func(item sourceItem, target targetDesc) error
 
 type taskState struct {
 	Running bool
@@ -575,8 +589,16 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].relative < items[j].relative })
 
-	// 待删除的源文件：整轮复制结束后统一处理，不在复制循环里「复制一个删一个」。
-	pendingDeletes := make([]pendingSourceDelete, 0, len(items))
+	// 每个源文件这一轮的复制结果。失败的目标先只登记、不计入 stats.Failed，
+	// 等重试轮跑完再结算：重试补救成功的那份算「已备份」，不该把整轮执行拖成失败。
+	type attemptedCopy struct {
+		item sourceItem
+		size int64
+	}
+	attempted := make(map[string]attemptedCopy, len(items))
+	order := make([]string, 0, len(items))
+	// 失败清单按「目标端相对路径」聚合：重试只重跑失败的那几条目标路径。
+	failedByPath := make(map[string][]*failedTargetCopy)
 
 	for _, item := range items {
 		if s.cancelled(task.ID) {
@@ -595,48 +617,23 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 			continue
 		}
 
-		// 逐个目标复制；任一目标失败，这个源文件都不允许按完成规则删除。
-		allTargetsOK := true
-		for _, target := range targets {
-			if target.isWebdav {
-				if err := s.copyOneWebdav(task, target, item, fileInfo, stats); err != nil {
-					stats.Failed++
-					allTargetsOK = false
-					s.log(task.ID, "上传失败：%s（%v）", item.relative, err)
-					stats.recordFile(model.BackupFileEntry{
-						Path:   filepath.ToSlash(item.relative),
-						Action: model.BackupFileActionFail,
-						Size:   fileInfo.Size(),
-						Target: webdavDisplayTarget(target.raw, item.relative),
-						Note:   err.Error(),
-					})
-				}
-			} else {
-				destination := filepath.Join(target.raw, item.relative)
-				if err := s.copyOne(task, item.relative, item.absolute, destination, fileInfo, stats); err != nil {
-					stats.Failed++
-					allTargetsOK = false
-					s.log(task.ID, "复制失败：%s（%v）", item.relative, err)
-					stats.recordFile(model.BackupFileEntry{
-						Path:   filepath.ToSlash(item.relative),
-						Action: model.BackupFileActionFail,
-						Size:   fileInfo.Size(),
-						Target: destination,
-						Note:   err.Error(),
-					})
-				}
-			}
-		}
+		attempted[item.relative] = attemptedCopy{item: item, size: fileInfo.Size()}
+		order = append(order, item.relative)
 
-		// 完成规则（删除源文件）**不在循环里立即删**：多源 / 多目标时，
-		// 「复制一个删一个」会让尚未写完的目标永远拿不到这个文件，而源文件删掉就补不回来。
-		// 这里只把「本轮确实写到了所有目标」的文件登记起来，等整轮复制结束后统一删。
-		if canDeleteSources && allTargetsOK {
-			pendingDeletes = append(pendingDeletes, pendingSourceDelete{
-				relative: item.relative,
-				absolute: item.absolute,
-				size:     fileInfo.Size(),
-			})
+		// 逐个目标复制；任一目标失败，这个源文件都不允许按完成规则删除。
+		for _, target := range targets {
+			if err := s.copyToTarget(task, item, target, fileInfo, stats); err != nil {
+				display := targetDisplayPath(target, item.relative)
+				failedByPath[item.relative] = append(failedByPath[item.relative], &failedTargetCopy{
+					item:    item,
+					target:  target,
+					display: display,
+					size:    fileInfo.Size(),
+					note:    err.Error(),
+				})
+				s.log(task.ID, "备份失败：%s → %s（%v），%s后重试",
+					item.relative, display, err, retryDelayText())
+			}
 		}
 	}
 
@@ -644,6 +641,52 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 	// 中途停下的结果并不完整（sourceIndex 可能只扫了一部分），
 	// 继续收尾动作会误删源文件 / 目标端已有文件。
 	stopped := s.cancelled(task.ID)
+
+	// 失败重试必须排在删除源文件之前：重试要读的正是那份源文件，提前删掉就无从补写。
+	// 目标端恢复后补写成功的那一份，才算真正备份完成。
+	if !stopped && len(failedByPath) > 0 {
+		failedByPath = s.retryFailedCopies(task, failedByPath, stats)
+	}
+	// 重试期间同样接受停止请求，这里重新判定一次，避免带着过期的 stopped 继续收尾。
+	stopped = stopped || s.cancelled(task.ID)
+
+	// 重试过后仍失败的文件：保留源文件、逐条记进明细，并让本次执行以「失败」收尾。
+	if !stopped {
+		failedCount := 0
+		for _, name := range order {
+			for _, failed := range failedByPath[name] {
+				failedCount++
+				stats.Failed++
+				stats.recordFile(model.BackupFileEntry{
+					Path:   filepath.ToSlash(failed.item.relative),
+					Action: model.BackupFileActionFail,
+					Size:   failed.size,
+					Target: failed.display,
+					Note:   failed.note,
+				})
+			}
+		}
+		if failedCount > 0 {
+			s.log(task.ID, "%d 个文件重试后仍未备份成功，已保留源文件并记录", failedCount)
+		}
+	}
+
+	// 待删除的源文件：整轮复制（含重试）结束后统一处理，不在复制循环里「复制一个删一个」。
+	// 只有「每个目标都写成功」的文件才登记 —— 靠重试补救成功的那份同样算数。
+	pendingDeletes := make([]pendingSourceDelete, 0, len(attempted))
+	if canDeleteSources && !stopped {
+		for _, name := range order {
+			if len(failedByPath[name]) > 0 {
+				continue
+			}
+			written := attempted[name]
+			pendingDeletes = append(pendingDeletes, pendingSourceDelete{
+				relative: name,
+				absolute: written.item.absolute,
+				size:     written.size,
+			})
+		}
+	}
 
 	// 收尾动作严格按「复制 → 删除源文件 → 清理空目录 → 从目标同步删除」的顺序。
 	if !stopped && len(pendingDeletes) > 0 {
@@ -670,6 +713,101 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 	// 收尾的统计行由 execute 的 defer 统一输出（describeBackupRunSummary），
 	// 这里不再重复打一遍，避免「最近日志」里同一件事出现两行。
+}
+
+// retryFailedCopies 对「没写进某个目标」的文件做有限轮重试，返回重试后仍失败的记录。
+//
+// 粒度是「文件 × 目标」：同一个文件在其它目标上的副本已经写好，重跑它们只会把
+// 「同名跳过」的计数刷高，还可能把刚写完的那份重新覆盖一遍。
+//
+// 每轮之间等 backupRetryInterval，等待期间收到停止请求会立刻放弃剩余轮次；
+// 停止后返回的仍失败清单由调用方丢弃（不算失败、也不删源）。
+func (s *Service) retryFailedCopies(
+	task model.BackupTask,
+	failed map[string][]*failedTargetCopy,
+	stats *runStats,
+) map[string][]*failedTargetCopy {
+	for round := 1; round <= backupRetryRounds && len(failed) > 0; round++ {
+		pending := 0
+		for _, list := range failed {
+			pending += len(list)
+		}
+		s.log(task.ID, "%d 个目标未写入，%s后进行第 %d/%d 轮重试",
+			pending, retryDelayText(), round, backupRetryRounds)
+		if !s.waitRetryInterval(task.ID, round) {
+			return failed
+		}
+
+		s.setPhase(task.ID, "重试备份", fmt.Sprintf("第 %d/%d 轮", round, backupRetryRounds))
+		remaining := make(map[string][]*failedTargetCopy)
+		recovered := 0
+		for name, list := range failed {
+			kept := make([]*failedTargetCopy, 0, len(list))
+			for _, candidate := range list {
+				if s.cancelled(task.ID) {
+					kept = append(kept, candidate)
+					continue
+				}
+				info, err := os.Stat(candidate.item.absolute)
+				if err != nil {
+					candidate.note = "重试时源文件已不可读：" + err.Error()
+					kept = append(kept, candidate)
+					continue
+				}
+				if err := s.copyToTarget(task, candidate.item, candidate.target, info, stats); err != nil {
+					candidate.note = err.Error()
+					kept = append(kept, candidate)
+					continue
+				}
+				recovered++
+			}
+			if len(kept) > 0 {
+				remaining[name] = kept
+			}
+		}
+		failed = remaining
+
+		stillFailed := 0
+		for _, list := range failed {
+			stillFailed += len(list)
+		}
+		s.log(task.ID, "第 %d/%d 轮重试完成：成功 %d 个，仍失败 %d 个",
+			round, backupRetryRounds, recovered, stillFailed)
+	}
+	return failed
+}
+
+// waitRetryInterval 等待一个重试间隔，期间刷新卡片上的倒计时。
+//
+// 用「隔一小会儿起来看一眼」而不是直接 time.Sleep：停止按钮必须立刻生效，
+// 不能让人点了停止还干等十分钟。返回值表示是否等满（false = 期间被停止）。
+func (s *Service) waitRetryInterval(taskID int64, round int) bool {
+	// 刷新步长跟着间隔走：生产是每 10 分钟等一轮、每秒刷一次倒计时；
+	// 测试把间隔压到毫秒级时，步长也跟着变短，不然一轮要多等一秒。
+	step := backupRetryInterval / 10
+	if step > time.Second {
+		step = time.Second
+	}
+	if step < 10*time.Millisecond {
+		step = 10 * time.Millisecond
+	}
+
+	deadline := time.Now().Add(backupRetryInterval)
+	ticker := time.NewTicker(step)
+	defer ticker.Stop()
+
+	for {
+		if s.cancelled(taskID) {
+			return false
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return true
+		}
+		s.setPhase(taskID, "等待重试", fmt.Sprintf("第 %d/%d 轮 · %s 后开始",
+			round, backupRetryRounds, formatRetryRemaining(remaining)))
+		<-ticker.C
+	}
 }
 
 // recordRunHistory 把一次备份执行写入运行日志（run_history），
@@ -1055,6 +1193,56 @@ func sourceKey(prefix, relative string) string {
 type sourceItem struct {
 	relative string
 	absolute string
+}
+
+// failedTargetCopy 是一条「源文件没能写进某个目标」的失败记录。
+//
+// 重试的粒度是「文件 × 目标」而不是「文件」：同一个文件在其它目标上的副本已经写好了，
+// 整份重跑只会把「同名跳过」的计数刷高，还可能把刚写完的那份重新覆盖一遍。
+type failedTargetCopy struct {
+	item    sourceItem
+	target  targetDesc
+	display string
+	size    int64
+	note    string
+}
+
+// copyToTarget 按目标类型分发复制 / 上传，返回错误交给调用方决定是否登记重试。
+func (s *Service) copyToTarget(task model.BackupTask, item sourceItem, target targetDesc, info os.FileInfo, stats *runStats) error {
+	if copyToTargetHook != nil {
+		if err := copyToTargetHook(item, target); err != nil {
+			return err
+		}
+	}
+	if target.isWebdav {
+		return s.copyOneWebdav(task, target, item, info, stats)
+	}
+	return s.copyOne(task, item.relative, item.absolute, filepath.Join(target.raw, item.relative), info, stats)
+}
+
+// targetDisplayPath 是失败明细里展示的目标端路径，与上传成功的明细保持同一措辞。
+func targetDisplayPath(target targetDesc, relative string) string {
+	if target.isWebdav {
+		return webdavDisplayTarget(target.raw, relative)
+	}
+	return filepath.Join(target.raw, relative)
+}
+
+// retryDelayText 把重试间隔写成「10 分钟」这类中文，日志里比 10m0s 好读。
+func retryDelayText() string {
+	if minutes := int(backupRetryInterval / time.Minute); minutes >= 1 {
+		return fmt.Sprintf("%d 分钟", minutes)
+	}
+	return backupRetryInterval.String()
+}
+
+// formatRetryRemaining 把剩余等待时间写成「09 分 30 秒」，用于卡片上的阶段进度。
+func formatRetryRemaining(remaining time.Duration) string {
+	if remaining < 0 {
+		remaining = 0
+	}
+	total := int(remaining.Seconds())
+	return fmt.Sprintf("%02d 分 %02d 秒", total/60, total%60)
 }
 
 // isSourceDeletingRule 判断完成规则是否会删除源文件。

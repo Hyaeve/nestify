@@ -11,7 +11,7 @@
         <section class="metric-card">
           <div class="metric-card__icon metric-card__icon--primary">▦</div>
           <div class="metric-card__body">
-            <div class="metric-card__label">总日志数</div>
+            <div class="metric-card__label">总日志</div>
             <div class="metric-card__value">{{ totalLogs }}</div>
           </div>
         </section>
@@ -25,21 +25,21 @@
         <section class="metric-card metric-card--success">
           <div class="metric-card__icon metric-card__icon--success">✓</div>
           <div class="metric-card__body">
-            <div class="metric-card__label">成功数</div>
+            <div class="metric-card__label">成功</div>
             <div class="metric-card__value">{{ successLogs }}</div>
           </div>
         </section>
         <section class="metric-card metric-card--danger">
           <div class="metric-card__icon metric-card__icon--danger">!</div>
           <div class="metric-card__body">
-            <div class="metric-card__label">错误数</div>
+            <div class="metric-card__label">错误</div>
             <div class="metric-card__value">{{ failedLogs }}</div>
           </div>
         </section>
         <section class="metric-card metric-card--warning">
           <div class="metric-card__icon metric-card__icon--warning">⚠</div>
           <div class="metric-card__body">
-            <div class="metric-card__label">警告数</div>
+            <div class="metric-card__label">跳过</div>
             <div class="metric-card__value">{{ skippedLogs }}</div>
           </div>
         </section>
@@ -53,7 +53,7 @@
             <el-option label="全部级别" value="all" />
             <el-option label="成功" value="success" />
             <el-option label="错误" value="failed" />
-            <el-option label="警告" value="skip" />
+            <el-option label="跳过" value="skip" />
           </el-select>
 
           <el-select v-model="ruleTypeFilter" class="logs-toolbar__select" placeholder="类型" @change="handleFiltersChange">
@@ -184,7 +184,7 @@
                   <span>{{ logTriggerText(scope.row) }}</span>
                   <span>处理 {{ scope.row.processed_files }}</span>
                   <span>成功 {{ scope.row.success_count }}</span>
-                  <span>警告 {{ scope.row.skip_count }}</span>
+                  <span>跳过 {{ scope.row.skip_count }}</span>
                   <span>错误 {{ scope.row.failure_count }}</span>
                 </div>
               </div>
@@ -244,7 +244,7 @@
             <div class="logs-detail-summary__main">
               <div class="logs-detail-summary__title">{{ selectedLogGroup.title }}</div>
               <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
-                   右上角不再挂「成功 / 失败」标签——一条执行里成功、警告、错误本来就同在一行。 -->
+                   右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、错误本来就同在一行。 -->
               <div class="logs-detail-summary__desc">
                 <span class="detail-summary__leading">{{ selectedLogGroupLeading }}</span>
                 <span class="detail-summary__sep">·</span>
@@ -262,20 +262,6 @@
             </div>
             <div class="logs-detail-summary__tags">
               <span class="logs-mode-tag" :class="historyModeTagClass(selectedLogGroup)">{{ historyModeLabel(selectedLogGroup) }}</span>
-            </div>
-          </div>
-          <div v-if="selectedBackupDetailRows.length" class="detail-backup">
-            <div class="detail-backup__head">
-              <span class="detail-backup__title">备份详情</span>
-              <span v-if="!selectedBackupTask" class="detail-backup__hint">对应的备份规则卡片已不存在，仅展示本次执行记录</span>
-            </div>
-            <div class="detail-backup__grid">
-              <div v-for="row in selectedBackupDetailRows" :key="row.label" class="detail-backup__row">
-                <span class="detail-backup__label">{{ row.label }}</span>
-                <div class="detail-backup__values">
-                  <span v-for="(value, index) in row.values" :key="`${row.label}-${index}`" class="detail-backup__value" :title="value">{{ value }}</span>
-                </div>
-              </div>
             </div>
           </div>
           <RunDetailList :manifest="selectedRunDetailManifest" :filter-key="detailFilterKey" />
@@ -303,15 +289,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import RunDetailList from '../components/RunDetailList.vue'
-import { fetchBackups, type BackupTask } from '../api/backups'
 import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import {
   backupTriggerLabel,
-  buildBackupDetailRows,
   buildRunDetailSummarySegments,
   parseRunDetail,
-  resolveBackupDeletedCount,
-  type BackupDetailRow,
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
@@ -377,7 +359,6 @@ const logsCurrentPage = ref(1)
 const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
-const selectedBackupTask = ref<BackupTask | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
 const selectedRunDetail = ref<RunHistoryItem | null>(null)
 // 标题下统计项里点中的那一项：null = 不筛选，列出全部文件明细。
@@ -391,7 +372,7 @@ const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 警告 / 错误不再是死文本，
+// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 错误不再是死文本，
 // 而是后面的可点击统计项（见 selectedLogGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedLogGroupLeading = computed(() => {
@@ -401,7 +382,7 @@ const selectedLogGroupLeading = computed(() => {
   }
   return `${group.rule_name || '手动任务'} · ${logTriggerText(group)}`
 })
-// 统计项：成功 / 警告 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
+// 统计项：成功 / 跳过 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedLogGroupSegments = computed(() =>
   buildRunDetailSummarySegments(selectedLogGroup.value ?? {}, selectedRunDetailManifest.value),
 )
@@ -409,20 +390,6 @@ const selectedLogGroupSegments = computed(() =>
 function toggleDetailFilter(key: RunDetailSummaryKey) {
   detailFilterKey.value = detailFilterKey.value === key ? null : key
 }
-// 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
-const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
-  const group = selectedLogGroup.value
-  if (!group || group.archive_mode !== 'backup') {
-    return []
-  }
-  return buildBackupDetailRows(selectedBackupTask.value, {
-    triggerMode: group.trigger_mode,
-    deletedCount: resolveBackupDeletedCount(group),
-    successCount: group.success_count,
-    skipCount: group.skip_count,
-    failureCount: group.failure_count,
-  })
-})
 
 async function loadHistory() {
   loading.value = true
@@ -608,21 +575,6 @@ function buildLogTreeRows(items: RunHistoryItem[]): LogTreeRow[] {
   })
 }
 
-// 备份任务的详情需要现场拉取对应的备份规则卡片信息（源/目标/删除策略等）。
-async function loadSelectedBackupTask(row: LogTreeRow) {
-  selectedBackupTask.value = null
-  if (row.archive_mode !== 'backup' || row.rule_id == null) {
-    return
-  }
-  try {
-    const payload = await fetchBackups()
-    const items = payload.data?.items ?? []
-    selectedBackupTask.value = items.find((task) => task.id === row.rule_id) ?? null
-  } catch {
-    selectedBackupTask.value = null
-  }
-}
-
 // 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
 // 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
 async function loadSelectedRunDetail(row: LogTreeRow) {
@@ -638,18 +590,16 @@ async function loadSelectedRunDetail(row: LogTreeRow) {
   }
 }
 
-// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 备份规则信息 + 文件级执行明细。
+// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 文件级执行明细。
+// 备份任务的规则卡片（源 / 目标 / 扫描配置 / 删除策略）不在这里重复一遍：
+// 那一整块就是备份卡片本身，照搬过来只会把明细挤下去。
 function openLogDetailDialog(row: LogTreeRow) {
   if (!row.is_group) return
   selectedLogGroup.value = row
-  selectedBackupTask.value = null
   selectedRunDetail.value = null
   // 换一条记录就回到「不筛选」，免得把上一条的筛选态带过来。
   detailFilterKey.value = null
   logDetailDialogVisible.value = true
-  if (row.archive_mode === 'backup') {
-    void loadSelectedBackupTask(row)
-  }
   void loadSelectedRunDetail(row)
 }
 
@@ -1182,68 +1132,6 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况（同样是不伸缩的顶块） */
-.detail-backup {
-  flex: 0 0 auto;
-  margin-bottom: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  background: var(--el-bg-color);
-}
-
-.detail-backup__head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.detail-backup__title {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0975b8;
-}
-
-.detail-backup__hint {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.detail-backup__grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-backup__row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.detail-backup__label {
-  flex: 0 0 88px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
-}
-
-.detail-backup__values {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.detail-backup__value {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-primary);
-  word-break: break-all;
 }
 
 .logs-message {
