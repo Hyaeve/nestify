@@ -3523,7 +3523,9 @@ onBeforeUnmount(() => {
    （那要求 el-table 是它的后代，永远匹配不上）。 */
 .history-tree-table :deep(th:first-child .cell),
 .history-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
-.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; }
+/* 折叠任务列的任务条目（标题 + 副行）用鸿蒙字体，见 styles/index.scss 顶部的 @font-face。
+   只作用于这张折叠表（平铺表的行是另一套标记），不动页面其它文字。 */
+.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; font-family: var(--font-harmony); }
 .history-detail-card__title { font-weight: 700; color: var(--el-text-color-primary); }
 .history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
 /* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，

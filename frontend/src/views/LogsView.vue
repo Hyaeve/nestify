@@ -1103,6 +1103,8 @@ onMounted(async () => {
 .logs-tree-table :deep(th:first-child .cell),
 .logs-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
 
+/* 折叠任务列的任务条目（标题 + 副行）用鸿蒙字体，见 styles/index.scss 顶部的 @font-face。
+   只作用于这张折叠表（平铺表的行是另一套标记），不动页面其它文字。 */
 .logs-detail-card {
   display: flex;
   flex-direction: column;
@@ -1113,6 +1115,7 @@ onMounted(async () => {
   background: transparent;
   border: 0;
   cursor: pointer;
+  font-family: var(--font-harmony);
 }
 
 .logs-detail-card__title {

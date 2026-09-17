@@ -64,3 +64,34 @@ func TestStaticRoutesCacheControl(t *testing.T) {
 		}
 	}
 }
+
+// 自托管的鸿蒙字体（frontend/src/assets/fonts）也走同一条静态路由，但 Go 标准库的 mime 表里
+// **没有** woff / woff2 —— 不显式注册的话 http.ServeFile 会嗅探文件头，把字体发成
+// `application/octet-stream`（Chrome 能忍，Safari 对字体 MIME 更挑），所以这里把两头都锁住。
+func TestStaticRoutesFontMIME(t *testing.T) {
+	webDir := t.TempDir()
+	fontPath := filepath.Join(webDir, "assets", "HarmonyOS_Sans_SC_Medium-BIwdPWv0.woff2")
+	if err := os.MkdirAll(filepath.Dir(fontPath), 0o755); err != nil {
+		t.Fatalf("创建目录失败：%v", err)
+	}
+	if err := os.WriteFile(fontPath, []byte("wOF2-font-bytes"), 0o644); err != nil {
+		t.Fatalf("写入字体失败：%v", err)
+	}
+
+	mux := http.NewServeMux()
+	registerStaticRoutes(mux, webDir)
+
+	request := httptest.NewRequest(http.MethodGet, "/assets/HarmonyOS_Sans_SC_Medium-BIwdPWv0.woff2", nil)
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("状态码期望 200，实际 %d", recorder.Code)
+	}
+	if actual := recorder.Header().Get("Content-Type"); actual != "font/woff2" {
+		t.Fatalf("Content-Type 期望 %q，实际 %q", "font/woff2", actual)
+	}
+	if actual := recorder.Header().Get("Cache-Control"); actual != "public, max-age=31536000, immutable" {
+		t.Fatalf("Cache-Control 期望 %q，实际 %q", "public, max-age=31536000, immutable", actual)
+	}
+}

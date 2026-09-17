@@ -1,3 +1,18 @@
+/* 鸿蒙字体（HarmonyOS Sans SC）—— 只给「折叠任务」列的任务条目用（归巢历史 / 运行日志），
+   不铺到全站。官方字体，华为授权免费商用（含商用），此处自托管 Medium 单档。
+   - `font-display: swap`：4.3MB 的 CJK 字体不可能等它下完再出字，先按回退字体渲染再换过来。
+   - 声明 `font-weight: 500`（这一档的真实字重）：标题要 700 时由浏览器合成加粗，正文行按 400
+     也会命中这一档（单档字体不做向下的字重合成），所以两级层次还在。
+   - 路径走 src/assets：Vite 会输出成带内容 hash 的 `/assets/*.woff2`，命中后端 static 路由的
+     immutable 长缓存（public/ 下的资源只能拿到 no-cache）。 */
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/HarmonyOS_Sans_SC_Medium.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light;
   --bg-app: #f5f7fb;
@@ -13,6 +28,9 @@
   --text-primary: #26323f;
   --text-secondary: #8b97a8;
   --text-tertiary: #94a3b8;
+  /* 「折叠任务」列的任务条目专用字体（鸿蒙字体，见文件顶部的 @font-face）。
+     主题只换色不换字，所以写在 :root 里、appletv 主题一并继承。 */
+  --font-harmony: 'HarmonyOS Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --border-color: rgba(148, 163, 184, 0.18);
   --accent-color: #209fee;
   --accent-soft: rgba(32, 159, 238, 0.1);

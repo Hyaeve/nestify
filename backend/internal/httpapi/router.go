@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1148,6 +1149,12 @@ func (a *apiHandler) handleRunHistoryDetail(w http.ResponseWriter, r *http.Reque
 }
 
 func registerStaticRoutes(mux *http.ServeMux, webDir string) {
+
+	// Go 标准库的 mime 表里**没有** woff / woff2（`mime.TypeByExtension(".woff2")` 返回空串），
+	// http.ServeFile 于是嗅探文件头，把自托管的鸿蒙字体（frontend/src/assets/fonts）发成
+	// `application/octet-stream`。Chrome 能容忍，但 Safari 对字体 MIME 更挑，显式注册一下。
+	mime.AddExtensionType(".woff2", "font/woff2")
+	mime.AddExtensionType(".woff", "font/woff")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
