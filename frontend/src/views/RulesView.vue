@@ -3533,10 +3533,12 @@ onBeforeUnmount(() => {
 .rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: #098ee1; border-radius: 999px; }
 .rules-tabs__item--naming.is-active { color: #0f9f87; }
 .rules-tabs__item--naming.is-active::after { background: #0f9f87; }
-/* 归巢历史单独走琥珀金，与规则类页签的青蓝区分开（轮 69 由 #d99a00 提亮到 #e8a90c）。 */
-.rules-tabs__item--history:hover { color: #e8a90c; }
-.rules-tabs__item--history.is-active { color: #e8a90c; }
-.rules-tabs__item--history.is-active::after { background: #e8a90c; }
+/* 归巢历史单独走暖橙，与规则类页签的青蓝区分开。
+   轮 69 由 #d99a00 提亮到 #e8a90c（琥珀金），轮 71 再改成暖橙 #f07f16
+   —— 色相 28°（琥珀 43° → 暖橙 28°），明度 51% / 饱和 88%，落在「清透」区间。 */
+.rules-tabs__item--history:hover { color: #f07f16; }
+.rules-tabs__item--history.is-active { color: #f07f16; }
+.rules-tabs__item--history.is-active::after { background: #f07f16; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
