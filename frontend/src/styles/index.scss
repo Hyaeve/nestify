@@ -457,6 +457,13 @@ body {
   line-height: 1.6;
 }
 
+/* 明细条的悬浮提示「移开就收回」：hide-after=0 只是立刻触发关闭，视觉上还挂着一截
+   EP 默认的 0.3s 淡出；这里把淡入淡出压到 0.14s，扫过整列时提示不会拖泥带水。
+   transition 类挂在内容元素上（不是 popper 根），所以要写到 .el-popper__content。 */
+.el-popper.run-detail-tip .el-popper__content {
+  transition-duration: 0.14s;
+}
+
 .el-popper.run-detail-tip .run-detail-tip__path {
   color: var(--el-text-color-primary);
   font-weight: 600;

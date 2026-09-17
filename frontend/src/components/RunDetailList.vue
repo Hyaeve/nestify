@@ -15,7 +15,18 @@
 
       <el-table-column label="源路径" min-width="360">
         <template #default="scope">
-          <el-tooltip placement="top" effect="light" popper-class="run-detail-tip" :show-after="150">
+          <!-- 悬浮提示：在**条目下方**弹出，鼠标停够 0.5s 才出现（扫过整列时不会一路弹），
+               移开立刻收回（hide-after=0，EP 默认还要再等 200ms）。enterable=false 让指针一旦
+               离开条目就关闭——只做「看一眼完整路径」的用途，不需要能点进提示框里。 -->
+          <el-tooltip
+            placement="bottom"
+            effect="light"
+            popper-class="run-detail-tip"
+            :show-after="500"
+            :hide-after="0"
+            :enterable="false"
+            :offset="6"
+          >
             <template #content>
               <div class="run-detail-tip__path">{{ scope.row.path }}</div>
               <div v-if="scope.row.target" class="run-detail-tip__target">→ {{ scope.row.target }}</div>
