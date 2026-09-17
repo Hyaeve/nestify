@@ -1,13 +1,13 @@
 <template>
   <div v-if="manifest" class="run-detail">
     <!-- 文件级明细：源路径 / 目标路径左右分列，一行一条（悬浮看完整路径与备注）。
-         顶部那行「面板标题 + 动作页签 + 跳过统计」已按需求去掉：动作数量在弹窗标题下方
-         的小字统计里给，这里只负责把条目尽量多地铺出来。 -->
+         窗口高度固定，这里不翻页——整份明细一次性铺出来，靠滚动条上下查看，
+         所以行高与内边距都压到最小，同样高度里尽量多显示几行。 -->
     <el-table
-      :data="pagedFiles"
+      :data="files"
       class="run-detail__table"
       size="small"
-      max-height="440"
+      height="100%"
       empty-text="本次执行没有文件级明细"
     >
       <el-table-column label="源路径" min-width="300">
@@ -62,21 +62,11 @@
         </template>
       </el-table-column>
     </el-table>
-
-    <div v-if="files.length > filePageSize" class="run-detail__pagination">
-      <el-pagination
-        v-model:current-page="currentPage"
-        background
-        layout="total, prev, pager, next"
-        :page-size="filePageSize"
-        :total="files.length"
-      />
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { Document, Folder } from '@element-plus/icons-vue'
 
 import {
@@ -89,23 +79,11 @@ import {
   type RunFileAction,
 } from '../utils/backupDetail'
 
-const props = withDefaults(
-  defineProps<{
-    manifest: BackupFileManifest | null
-    pageSize?: number
-  }>(),
-  { pageSize: 100 },
-)
-
-const filePageSize = props.pageSize
-const currentPage = ref(1)
+const props = defineProps<{
+  manifest: BackupFileManifest | null
+}>()
 
 const files = computed(() => props.manifest?.files ?? [])
-
-const pagedFiles = computed(() => {
-  const start = (currentPage.value - 1) * filePageSize
-  return files.value.slice(start, start + filePageSize)
-})
 
 // 源 / 目标列只显示「配置根路径下一级」开始的相对路径：绝对路径太长，两列并排根本读不出差别；
 // 完整路径放在悬浮提示里（见模板里的 el-tooltip）。
@@ -116,14 +94,6 @@ function displaySource(row: BackupFileEntry) {
 function displayTarget(row: BackupFileEntry) {
   return stripDetailRoot(row.target ?? '', props.manifest?.targetRoots ?? [])
 }
-
-// 换一条记录就回到第一页，免得停留在上一份载荷的页码上。
-watch(
-  () => props.manifest,
-  () => {
-    currentPage.value = 1
-  },
-)
 
 function actionLabel(action: RunFileAction) {
   return backupFileActionLabel(action)
@@ -139,17 +109,32 @@ function formatSize(size?: number) {
 </script>
 
 <style scoped>
+/* 竖直方向被弹窗正文的 flex 分配高度：自己撑满剩余空间，把余下的高度全给表格。 */
 .run-detail {
-  margin-bottom: 4px;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 
+/* 表格高度由组件的 height="100%" 写成内联样式，这里再兜一层 flex，保证它是唯一的伸缩项。 */
 .run-detail__table {
+  flex: 1 1 auto;
   width: 100%;
+  min-height: 0;
 }
 
-/* 一行一条：把单元格上下内边距压到最小，同样高度里能多铺几行。 */
+/* 一行一条：把单元格的上下内边距压到最小，同样高度里能多铺几行。
+   注意有**两层**上下内边距：`td.el-table__cell` 一层，内层 `.cell` 一层；全局
+   `styles/index.scss` 的 `.el-table .cell { padding-top/bottom: var(--table-cell-padding-y) }`
+   给内层留了 12px，只压外层的话行高仍会停在 58px（明细表要单独清零）。 */
 .run-detail__table :deep(.el-table__cell) {
-  padding: 5px 0;
+  padding: 4px 0;
+}
+
+.run-detail__table :deep(.cell) {
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .run-detail__cell {
@@ -238,11 +223,5 @@ function formatSize(size?: number) {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
-}
-
-.run-detail__pagination {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
 }
 </style>

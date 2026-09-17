@@ -238,7 +238,7 @@
         </el-table>
       </div>
 
-      <el-dialog v-model="logDetailDialogVisible" class="logs-detail-dialog" title="任务详情" width="1080px" destroy-on-close>
+      <el-dialog v-model="logDetailDialogVisible" class="logs-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
         <template v-if="selectedLogGroup">
           <div class="logs-detail-summary">
             <div>
@@ -1120,30 +1120,33 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
+/* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
+   让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
 .logs-detail-summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex: 0 0 auto;
   gap: 18px;
-  margin-bottom: 16px;
-  padding: 16px;
+  margin-bottom: 8px;
+  padding: 8px 14px;
   border: 1px solid #eef2f7;
-  border-radius: 18px;
+  border-radius: 14px;
   background: #f8fafc;
 }
 
 .logs-detail-summary__title {
   color: #0f172a;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
 }
 
 .logs-detail-summary__desc {
-  margin-top: 6px;
+  margin-top: 3px;
   color: #64748b;
   font-size: 13px;
   font-weight: 600;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .logs-detail-summary__tags {
@@ -1153,12 +1156,13 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
+/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况（同样是不伸缩的顶块） */
 .detail-backup {
-  margin-bottom: 16px;
-  padding: 14px 16px;
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+  padding: 10px 14px;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--el-bg-color);
 }
 
@@ -1167,7 +1171,7 @@ onMounted(async () => {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .detail-backup__title {

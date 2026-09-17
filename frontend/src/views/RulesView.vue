@@ -199,7 +199,7 @@
           </el-table-column>
         </el-table>
 
-        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" destroy-on-close>
+        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
           <template v-if="selectedHistoryGroup">
             <div class="detail-dialog-summary">
               <div>
@@ -3510,13 +3510,15 @@ onBeforeUnmount(() => {
 .history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; }
 .history-detail-card__title { font-weight: 700; color: var(--el-text-color-primary); }
 .history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
-.detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 16px; padding: 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 18px; background: var(--el-fill-color-extra-light); }
-.detail-dialog-summary__title { font-size: 16px; font-weight: 800; color: var(--el-text-color-primary); }
-.detail-dialog-summary__desc { margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.6; color: var(--el-text-color-secondary); }
+/* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
+   让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
+.detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; flex: 0 0 auto; gap: 18px; margin-bottom: 8px; padding: 8px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-fill-color-extra-light); }
+.detail-dialog-summary__title { font-size: 15px; font-weight: 800; color: var(--el-text-color-primary); }
+.detail-dialog-summary__desc { margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--el-text-color-secondary); }
 .detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况 */
-.detail-backup { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--el-border-color-lighter); border-radius: 16px; background: var(--el-bg-color); }
-.detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+/* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况（同样是不伸缩的顶块） */
+.detail-backup { flex: 0 0 auto; margin-bottom: 8px; padding: 10px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-bg-color); }
+.detail-backup__head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
 .detail-backup__title { font-size: 14px; font-weight: 800; color: #0975b8; }
 .detail-backup__hint { font-size: 12px; color: var(--el-text-color-secondary); }
 .detail-backup__grid { display: flex; flex-direction: column; gap: 8px; }
