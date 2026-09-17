@@ -157,12 +157,20 @@ func TestExecuteStrmRuleRecordsRunDetail(t *testing.T) {
 		t.Fatalf("首次生成的备注应为「新建」，实际 %q", strmEntries[0].Note)
 	}
 
+	// 元数据（封面 / 字幕 / nfo）一律合并成一条汇总明细：逐个文件列一条会把
+	// 归巢历史 / 任务日志的详情面板撑满。数量仍按真实值记在 counts 里。
 	metadataEntries := detailEntriesByAction(detail, model.RunFileActionMetadata)
 	if len(metadataEntries) != 1 {
-		t.Fatalf("元数据明细条数 = %d, want 1", len(metadataEntries))
+		t.Fatalf("元数据明细应合并为 1 条汇总，实际 %d 条", len(metadataEntries))
 	}
-	if want := filepath.Join(targetDir, "剧集", "S01E01.srt"); metadataEntries[0].Target != want {
-		t.Fatalf("元数据明细 Target = %q, want %q", metadataEntries[0].Target, want)
+	if got := detail.Counts[model.RunFileActionMetadata]; got != 1 {
+		t.Fatalf("元数据 counts = %d, want 1（真实数量）", got)
+	}
+	if want := targetDir; metadataEntries[0].Target != want {
+		t.Fatalf("元数据汇总 Target = %q, want %q", metadataEntries[0].Target, want)
+	}
+	if want := "同步 1 个元数据文件（封面 / 字幕 / nfo）"; metadataEntries[0].Note != want {
+		t.Fatalf("元数据汇总 Note = %q, want %q", metadataEntries[0].Note, want)
 	}
 
 	// 未命中后缀的文件只计入跳过，不产生明细。
@@ -171,6 +179,61 @@ func TestExecuteStrmRuleRecordsRunDetail(t *testing.T) {
 	}
 	if len(detailEntriesByAction(detail, model.BackupFileActionSkip)) != 0 {
 		t.Fatal("跳过不应产生逐条明细")
+	}
+}
+
+// TestExecuteStrmRuleAggregatesMetadataEntries 锁定「元数据不逐条列」：
+// 一次同步多个封面 / 字幕 / nfo 时，明细里只允许出现一条汇总（数量写进 counts 与备注），
+// 运行日志同样只留一行汇总 —— 原来是「下载一个元数据文件就一条目」，太占地方。
+func TestExecuteStrmRuleAggregatesMetadataEntries(t *testing.T) {
+	sourceDir := t.TempDir()
+	targetDir := t.TempDir()
+
+	writeStrmFixture(t, filepath.Join(sourceDir, "S01E01.mkv"), "video-bytes")
+	for _, name := range []string{"S01E01.srt", "S01E02.srt", "poster.jpg", "fanart.jpg", "tvshow.nfo"} {
+		writeStrmFixture(t, filepath.Join(sourceDir, name), name+"-bytes")
+	}
+
+	service := NewService(nil)
+	runID := "run-merge-metadata"
+	stats, err := service.executeStrmRule(runID, ExecuteRuleRequest{
+		Filters:         []string{"mkv"},
+		MetadataFilters: []string{"srt", "jpg", "nfo"},
+	}, sourceDir, targetDir, &executionStats{})
+	if err != nil {
+		t.Fatalf("executeStrmRule 出错: %v", err)
+	}
+	if stats.MetadataCount != 5 {
+		t.Fatalf("MetadataCount = %d, want 5", stats.MetadataCount)
+	}
+
+	detail := decodeRunDetail(t, &stats)
+	metadataEntries := detailEntriesByAction(detail, model.RunFileActionMetadata)
+	if len(metadataEntries) != 1 {
+		t.Fatalf("元数据明细条数 = %d, want 1（多个元数据文件应合并为一条汇总）", len(metadataEntries))
+	}
+	if got := detail.Counts[model.RunFileActionMetadata]; got != 5 {
+		t.Fatalf("元数据 counts = %d, want 5（页签仍显示真实数量）", got)
+	}
+	if want := "同步 5 个元数据文件（封面 / 字幕 / nfo）"; metadataEntries[0].Note != want {
+		t.Fatalf("元数据汇总 Note = %q, want %q", metadataEntries[0].Note, want)
+	}
+	if metadataEntries[0].Target != targetDir {
+		t.Fatalf("元数据汇总 Target = %q, want %q", metadataEntries[0].Target, targetDir)
+	}
+
+	// 运行日志同样不能每个元数据文件一行。
+	summaryLines := 0
+	for _, entry := range service.ListRunLogs(runID) {
+		if strings.Contains(entry.Message, "metadata ") && strings.Contains(entry.Message, "->") {
+			t.Fatalf("不应逐条打印元数据搬运日志：%q", entry.Message)
+		}
+		if strings.HasPrefix(entry.Message, "同步 ") && strings.Contains(entry.Message, "元数据文件") {
+			summaryLines++
+		}
+	}
+	if summaryLines != 1 {
+		t.Fatalf("元数据汇总日志行数 = %d, want 1", summaryLines)
 	}
 }
 

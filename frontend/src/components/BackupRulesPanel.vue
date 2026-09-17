@@ -1,12 +1,14 @@
 <template>
   <el-card v-show="visible" class="page-card rules-card backup-rules-card">
     <template #header>
+      <!-- 页头结构与其它规则页保持一致：「+ 添加备份」独占右上角（和其他页面的
+           「+ 添加规则」同一位置、同一支样式）；「资源限制」是次要操作，收在标题旁边。 -->
       <div class="rules-card__header">
-        <div class="rules-card__title">备份规则</div>
-        <div class="rules-card__header-actions">
-          <el-button round @click="openResourceLimitDialog">资源限制</el-button>
-          <el-button type="primary" round @click="openCreateWizard">+ 添加备份</el-button>
+        <div class="rules-card__header-main">
+          <div class="rules-card__title">备份规则</div>
+          <el-button class="rules-card__header-secondary" round @click="openResourceLimitDialog">资源限制</el-button>
         </div>
+        <el-button class="add-rule-button" type="primary" round @click="openCreateWizard">+ 添加备份</el-button>
       </div>
     </template>
 
@@ -1232,10 +1234,27 @@ function statusTagType(status: string): 'success' | 'danger' | 'warning' | 'info
   gap: 16px;
 }
 
-.rules-card__header-actions {
+.rules-card__header-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 「资源限制」是次要操作：贴着标题放，把右上角让给「+ 添加备份」，
+   位置与归档 / 净化 / 链路 / 命名四页的添加按钮完全一致。 */
+.rules-card__header-secondary {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: transparent;
+}
+
+.rules-card__header-secondary:hover {
+  color: #1e293b;
+  background: rgba(148, 163, 184, 0.2);
+  border-color: transparent;
 }
 
 .rules-card__title {

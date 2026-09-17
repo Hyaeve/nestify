@@ -24,6 +24,16 @@ type runDetailCollector struct {
 	counts    map[string]int
 	total     int
 	truncated bool
+	// aggregate 记录「逐条列出太占地方」的动作的累计值（数量 + 总大小），
+	// 收尾时由 summarizeAggregated 压成一条汇总明细。当前用于 strm 的元数据同步：
+	// 一次任务常见成百上千个封面 / 字幕 / nfo，逐条列出只会把明细面板撑满。
+	aggregate map[string]runAggregate
+}
+
+// runAggregate 是某个动作的汇总累计值。
+type runAggregate struct {
+	count int
+	bytes int64
 }
 
 func newRunDetailCollector(kind string) *runDetailCollector {
@@ -72,6 +82,68 @@ func (c *runDetailCollector) recordSkip(count int) {
 	defer c.mu.Unlock()
 	c.counts[model.BackupFileActionSkip] += count
 	c.total += count
+}
+
+// addAggregated 累计一个「逐条列出太占地方」的动作（当前用于 strm 的元数据同步）。
+//
+// 与 record 的区别：record 一条文件一条明细，这里只累加数量与总大小，
+// 收尾时由 summarizeAggregated 压成一条汇总明细 —— 一次 strm 任务可能同步
+// 成百上千个封面 / 字幕 / nfo，逐条列出来会把明细面板整个撑满。
+// 自带锁：strm 的多线程下载路径会并发调用。
+func (c *runDetailCollector) addAggregated(action string, size int64) {
+	if c == nil {
+		return
+	}
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.aggregate == nil {
+		c.aggregate = make(map[string]runAggregate, 1)
+	}
+	current := c.aggregate[action]
+	current.count++
+	current.bytes += size
+	c.aggregate[action] = current
+}
+
+// summarizeAggregated 把累计结果写成一条汇总明细，并在采集器里清掉该动作的累计值。
+//
+// counts 仍按真实数量累计（前端动作页签照旧显示「同步元数据 N」），
+// files 里只留 build 造出来的这一条，明细面板因此只占一行。
+func (c *runDetailCollector) summarizeAggregated(action string, build func(count int, bytes int64) model.RunFileEntry) {
+	if c == nil || build == nil {
+		return
+	}
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	aggregated, ok := c.aggregate[action]
+	if !ok || aggregated.count <= 0 {
+		return
+	}
+	delete(c.aggregate, action)
+
+	entry := build(aggregated.count, aggregated.bytes)
+	entry.Action = action
+	entry.Path = strings.TrimSpace(entry.Path)
+	if entry.Path == "" {
+		// 汇总条目必须有 Path（前端按它渲染「文件」列），缺了就给个语义占位。
+		entry.Path = "元数据文件"
+	}
+
+	c.counts[action] += aggregated.count
+	c.total += aggregated.count
+	c.files = append(c.files, entry)
 }
 
 // buildJSON 序列化明细载荷；没有任何明细时返回空串，

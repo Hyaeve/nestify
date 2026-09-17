@@ -434,6 +434,8 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	}
 	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
 	detail.recordSkip(stats.SkipCount)
+	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
+	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -590,7 +592,8 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	}
 
 	targetPath := filepath.Join(targetRoot, relPath)
-	skip, existed, stateErr := strmMetadataTargetState(targetPath)
+	// 元数据不再逐条记明细，覆盖与否只体现在「这次落了多少个」里，故不取 existed。
+	skip, _, stateErr := strmMetadataTargetState(targetPath)
 	if stateErr != nil {
 		stats.FailureCount++
 		stats.Detail.record(model.RunFileEntry{
@@ -604,7 +607,8 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	}
 	if skip {
 		stats.SkipCount++
-		s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
+		// 已存在的元数据只计数、不逐条打印：第二次跑全量时每个封面 / 字幕都会命中这里，
+		// 逐条写日志只会把运行日志刷满（明细同理，见 executeStrmRule 的汇总）。
 		return
 	}
 
@@ -634,18 +638,10 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	stats.ProcessedFiles++
 	stats.SuccessCount++
 	stats.MetadataCount++
-	stats.Detail.record(model.RunFileEntry{
-		Path:   sourcePath,
-		Action: model.RunFileActionMetadata,
-		Target: targetPath,
-		Size:   fileSizeOrZero(sourcePath),
-		Note:   describeStrmWrite(existed),
-	})
-	if existed {
-		s.appendLog(runID, "info", fmt.Sprintf("overwrote metadata %s -> %s", targetPath, sourcePath))
-	} else {
-		s.appendLog(runID, "info", fmt.Sprintf("copied metadata %s -> %s", targetPath, sourcePath))
-	}
+	// 元数据只累计、不逐条记明细与日志：一次 strm 任务常见成百上千个封面 / 字幕 / nfo，
+	// 逐条记录会把「归巢历史 / 任务日志」的任务详情撑满（用户反馈「太占地方」）。
+	// 收尾时由 executeStrmRule 压成一条汇总明细 + 一行汇总日志。
+	stats.Detail.addAggregated(model.RunFileActionMetadata, fileSizeOrZero(sourcePath))
 }
 
 // strmMetadataTargetState 判断目标端已有的元数据实体文件该怎么处理，返回 (skip, existed, err)：
@@ -775,6 +771,38 @@ func describeMetadataCount(count int) string {
 		return ""
 	}
 	return fmt.Sprintf("、同步 %d 个元数据文件", count)
+}
+
+// describeMetadataSummary 是「元数据同步」的汇总文案，明细条目与运行日志共用。
+//
+// 元数据（封面 / 字幕 / nfo）是一次同步几百上千个的辅助文件：逐个文件记一条明细、
+// 写一行日志，会让归巢历史 / 任务日志的任务详情被这些条目撑满（用户反馈「太占地方」），
+// 所以在链路收尾时只留这一条。
+func describeMetadataSummary(count int) string {
+	return fmt.Sprintf("同步 %d 个元数据文件（封面 / 字幕 / nfo）", count)
+}
+
+// recordStrmMetadataSummary 在 strm 链路收尾时，把本次同步的元数据文件压成
+// 「一条汇总明细 + 一行汇总日志」。
+//
+// 明细：counts[metadata] 记真实数量（前端「同步元数据」页签照旧显示 N），
+// Files 里只有一条，行内写明数量与总大小、源目录与目标目录。
+func (s *Service) recordStrmMetadataSummary(runID string, detail *runDetailCollector, stats *executionStats, sourceDir, targetDir string) {
+	if detail == nil || stats == nil || stats.MetadataCount <= 0 {
+		return
+	}
+	summary := describeMetadataSummary(stats.MetadataCount)
+	detail.summarizeAggregated(model.RunFileActionMetadata, func(count int, bytes int64) model.RunFileEntry {
+		return model.RunFileEntry{
+			Path:   sourceDir,
+			Action: model.RunFileActionMetadata,
+			Target: targetDir,
+			Size:   bytes,
+			Note:   summary,
+			Dir:    true,
+		}
+	})
+	s.appendLog(runID, "info", summary)
 }
 
 func strmTargetPath(rootPath, sourcePath, targetRoot string) (string, error) {

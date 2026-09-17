@@ -131,6 +131,8 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	}
 	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
 	detail.recordSkip(stats.SkipCount)
+	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
+	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -519,7 +521,7 @@ func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client
 	}
 	targetPath := filepath.Join(targetRoot, filepath.FromSlash(relative))
 
-	skip, existed, stateErr := strmMetadataTargetState(targetPath)
+	skip, _, stateErr := strmMetadataTargetState(targetPath)
 	if stateErr != nil {
 		s.appendLog(runID, "error", fmt.Sprintf("inspect metadata target %s failed: %v", targetPath, stateErr))
 		stats.Detail.record(model.RunFileEntry{
@@ -531,7 +533,8 @@ func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client
 		return strmMetadataFailed
 	}
 	if skip {
-		s.appendLog(runID, "info", fmt.Sprintf("skipped existing metadata target %s", targetPath))
+		// 已存在的元数据只计数、不逐条打印：第二次跑全量时每个封面 / 字幕都会命中这里，
+		// 逐条写日志只会把运行日志刷满（明细同理，见 recordStrmMetadataSummary）。
 		return strmMetadataSkipped
 	}
 
@@ -546,13 +549,11 @@ func (s *Service) downloadStrmMetadata(ctx context.Context, runID string, client
 		return strmMetadataFailed
 	}
 
-	stats.Detail.record(model.RunFileEntry{
-		Path:   entryPath,
-		Action: model.RunFileActionMetadata,
-		Target: targetPath,
-		Note:   describeStrmWrite(existed),
-	})
-	s.appendLog(runID, "info", fmt.Sprintf("downloaded metadata %s -> %s", entryPath, targetPath))
+	// 元数据只累计、不逐条记明细与日志：一次 strm 任务常见成百上千个封面 / 字幕 / nfo，
+	// 逐条记录会把「归巢历史 / 任务日志」的任务详情撑满（用户反馈「太占地方」）。
+	// 收尾时由 executeWebdavStrmRule 压成一条汇总明细 + 一行汇总日志。
+	// addAggregated 自带锁，多线程下载路径可以安全调用。
+	stats.Detail.addAggregated(model.RunFileActionMetadata, fileSizeOrZero(targetPath))
 	return strmMetadataCopied
 }
 
