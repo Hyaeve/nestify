@@ -3534,11 +3534,13 @@ onBeforeUnmount(() => {
 .rules-tabs__item--naming.is-active { color: #0f9f87; }
 .rules-tabs__item--naming.is-active::after { background: #0f9f87; }
 /* 归巢历史单独走暖橙，与规则类页签的青蓝区分开。
-   轮 69 由 #d99a00 提亮到 #e8a90c（琥珀金），轮 71 再改成暖橙 #f07f16
-   —— 色相 28°（琥珀 43° → 暖橙 28°），明度 51% / 饱和 88%，落在「清透」区间。 */
-.rules-tabs__item--history:hover { color: #f07f16; }
-.rules-tabs__item--history.is-active { color: #f07f16; }
-.rules-tabs__item--history.is-active::after { background: #f07f16; }
+   沿革：轮 69 #d99a00 → #e8a90c（琥珀金），轮 71 暖橙 #f07f16，轮 72 定稿 #f2a65a。
+   橙色在 L51 的**感知亮度明显低于同明度的蓝**，看着就比旁边页签"沉"——所以「提亮 + 降饱和」
+   双管齐下：明度 51% → 65%、饱和 88% → 85%，色相仍锁在 30° 暖橙区间
+   —— 直观（一眼还是橙）、不辣眼（压了饱和）、清透（提了明度）。 */
+.rules-tabs__item--history:hover { color: #f2a65a; }
+.rules-tabs__item--history.is-active { color: #f2a65a; }
+.rules-tabs__item--history.is-active::after { background: #f2a65a; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }

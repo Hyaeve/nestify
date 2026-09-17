@@ -5,7 +5,6 @@
         <img class="brand__logo" src="/nestify-logo.png" alt="Nestify logo" />
         <div class="brand__meta">
           <div class="brand__name">Nestify</div>
-          <div class="brand__version">v8.0</div>
         </div>
       </div>
       <div class="aside-scroll">
@@ -296,13 +295,6 @@ async function handleLogout() {
   font-size: 16px;
   font-weight: 800;
   line-height: 1.1;
-}
-
-.brand__version {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  letter-spacing: 0.08em;
 }
 
 .aside-scroll {
