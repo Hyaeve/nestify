@@ -182,14 +182,74 @@ export function runDetailTitle(kind?: string): string {
   return runDetailTitles[(kind || '').trim()] ?? '执行明细'
 }
 
-// describeRunDetailCounts 生成「Strm N · 元数据 N」这类明细构成文案，供任务详情弹窗
-// 标题下的小字统计使用（明细面板已去掉动作页签，这些数目只能在这里给）。
-// 目前只有 strm 链路需要区分这两类动作，其它链路返回空串、不占篇幅。
-export function describeRunDetailCounts(manifest: BackupFileManifest | null): string {
-  if (!manifest || manifest.kind.trim() !== 'strm') {
-    return ''
+// ---------------------------------------------------------------------------
+// 任务详情弹窗标题下的统计项：每一项同时是下面文件明细的筛选入口
+// ---------------------------------------------------------------------------
+
+// 统计项标识。成功 / 警告 / 错误 来自运行记录本身（run_history 的计数），
+// Strm / 元数据 来自明细载荷的动作构成。
+export type RunDetailSummaryKey = 'success' | 'skip' | 'failure' | 'strm' | 'metadata'
+
+export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
+  success: '成功',
+  skip: '警告',
+  failure: '错误',
+  strm: 'Strm',
+  metadata: '元数据',
+}
+
+// 统计项 → 明细动作。点「成功」不该把失败条目带出来，点「Strm」只看真的生成了 strm 的那些。
+// 「已删除」不属于任何统计项：它是收尾动作，既不计入成功数、也没有对应的数字可点，
+// 只在「全部」视图里出现。
+const runDetailSummaryActions: Record<RunDetailSummaryKey, RunFileAction[]> = {
+  success: ['upload', 'strm', 'metadata', 'pack', 'move'],
+  skip: [],
+  failure: ['fail'],
+  strm: ['strm'],
+  metadata: ['metadata'],
+}
+
+export interface RunDetailSummarySegment {
+  key: RunDetailSummaryKey
+  label: string
+  value: number
+}
+
+// buildRunDetailSummarySegments 拼出标题下展示（且可点击筛选）的统计项。
+// 「Strm / 元数据」只有 strm 链路才区分，其它链路不占篇幅。
+export function buildRunDetailSummarySegments(
+  counts: { success_count?: number; skip_count?: number; failure_count?: number },
+  manifest: BackupFileManifest | null,
+): RunDetailSummarySegment[] {
+  const safe = (value?: number) => Math.max(0, Number(value || 0))
+  const segments: RunDetailSummarySegment[] = [
+    { key: 'success', label: runDetailSummaryLabels.success, value: safe(counts.success_count) },
+    { key: 'skip', label: runDetailSummaryLabels.skip, value: safe(counts.skip_count) },
+    { key: 'failure', label: runDetailSummaryLabels.failure, value: safe(counts.failure_count) },
+  ]
+  if (manifest && manifest.kind.trim() === 'strm') {
+    segments.push({ key: 'strm', label: runDetailSummaryLabels.strm, value: manifest.counts.strm })
+    segments.push({ key: 'metadata', label: runDetailSummaryLabels.metadata, value: manifest.counts.metadata })
   }
-  return `Strm ${manifest.counts.strm} · 元数据 ${manifest.counts.metadata}`
+  return segments
+}
+
+// filterRunDetailFiles 按统计项筛明细；未选中任何项（null）时返回整份明细。
+//
+// 「警告」（跳过）在明细载荷里只累计数量、不产生逐条明细，所以筛出来必然是空 ——
+// 调用方据此给一句说明文案（见 RunDetailList 的空态），不要让它看起来像「坏了」。
+export function filterRunDetailFiles(
+  files: BackupFileEntry[],
+  key: RunDetailSummaryKey | null,
+): BackupFileEntry[] {
+  if (!key) {
+    return files
+  }
+  const actions = runDetailSummaryActions[key]
+  if (!actions.length) {
+    return []
+  }
+  return files.filter((file) => actions.includes(file.action))
 }
 
 // 解析运行明细载荷；无明细（历史记录或该链路尚未采集）时返回 null，调用方据此隐藏面板。

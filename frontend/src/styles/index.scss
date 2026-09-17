@@ -469,6 +469,128 @@ body {
   word-break: break-all;
 }
 
+/* 明细表已不再单列「目标路径」，完整目标路径挪到悬浮框里，用箭头与源路径区分。 */
+.el-popper.run-detail-tip .run-detail-tip__target {
+  margin-top: 2px;
+  color: var(--el-text-color-secondary);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* —— 任务详情弹窗标题下的统计项（运行日志 / 归巢历史共用）——
+   每一项兼作下面文件明细的筛选入口：默认淡本色底，选中态一律「半透明浅底 + 本色深字 +
+   本色描边」（项目约定，不铺实心块）。本色与明细条目上的结果标签保持一致。 */
+.detail-summary__leading {
+  color: inherit;
+}
+
+/* 前缀文字与统计项之间的分隔点：靠 flex 的 gap 控距，这里只把它调淡一点。 */
+.detail-summary__sep {
+  opacity: 0.55;
+}
+
+.detail-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 3px 0 0;
+  padding: 1px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.7;
+  color: #64748b;
+  background: rgba(148, 163, 184, 0.09);
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.detail-summary__chip:hover {
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.detail-summary__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+/* 成功：绿 */
+.detail-summary__chip.is-success {
+  color: #2f8f5b;
+  background: rgba(47, 143, 91, 0.09);
+}
+
+.detail-summary__chip.is-success:hover {
+  background: rgba(47, 143, 91, 0.16);
+}
+
+.detail-summary__chip.is-success.is-active {
+  background: rgba(47, 143, 91, 0.2);
+  border-color: rgba(47, 143, 91, 0.5);
+}
+
+/* 警告（跳过）：橙。与「元数据」的金色拉开一档，避免两个橙金撞在一起。 */
+.detail-summary__chip.is-skip {
+  color: #d9861a;
+  background: rgba(217, 134, 26, 0.1);
+}
+
+.detail-summary__chip.is-skip:hover {
+  background: rgba(217, 134, 26, 0.17);
+}
+
+.detail-summary__chip.is-skip.is-active {
+  background: rgba(217, 134, 26, 0.22);
+  border-color: rgba(217, 134, 26, 0.55);
+}
+
+/* 错误：砖红（与明细里的失败标签同色） */
+.detail-summary__chip.is-failure {
+  color: #c4562f;
+  background: rgba(196, 86, 47, 0.09);
+}
+
+.detail-summary__chip.is-failure:hover {
+  background: rgba(196, 86, 47, 0.16);
+}
+
+.detail-summary__chip.is-failure.is-active {
+  background: rgba(196, 86, 47, 0.2);
+  border-color: rgba(196, 86, 47, 0.5);
+}
+
+/* Strm：青 */
+.detail-summary__chip.is-strm {
+  color: #2f8f9d;
+  background: rgba(47, 143, 157, 0.1);
+}
+
+.detail-summary__chip.is-strm:hover {
+  background: rgba(47, 143, 157, 0.17);
+}
+
+.detail-summary__chip.is-strm.is-active {
+  background: rgba(47, 143, 157, 0.22);
+  border-color: rgba(47, 143, 157, 0.52);
+}
+
+/* 元数据：金 */
+.detail-summary__chip.is-metadata {
+  color: #b07d18;
+  background: rgba(176, 125, 24, 0.1);
+}
+
+.detail-summary__chip.is-metadata:hover {
+  background: rgba(176, 125, 24, 0.17);
+}
+
+.detail-summary__chip.is-metadata.is-active {
+  background: rgba(176, 125, 24, 0.22);
+  border-color: rgba(176, 125, 24, 0.52);
+}
+
 .el-button {
   border-radius: 12px;
   min-height: var(--control-height);

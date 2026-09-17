@@ -202,13 +202,27 @@
         <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
           <template v-if="selectedHistoryGroup">
             <div class="detail-dialog-summary">
-              <div>
+              <div class="detail-dialog-summary__main">
                 <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
-                <div class="detail-dialog-summary__desc">{{ selectedHistoryGroupSummary }}</div>
+                <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
+                     右上角不再挂「成功 / 失败」标签——一条执行里成功、警告、错误本来就同在一行。 -->
+                <div class="detail-dialog-summary__desc">
+                  <span class="detail-summary__leading">{{ selectedHistoryGroupLeading }}</span>
+                  <span class="detail-summary__sep">·</span>
+                  <button
+                    v-for="segment in selectedHistoryGroupSegments"
+                    :key="segment.key"
+                    type="button"
+                    class="detail-summary__chip"
+                    :class="[`is-${segment.key}`, { 'is-active': detailFilterKey === segment.key }]"
+                    @click="toggleDetailFilter(segment.key)"
+                  >
+                    {{ segment.label }}<span class="detail-summary__count">{{ segment.value }}</span>
+                  </button>
+                </div>
               </div>
               <div class="detail-dialog-summary__tags">
                 <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
-                <span class="history-status" :class="`is-${selectedHistoryGroup.status}`">{{ historyStatusText(selectedHistoryGroup.status) }}</span>
               </div>
             </div>
             <div v-if="selectedBackupDetailRows.length" class="detail-backup">
@@ -225,7 +239,7 @@
                 </div>
               </div>
             </div>
-            <RunDetailList :manifest="selectedRunDetailManifest" />
+            <RunDetailList :manifest="selectedRunDetailManifest" :filter-key="detailFilterKey" />
           </template>
         </el-dialog>
 
@@ -993,10 +1007,11 @@ import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
-  describeRunDetailCounts,
+  buildRunDetailSummarySegments,
   parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
+  type RunDetailSummaryKey,
 } from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
@@ -1599,6 +1614,8 @@ const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 const selectedBackupTask = ref<BackupTask | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
 const selectedRunDetail = ref<RunHistoryItem | null>(null)
+// 标题下统计项里点中的那一项：null = 不筛选，列出全部文件明细。
+const detailFilterKey = ref<RunDetailSummaryKey | null>(null)
 
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
@@ -1614,25 +1631,24 @@ const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口只在标题下保留一行小字统计，窗口内不再罗列「明细条目」列表（文件级明细保留）。
+// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 警告 / 错误不再是死文本，
+// 而是后面的可点击统计项（见 selectedHistoryGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
-const selectedHistoryGroupSummary = computed(() => {
+const selectedHistoryGroupLeading = computed(() => {
   const group = selectedHistoryGroup.value
   if (!group) {
     return ''
   }
-  const success = Math.max(0, Number(group.success_count || 0))
-  const skipped = Math.max(0, Number(group.skip_count || 0))
-  const failed = Math.max(0, Number(group.failure_count || 0))
-  const parts = [
-    `${group.rule_name || '未知规则'} · ${historyTriggerText(group)} · 成功 ${success} / 警告 ${skipped} / 错误 ${failed}`,
-  ]
-  const detailCounts = describeRunDetailCounts(selectedRunDetailManifest.value)
-  if (detailCounts) {
-    parts.push(detailCounts)
-  }
-  return parts.join(' · ')
+  return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)}`
 })
+// 统计项：成功 / 警告 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
+const selectedHistoryGroupSegments = computed(() =>
+  buildRunDetailSummarySegments(selectedHistoryGroup.value ?? {}, selectedRunDetailManifest.value),
+)
+// 点中的统计项：再点一次同一个即取消筛选。
+function toggleDetailFilter(key: RunDetailSummaryKey) {
+  detailFilterKey.value = detailFilterKey.value === key ? null : key
+}
 // 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
 const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
   const group = selectedHistoryGroup.value
@@ -2783,12 +2799,14 @@ async function loadSelectedBackupTask(row: HistoryTreeRow) {
   }
 }
 
-// 详情窗口 = 任务级摘要（标题 + 一行统计 + 状态/模式标签）+ 备份规则信息 + 文件级执行明细。
+// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 备份规则信息 + 文件级执行明细。
 function openHistoryDetailDialog(row: HistoryTreeRow) {
   if (!row.is_group) return
   selectedHistoryGroup.value = row
   selectedBackupTask.value = null
   selectedRunDetail.value = null
+  // 换一条记录就回到「不筛选」，免得把上一条的筛选态带过来。
+  detailFilterKey.value = null
   historyDetailDialogVisible.value = true
   if (row.archive_mode === 'backup') {
     void loadSelectedBackupTask(row)
@@ -3513,8 +3531,10 @@ onBeforeUnmount(() => {
 /* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
    让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
 .detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; flex: 0 0 auto; gap: 18px; margin-bottom: 8px; padding: 8px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-fill-color-extra-light); }
+.detail-dialog-summary__main { min-width: 0; flex: 1 1 auto; }
 .detail-dialog-summary__title { font-size: 15px; font-weight: 800; color: var(--el-text-color-primary); }
-.detail-dialog-summary__desc { margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--el-text-color-secondary); }
+/* 前缀文字与可点击的统计项排在一行，靠 gap 分隔，窄了自动换行。 */
+.detail-dialog-summary__desc { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--el-text-color-secondary); }
 .detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 /* 备份任务详情：规则卡片信息 + 来源去向 + 触发方式 + 删除情况（同样是不伸缩的顶块） */
 .detail-backup { flex: 0 0 auto; margin-bottom: 8px; padding: 10px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-bg-color); }

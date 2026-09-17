@@ -8,13 +8,17 @@
       class="run-detail__table"
       size="small"
       height="100%"
-      empty-text="本次执行没有文件级明细"
     >
-      <el-table-column label="源路径" min-width="300">
+      <template #empty>
+        <div class="run-detail__empty">{{ emptyText }}</div>
+      </template>
+
+      <el-table-column label="源路径" min-width="360">
         <template #default="scope">
           <el-tooltip placement="top" effect="light" popper-class="run-detail-tip" :show-after="150">
             <template #content>
               <div class="run-detail-tip__path">{{ scope.row.path }}</div>
+              <div v-if="scope.row.target" class="run-detail-tip__target">→ {{ scope.row.target }}</div>
               <div v-if="scope.row.note" class="run-detail-tip__note">{{ scope.row.note }}</div>
             </template>
             <span class="run-detail__cell">
@@ -28,37 +32,11 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="目标路径" min-width="300">
-        <template #default="scope">
-          <el-tooltip
-            v-if="scope.row.target"
-            placement="top"
-            effect="light"
-            popper-class="run-detail-tip"
-            :show-after="150"
-          >
-            <template #content>
-              <div class="run-detail-tip__path">{{ scope.row.target }}</div>
-            </template>
-            <span class="run-detail__cell">
-              <span class="run-detail__path">{{ displayTarget(scope.row) }}</span>
-            </span>
-          </el-tooltip>
-          <span v-else class="run-detail__blank">—</span>
-        </template>
-      </el-table-column>
-
-      <el-table-column label="结果" width="112" align="center">
+      <el-table-column label="结果" width="126" align="center">
         <template #default="scope">
           <span class="run-detail__action" :class="actionClass(scope.row.action)">
             {{ actionLabel(scope.row.action) }}
           </span>
-        </template>
-      </el-table-column>
-
-      <el-table-column label="大小" width="94" align="right">
-        <template #default="scope">
-          <span class="run-detail__size">{{ formatSize(scope.row.size) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -72,27 +50,40 @@ import { Document, Folder } from '@element-plus/icons-vue'
 import {
   backupFileActionClass,
   backupFileActionLabel,
-  formatBackupFileSize,
+  filterRunDetailFiles,
+  runDetailSummaryLabels,
   stripDetailRoot,
   type BackupFileEntry,
   type BackupFileManifest,
+  type RunDetailSummaryKey,
   type RunFileAction,
 } from '../utils/backupDetail'
 
 const props = defineProps<{
   manifest: BackupFileManifest | null
+  // 顶部统计栏选中的筛选项：null 表示不筛选，列出全部条目。
+  filterKey?: RunDetailSummaryKey | null
 }>()
 
-const files = computed(() => props.manifest?.files ?? [])
+const files = computed(() => filterRunDetailFiles(props.manifest?.files ?? [], props.filterKey ?? null))
 
-// 源 / 目标列只显示「配置根路径下一级」开始的相对路径：绝对路径太长，两列并排根本读不出差别；
-// 完整路径放在悬浮提示里（见模板里的 el-tooltip）。
+// 空态要分清「本来就没有明细」与「筛出来是空的」：跳过（警告）压根不写明细，得说清楚，
+// 否则点进去会像界面坏了。
+const emptyText = computed(() => {
+  const key = props.filterKey
+  if (!key) {
+    return '本次执行没有文件级明细'
+  }
+  if (key === 'skip') {
+    return '被跳过的文件只计入「警告」数量，不记录文件明细'
+  }
+  return `本次执行没有「${runDetailSummaryLabels[key]}」明细`
+})
+
+// 源路径列只显示「配置根路径下一级」开始的相对路径：绝对路径太长，一行根本读不出差别；
+// 完整源路径 / 目标路径放在悬浮提示里（见模板里的 el-tooltip）。
 function displaySource(row: BackupFileEntry) {
   return stripDetailRoot(row.path, props.manifest?.sourceRoots ?? [])
-}
-
-function displayTarget(row: BackupFileEntry) {
-  return stripDetailRoot(row.target ?? '', props.manifest?.targetRoots ?? [])
 }
 
 function actionLabel(action: RunFileAction) {
@@ -101,10 +92,6 @@ function actionLabel(action: RunFileAction) {
 
 function actionClass(action: RunFileAction) {
   return backupFileActionClass(action)
-}
-
-function formatSize(size?: number) {
-  return formatBackupFileSize(size)
 }
 </script>
 
@@ -127,9 +114,10 @@ function formatSize(size?: number) {
 /* 一行一条：把单元格的上下内边距压到最小，同样高度里能多铺几行。
    注意有**两层**上下内边距：`td.el-table__cell` 一层，内层 `.cell` 一层；全局
    `styles/index.scss` 的 `.el-table .cell { padding-top/bottom: var(--table-cell-padding-y) }`
-   给内层留了 12px，只压外层的话行高仍会停在 58px（明细表要单独清零）。 */
+   给内层留了 12px，只压外层的话行高仍会停在 58px（明细表要单独清零）。
+   上下各留 7px：4px 时条目挤成一片、扫不出行，7px 是「分得清行又不浪费高度」的折中。 */
 .run-detail__table :deep(.el-table__cell) {
-  padding: 4px 0;
+  padding: 7px 0;
 }
 
 .run-detail__table :deep(.cell) {
@@ -161,8 +149,12 @@ function formatSize(size?: number) {
   white-space: nowrap;
 }
 
-.run-detail__blank {
-  color: var(--el-text-color-placeholder);
+/* 筛选后没有条目时的说明文案（el-table 的 empty 插槽）。 */
+.run-detail__empty {
+  padding: 18px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
 }
 
 .run-detail__action {
@@ -217,11 +209,5 @@ function formatSize(size?: number) {
 .run-detail__action.is-skip {
   color: #8a8f98;
   background: rgba(138, 143, 152, 0.14);
-}
-
-.run-detail__size {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
 }
 </style>
