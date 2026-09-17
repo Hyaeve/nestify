@@ -2,6 +2,7 @@ package backup
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"nestify/backend/internal/model"
@@ -126,6 +127,60 @@ func TestRunStatsSkipsEmptyPathAndEmptyPayload(t *testing.T) {
 	}
 	if payload := stats.buildBackupDetailJSON(); payload != "" {
 		t.Fatalf("empty stats should produce empty payload, got %q", payload)
+	}
+}
+
+// 源 / 目标根路径随明细入库：前端据此把目标端绝对路径裁成「根路径下一级」显示。
+// 归一化要求与 executor 侧一致：去尾部斜杠、去重复、丢掉空值与「/」（裁不出内容）。
+func TestRunStatsSerializesRoots(t *testing.T) {
+	stats := &runStats{
+		SourceRoots: []string{"/mnt/a/电影/", "/mnt/a/电影", "   "},
+		TargetRoots: []string{"webdav://2/备份/电影", "/"},
+	}
+	stats.recordFile(model.BackupFileEntry{
+		Path:   "电影/a.mkv",
+		Action: model.BackupFileActionUpload,
+		Target: "webdav://2/备份/电影/电影/a.mkv",
+	})
+
+	var detail model.BackupDetail
+	if err := json.Unmarshal([]byte(stats.buildBackupDetailJSON()), &detail); err != nil {
+		t.Fatalf("decode detail json: %v", err)
+	}
+	if got := strings.Join(detail.SourceRoots, "|"); got != "/mnt/a/电影" {
+		t.Fatalf("source_roots = %q, want %q", got, "/mnt/a/电影")
+	}
+	if got := strings.Join(detail.TargetRoots, "|"); got != "webdav://2/备份/电影" {
+		t.Fatalf("target_roots = %q, want %q", got, "webdav://2/备份/电影")
+	}
+}
+
+// 实时监控的连续触发走合并路径：根路径必须以本次任务配置为准带上，
+// 否则合并后的历史记录丢掉裁剪依据，前端只能显示整条绝对路径。
+func TestMergeBackupDetailPayloadKeepsRoots(t *testing.T) {
+	previous := `{"kind":"backup","files":[{"path":"电影/a.mkv","action":"upload"}],"counts":{"upload":1},"files_total":1}`
+	stats := &runStats{TargetRoots: []string{"/mnt/b/电影/"}}
+	stats.recordFile(model.BackupFileEntry{Path: "电影/b.mkv", Action: model.BackupFileActionUpload})
+
+	var detail model.BackupDetail
+	if err := json.Unmarshal([]byte(mergeBackupDetailPayload(previous, stats)), &detail); err != nil {
+		t.Fatalf("decode merged detail json: %v", err)
+	}
+	if got := strings.Join(detail.TargetRoots, "|"); got != "/mnt/b/电影" {
+		t.Fatalf("merged target_roots = %q, want %q", got, "/mnt/b/电影")
+	}
+	if len(detail.Files) != 2 {
+		t.Fatalf("merged files = %d, want 2", len(detail.Files))
+	}
+}
+
+// WebDAV 目标端的展示路径 = 配置串 + 源相对路径。
+// 曾经的 target.raw + internalPath 会把配置里的内部路径重复一遍
+// （webdav://2/备份/电影/备份/电影/a.mkv），前端裁掉根路径后仍会多出「备份/电影」一段。
+func TestWebdavDisplayTargetAvoidsDuplicatedInternalPath(t *testing.T) {
+	got := webdavDisplayTarget("webdav://2/备份/电影", "电影/a.mkv")
+	if want := "webdav://2/备份/电影/电影/a.mkv"; got != want {
+		t.Fatalf("webdavDisplayTarget = %q, want %q", got, want)
 	}
 }
 

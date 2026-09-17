@@ -2,6 +2,7 @@ package executor
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -28,6 +29,10 @@ type runDetailCollector struct {
 	// 收尾时由 summarizeAggregated 压成一条汇总明细。当前用于 strm 的元数据同步：
 	// 一次任务常见成百上千个封面 / 字幕 / nfo，逐条列出只会把明细面板撑满。
 	aggregate map[string]runAggregate
+	// sourceRoots / targetRoots 是本次执行的源 / 目标根路径（规则里配置的路径）。
+	// 前端据此刻成「根路径下一级」显示，避免长绝对路径把明细的两列挤爆（见 model.RunDetail）。
+	sourceRoots []string
+	targetRoots []string
 }
 
 // runAggregate 是某个动作的汇总累计值。
@@ -41,6 +46,44 @@ func newRunDetailCollector(kind string) *runDetailCollector {
 		kind:   normalizeDetailKind(kind),
 		counts: make(map[string]int, 4),
 	}
+}
+
+// setRoots 记录本次执行的源 / 目标根路径，收尾时写进明细载荷（见 model.RunDetail）。
+//
+// 在启动并发枚举之前调用一次即可；传空切片表示不裁剪，前端照旧渲染完整路径。
+func (c *runDetailCollector) setRoots(sourceRoots, targetRoots []string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.sourceRoots = normalizeDetailRoots(sourceRoots)
+	c.targetRoots = normalizeDetailRoots(targetRoots)
+}
+
+// normalizeDetailRoots 归一化根路径：去空白、统一成斜杠分隔、去掉尾部斜杠与重复项。
+//
+// 根路径只用来做前缀裁剪，所以「/」这类只剩空的根会被丢掉（无可裁内容），
+// 免得前端把整条路径都裁没。
+func normalizeDetailRoots(roots []string) []string {
+	if len(roots) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(roots))
+	out := make([]string, 0, len(roots))
+	for _, root := range roots {
+		trimmed := filepath.ToSlash(strings.TrimSpace(root))
+		trimmed = strings.TrimRight(trimmed, "/")
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 // record 记录一条明细：累加计数，同一动作超过上限后只计数不再追加。
@@ -176,6 +219,8 @@ func (c *runDetailCollector) buildJSON() string {
 		Counts:         counts,
 		FilesTotal:     filesTotal,
 		FilesTruncated: c.truncated,
+		SourceRoots:    c.sourceRoots,
+		TargetRoots:    c.targetRoots,
 	})
 	if err != nil {
 		return ""

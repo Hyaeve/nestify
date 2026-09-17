@@ -91,6 +91,67 @@ export interface BackupFileManifest {
   counts: Record<RunFileAction, number>
   total: number
   truncated: boolean
+  // 本次执行的源 / 目标根路径（规则里配置的路径），用来把明细里的绝对路径裁成
+  // 「根路径下一级」显示；旧记录没有这两个字段，退化成整条路径。
+  sourceRoots: string[]
+  targetRoots: string[]
+}
+
+// ---------------------------------------------------------------------------
+// 路径裁剪：明细里存的是绝对路径，直接铺在两列里会被挤成几个字
+// ---------------------------------------------------------------------------
+
+// stripDetailRoot 把绝对路径裁成「根路径下一级开始的相对路径」。
+//
+// 规则：
+//   - 多个根时取**最长**匹配的那一个（多源 / 多目标的根可能互相是前缀）；
+//   - 必须落在路径分隔符上才算命中，否则 /media/strm2 会被 /media/strm 裁成 "2"；
+//   - 裁完为空（路径正好等于根，例如 strm 的元数据汇总行记的就是源目录本身）时保留原路径，
+//     否则那一格会变成空白，反而看不出指的是哪儿。
+export function stripDetailRoot(path: string, roots: string[]): string {
+  const normalized = (path || '').replace(/\\/g, '/')
+  if (!normalized) {
+    return ''
+  }
+
+  let matched = ''
+  for (const root of roots) {
+    if (!root || !normalized.startsWith(root)) {
+      continue
+    }
+    const rest = normalized.slice(root.length)
+    if (rest !== '' && !rest.startsWith('/')) {
+      continue
+    }
+    if (root.length > matched.length) {
+      matched = root
+    }
+  }
+  if (!matched) {
+    return normalized
+  }
+
+  const rest = normalized.slice(matched.length).replace(/^\/+/, '')
+  return rest || normalized
+}
+
+// normalizeDetailRoots 把载荷里的根路径整理成前端可用的形式：去尾部斜杠、去重复、丢空值。
+function normalizeDetailRoots(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const roots: string[] = []
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') {
+      continue
+    }
+    const root = candidate.replace(/\\/g, '/').trim().replace(/\/+$/, '')
+    if (!root || roots.includes(root)) {
+      continue
+    }
+    roots.push(root)
+  }
+  return roots
 }
 
 const emptyActionCounts = (): Record<RunFileAction, number> => ({
@@ -121,6 +182,16 @@ export function runDetailTitle(kind?: string): string {
   return runDetailTitles[(kind || '').trim()] ?? '执行明细'
 }
 
+// describeRunDetailCounts 生成「Strm N · 元数据 N」这类明细构成文案，供任务详情弹窗
+// 标题下的小字统计使用（明细面板已去掉动作页签，这些数目只能在这里给）。
+// 目前只有 strm 链路需要区分这两类动作，其它链路返回空串、不占篇幅。
+export function describeRunDetailCounts(manifest: BackupFileManifest | null): string {
+  if (!manifest || manifest.kind.trim() !== 'strm') {
+    return ''
+  }
+  return `Strm ${manifest.counts.strm} · 元数据 ${manifest.counts.metadata}`
+}
+
 // 解析运行明细载荷；无明细（历史记录或该链路尚未采集）时返回 null，调用方据此隐藏面板。
 export function parseRunDetail(item?: { archive_mode?: string; detail_json?: string }): BackupFileManifest | null {
   const raw = item?.detail_json?.trim()
@@ -144,6 +215,8 @@ export function parseRunDetail(item?: { archive_mode?: string; detail_json?: str
     counts?: unknown
     files_total?: unknown
     files_truncated?: unknown
+    source_roots?: unknown
+    target_roots?: unknown
   }
   const kind = typeof payload.kind === 'string' ? payload.kind.trim() : ''
   const rawFiles = Array.isArray(payload.files) ? payload.files : []
@@ -204,6 +277,8 @@ export function parseRunDetail(item?: { archive_mode?: string; detail_json?: str
     counts,
     total,
     truncated: payload.files_truncated === true,
+    sourceRoots: normalizeDetailRoots(payload.source_roots),
+    targetRoots: normalizeDetailRoots(payload.target_roots),
   }
 }
 

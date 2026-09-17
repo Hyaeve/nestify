@@ -199,7 +199,7 @@
           </el-table-column>
         </el-table>
 
-        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="920px" destroy-on-close>
+        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" destroy-on-close>
           <template v-if="selectedHistoryGroup">
             <div class="detail-dialog-summary">
               <div>
@@ -993,6 +993,7 @@ import { fetchBackups, type BackupTask } from '../api/backups'
 import {
   backupTriggerLabel,
   buildBackupDetailRows,
+  describeRunDetailCounts,
   parseRunDetail,
   resolveBackupDeletedCount,
   type BackupDetailRow,
@@ -1611,7 +1612,10 @@ const successCount = computed(() => historySummary.value.success)
 const skipCount = computed(() => historySummary.value.skipped)
 const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
+// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
+const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 // 详情窗口只在标题下保留一行小字统计，窗口内不再罗列「明细条目」列表（文件级明细保留）。
+// strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedHistoryGroupSummary = computed(() => {
   const group = selectedHistoryGroup.value
   if (!group) {
@@ -1620,7 +1624,14 @@ const selectedHistoryGroupSummary = computed(() => {
   const success = Math.max(0, Number(group.success_count || 0))
   const skipped = Math.max(0, Number(group.skip_count || 0))
   const failed = Math.max(0, Number(group.failure_count || 0))
-  return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)} · 成功 ${success} / 警告 ${skipped} / 错误 ${failed}`
+  const parts = [
+    `${group.rule_name || '未知规则'} · ${historyTriggerText(group)} · 成功 ${success} / 警告 ${skipped} / 错误 ${failed}`,
+  ]
+  const detailCounts = describeRunDetailCounts(selectedRunDetailManifest.value)
+  if (detailCounts) {
+    parts.push(detailCounts)
+  }
+  return parts.join(' · ')
 })
 // 备份任务的详情面板：规则卡片信息 + 本次执行的来源去向、触发方式与删除情况。
 const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
@@ -1636,8 +1647,6 @@ const selectedBackupDetailRows = computed<BackupDetailRow[]>(() => {
     failureCount: group.failure_count,
   })
 })
-// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
-const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 
 const purifyRulesTotal = ref(0)
 

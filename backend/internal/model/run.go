@@ -129,6 +129,14 @@ type RunDetail struct {
 	Counts         map[string]int `json:"counts,omitempty"`
 	FilesTotal     int            `json:"files_total"`
 	FilesTruncated bool           `json:"files_truncated,omitempty"`
+	// SourceRoots / TargetRoots 是本次执行使用的源 / 目标根路径（规则里配置的路径）。
+	//
+	// 前端的文件明细表按「根路径下一级」显示：绝对路径太长的两列会被挤成几个字，
+	// 所以入库时把根路径带上，前端裁掉前缀只留相对部分，悬浮提示再给完整路径。
+	//   源端：strm 记录的是远端内部绝对路径，需要裁；备份记录的本就是相对路径，裁剪不命中即原样显示。
+	//   目标端：两条链路都记绝对路径，都需要裁。
+	SourceRoots []string `json:"source_roots,omitempty"`
+	TargetRoots []string `json:"target_roots,omitempty"`
 }
 
 // BackupDetail 是 RunDetail 的历史名称（备份链路沿用），二者完全等价。

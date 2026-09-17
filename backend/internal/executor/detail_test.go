@@ -237,6 +237,60 @@ func TestExecuteStrmRuleAggregatesMetadataEntries(t *testing.T) {
 	}
 }
 
+// TestRunDetailCollectorNormalizesRoots 锁定源 / 目标根路径的归一化与入库：
+// 前端靠 source_roots / target_roots 把绝对路径裁成「根路径下一级」显示，
+// 所以要去尾部斜杠、去重复、丢掉空白与「/」（「/」裁不出内容，留着会把路径裁没）。
+func TestRunDetailCollectorNormalizesRoots(t *testing.T) {
+	collector := newRunDetailCollector(model.RunDetailKindStrm)
+	collector.setRoots(
+		[]string{"/mnt/cloud/天翼云/", "/mnt/cloud/天翼云", "   "},
+		[]string{"/media/strm", "/"},
+	)
+	collector.record(model.RunFileEntry{
+		Path:   "/mnt/cloud/天翼云/电影/流浪地球.mkv",
+		Action: model.RunFileActionStrm,
+	})
+
+	var detail model.RunDetail
+	if err := json.Unmarshal([]byte(collector.buildJSON()), &detail); err != nil {
+		t.Fatalf("解析明细失败: %v", err)
+	}
+
+	if got := strings.Join(detail.SourceRoots, "|"); got != "/mnt/cloud/天翼云" {
+		t.Fatalf("source_roots = %q, want %q（去重复 / 去尾部斜杠 / 丢空值）", got, "/mnt/cloud/天翼云")
+	}
+	if got := strings.Join(detail.TargetRoots, "|"); got != "/media/strm" {
+		t.Fatalf("target_roots = %q, want %q（「/」应被丢掉）", got, "/media/strm")
+	}
+}
+
+// TestExecuteStrmRuleRecordsRoots 锁定 strm 链路把规则的源 / 目标路径一并写进明细载荷：
+// 明细里的 Path 是绝对路径，前端要用这两个根裁成相对路径再展示，悬浮时才给完整路径。
+func TestExecuteStrmRuleRecordsRoots(t *testing.T) {
+	sourceDir := t.TempDir()
+	targetDir := t.TempDir()
+
+	writeStrmFixture(t, filepath.Join(sourceDir, "剧集", "S01E01.mkv"), "video-bytes")
+
+	service := NewService(nil)
+	stats, err := service.executeStrmRule("run-detail-roots", ExecuteRuleRequest{
+		Filters: []string{"mkv"},
+	}, sourceDir, targetDir, &executionStats{})
+	if err != nil {
+		t.Fatalf("executeStrmRule 出错: %v", err)
+	}
+
+	detail := decodeRunDetail(t, &stats)
+	wantSource := strings.TrimRight(filepath.ToSlash(sourceDir), "/")
+	if got := strings.Join(detail.SourceRoots, "|"); got != wantSource {
+		t.Fatalf("source_roots = %q, want %q", got, wantSource)
+	}
+	wantTarget := strings.TrimRight(filepath.ToSlash(targetDir), "/")
+	if got := strings.Join(detail.TargetRoots, "|"); got != wantTarget {
+		t.Fatalf("target_roots = %q, want %q", got, wantTarget)
+	}
+}
+
 // TestExecutePackageRuleRecordsPackedDirectories 锁定打包规则的运行详情：
 // 必须能看到「打包了哪个文件夹、产出了哪个压缩包」。
 func TestExecutePackageRuleRecordsPackedDirectories(t *testing.T) {

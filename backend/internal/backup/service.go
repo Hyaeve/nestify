@@ -380,6 +380,10 @@ func (s *Service) log(taskID int64, format string, args ...any) {
 func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode string) {
 	startedAt := time.Now().UTC()
 	stats := &runStats{}
+	// 明细里的源 / 目标根路径：前端据此把目标端绝对路径裁成「根路径下一级」显示
+	// （源端入库的已经是相对路径，裁剪不命中就原样显示）。见 model.RunDetail。
+	stats.SourceRoots = task.SourceDirs
+	stats.TargetRoots = task.TargetDirs
 
 	defer func() {
 		status := "success"
@@ -603,7 +607,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 						Path:   filepath.ToSlash(item.relative),
 						Action: model.BackupFileActionFail,
 						Size:   fileInfo.Size(),
-						Target: target.raw + webdav.InternalPathFromParts(target.internal, filepath.ToSlash(item.relative)),
+						Target: webdavDisplayTarget(target.raw, item.relative),
 						Note:   err.Error(),
 					})
 				}
@@ -882,6 +886,14 @@ func mergeBackupDetailPayload(previousJSON string, stats *runStats) string {
 	merged.FilesTotal += listable
 	merged.FilesTruncated = truncated
 
+	// 根路径随明细一起带上：实时监控的连续触发会走到这里合并，本次任务配置的根路径为准。
+	if roots := normalizeBackupRoots(stats.SourceRoots); len(roots) > 0 {
+		merged.SourceRoots = roots
+	}
+	if roots := normalizeBackupRoots(stats.TargetRoots); len(roots) > 0 {
+		merged.TargetRoots = roots
+	}
+
 	total := 0
 	for _, count := range merged.Counts {
 		total += count
@@ -909,6 +921,11 @@ type runStats struct {
 	fileCounts map[string]int
 	fileTotal  int
 	truncated  bool
+
+	// SourceRoots / TargetRoots 是任务配置里的源 / 目标根路径，随明细一起入库：
+	// 前端把目标端绝对路径裁成「根路径下一级」显示，避免长路径把明细列挤爆。
+	SourceRoots []string
+	TargetRoots []string
 }
 
 // recordFile 采集一条文件明细。每个动作最多保留 maxFileEntriesPerAction 条，
@@ -938,6 +955,30 @@ func (s *runStats) recordFile(entry model.BackupFileEntry) {
 	s.Files = append(s.Files, entry)
 }
 
+// normalizeBackupRoots 归一化源 / 目标根路径：去空白、统一成斜杠分隔、去掉尾部斜杠与重复项。
+//
+// 根路径只用于前端把绝对路径裁成相对路径，所以「/」这类裁不出内容的根会被丢掉，
+// 免得前端把整条路径裁没。
+func normalizeBackupRoots(roots []string) []string {
+	if len(roots) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(roots))
+	out := make([]string, 0, len(roots))
+	for _, root := range roots {
+		trimmed := strings.TrimRight(filepath.ToSlash(strings.TrimSpace(root)), "/")
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
 // buildBackupDetailJSON 把采集到的文件明细序列化成 run_history.detail_json。
 // files_total 只统计会被列出的明细（上传/失败/删除）；跳过是纯计数，只出现在 counts 里。
 func (s *runStats) buildBackupDetailJSON() string {
@@ -957,6 +998,8 @@ func (s *runStats) buildBackupDetailJSON() string {
 		Counts:         s.fileCounts,
 		FilesTotal:     filesTotal,
 		FilesTruncated: s.truncated,
+		SourceRoots:    normalizeBackupRoots(s.SourceRoots),
+		TargetRoots:    normalizeBackupRoots(s.TargetRoots),
 	})
 	if err != nil {
 		return ""
@@ -1134,6 +1177,16 @@ func sourceDiskPath(root, relative string) string {
 	return filepath.Join(root, relative)
 }
 
+// webdavDisplayTarget 拼出 WebDAV 目标端某个文件的完整路径，用于明细与日志展示。
+//
+// 不能写成 target.raw + internalPath：internalPath 由 target.internal（配置串里的内部路径）
+// 与相对路径拼成，而 target.raw 本身就是完整配置串，两段相加会把内部路径重复一遍
+// （webdav://2/备份/电影/备份/电影/x.mkv）。这里按「配置串 + 相对路径」拼，
+// 结果与用户在规则里填的目标路径逐段对应；上传实际用的仍是 internalPath，不受影响。
+func webdavDisplayTarget(raw, relative string) string {
+	return strings.TrimRight(raw, "/") + "/" + strings.TrimLeft(filepath.ToSlash(relative), "/")
+}
+
 // copyOneWebdav 将源文件上传到 WebDAV 目标。
 // 替换规则：目标已存在且为「跳过」时跳过；「覆盖」时 PUT 覆盖。
 func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item sourceItem, info os.FileInfo, stats *runStats) error {
@@ -1147,7 +1200,7 @@ func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item s
 				Path:   filepath.ToSlash(item.relative),
 				Action: model.BackupFileActionSkip,
 				Size:   info.Size(),
-				Target: target.raw + internalPath,
+				Target: webdavDisplayTarget(target.raw, item.relative),
 				Note:   "远端已存在同名文件，按「同名跳过」处理",
 			})
 			return nil
@@ -1179,7 +1232,7 @@ func (s *Service) copyOneWebdav(task model.BackupTask, target targetDesc, item s
 		Path:   filepath.ToSlash(item.relative),
 		Action: model.BackupFileActionUpload,
 		Size:   info.Size(),
-		Target: target.raw + internalPath,
+		Target: webdavDisplayTarget(target.raw, item.relative),
 	})
 	s.log(task.ID, "已上传：%s", internalPath)
 	return nil

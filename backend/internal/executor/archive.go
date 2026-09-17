@@ -74,6 +74,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 		return stats, fmt.Errorf("target dir is required")
 	}
 
+	// 明细里的源 / 目标根路径：前端据此把绝对路径裁成「根路径下一级」显示（见 model.RunDetail）。
+	stats.Detail.setRoots([]string{sourceDir}, []string{targetDir})
+
 	info, err := statWithMode(req.CompatibilityMode, sourceDir)
 	if err != nil {
 		return stats, fmt.Errorf("stat source dir: %w", err)
@@ -415,6 +418,8 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	// 明细采集器必须在进入 syncStrmDirectory 之前初始化：
 	// 并发路径下两个线程各自创建会丢掉先建那份采集到的明细。
 	detail := stats.detail(model.RunDetailKindStrm)
+	// 明细里的源 / 目标根路径：前端据此把绝对路径裁成「根路径下一级」显示（见 model.RunDetail）。
+	detail.setRoots([]string{sourceDir}, []string{targetDir})
 
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {

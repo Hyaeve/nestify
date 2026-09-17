@@ -396,6 +396,29 @@ body {
   white-space: pre-line;
 }
 
+/* 文件明细的路径悬浮提示：圆角文本框，给的是**完整路径**（源路径那列还会多一行备注）。
+   明细表里两列都做了单行省略，所以这里必须能完整展示，否则长路径就真的看不到全貌了。
+   与上面同理，EP tooltip 被 Teleport 到 body，组件里的 scoped 样式够不着它。 */
+.el-popper.run-detail-tip {
+  max-width: 640px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.el-popper.run-detail-tip .run-detail-tip__path {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.el-popper.run-detail-tip .run-detail-tip__note {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
 .el-button {
   border-radius: 12px;
   min-height: var(--control-height);

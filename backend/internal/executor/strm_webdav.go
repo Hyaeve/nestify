@@ -85,6 +85,10 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 
 	// 明细采集器必须在启动并发列举之前初始化（多线程各自创建会丢明细）。
 	detail := stats.detail(model.RunDetailKindStrm)
+	// 明细里的源 / 目标根路径：源端裁掉挂载内部路径（明细的 Path 是远端内部绝对路径，
+	// 形如 /天翼云/电影/video.mkv），目标端是本地目标目录；前端据此裁成「根路径下一级」显示。
+	// 源设为挂载根时 internalPath 为空，会被归一化丢掉 —— 那时整条远端路径就是相对内容。
+	detail.setRoots([]string{internalPath}, []string{targetDir})
 
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
