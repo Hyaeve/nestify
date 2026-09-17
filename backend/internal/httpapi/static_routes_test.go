@@ -15,7 +15,7 @@ import (
 //	「图还没下完就先按遮罩画出来」会让侧栏图标在左上角闪出一块色块；
 //
 // ② 入口 html 每次回源——它引用的是带新 hash 的资源，缓存住前端就更新不了；
-// ③ 不带 hash 的 public 资源（logo / favicon）给一天。
+// ③ 不带 hash 的 public 资源（logo / favicon）用 no-cache：文件名不随内容变，
 func TestStaticRoutesCacheControl(t *testing.T) {
 	webDir := t.TempDir()
 
@@ -44,7 +44,7 @@ func TestStaticRoutesCacheControl(t *testing.T) {
 	}{
 		{"入口 html 每次回源", "/", "no-cache", "<!doctype html>"},
 		{"hash 产物长缓存", "/assets/app-abc123.js", "public, max-age=31536000, immutable", "console.log(1)"},
-		{"public 资源缓存一天", "/nestify-logo.png", "public, max-age=86400", "png-bytes"},
+		{"public 资源每次回源校验", "/nestify-logo.png", "no-cache", "png-bytes"},
 		{"未知路径回落到入口 html", "/rules", "no-cache", "<!doctype html>"},
 	}
 

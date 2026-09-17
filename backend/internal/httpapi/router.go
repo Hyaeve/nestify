@@ -1174,16 +1174,18 @@ func registerStaticRoutes(mux *http.ServeMux, webDir string) {
 
 		assetPath := filepath.Join(webDir, cleanPath)
 		if info, err := os.Stat(assetPath); err == nil && !info.IsDir() {
-			// 构建产物带内容 hash，可以放心长缓存；不带 hash 的（logo / favicon 等 public 资源）
-			// 给一天。之前一个头都不发，每次重建镜像后浏览器都要把全部资源重新下一遍，
-			// 冷缓存期间「图还没到就先按遮罩画出来」会让侧栏图标在左上角先渲染成一块色块
-			// （详见 frontend/vite.config.ts 的 assetsInlineLimit 说明）。
+			// 构建产物带内容 hash，可以放心长缓存。之前一个头都不发，每次重建镜像后浏览器都要
+			// 把全部资源重新下一遍，冷缓存期间「图还没到就先按遮罩画出来」会让侧栏图标在左上角
+			// 先渲染成一块色块（详见 frontend/vite.config.ts 的 assetsInlineLimit 说明）。
+			// 不带 hash 的（logo / favicon 等 public 资源）用 no-cache：文件名不随内容变，
+			// 若给 max-age，换图之后用户会在缓存过期前一直拿到旧图；no-cache 仍走条件请求，
+			// http.ServeFile 会按 Last-Modified 回 304，不会重复下载体积。
 			// 这里用 URL 路径（永远是 / 分隔）判断，不用上面 filepath.Clean 的结果：
 			// 后者在 Windows 上会把分隔符换成反斜杠，本地跑测试时会误判。
 			if strings.HasPrefix(strings.TrimPrefix(r.URL.Path, "/"), "assets/") {
 				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			} else {
-				w.Header().Set("Cache-Control", "public, max-age=86400")
+				w.Header().Set("Cache-Control", "no-cache")
 			}
 			http.ServeFile(w, r, assetPath)
 			return
