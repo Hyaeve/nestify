@@ -63,66 +63,75 @@
 
     <el-card v-show="activeTab === 'history'" class="page-card history-card">
       <template #header>
-        <div class="rules-card__header">
-          <div class="rules-card__title">归巢历史</div>
-          <div class="history-actions">
-            <el-button type="success" plain @click="clearHistory('success')">删除成功</el-button>
-            <el-button type="warning" plain @click="clearHistory('skip')">删除跳过</el-button>
-            <el-button type="danger" plain @click="clearHistory('failed')">删除失败</el-button>
+        <!-- 归巢历史的工具条整体搬进卡片标题行：统计、排序、筛选、搜索、删除都和「归巢历史」
+             排在同一行，下面整块高度让给列表。窄屏靠 flex-wrap 折行，不做横向滚动。 -->
+        <div class="rules-card__header history-card__header">
+          <div class="rules-card__header-main">
+            <div class="rules-card__title">归巢历史</div>
+            <div class="history-summary">
+              <span>累计 {{ historySummary.total }}</span>
+              <span>今日 {{ historySummary.today }}</span>
+              <span>成功 {{ successCount }}</span>
+              <span>跳过 {{ skipCount }}</span>
+              <span>失败 {{ failedCount }}</span>
+            </div>
           </div>
-        </div>
-      </template>
-
-        <div class="history-toolbar">
-          <div class="history-summary">
-            <span>累计 {{ historySummary.total }}</span>
-            <span>今日 {{ historySummary.today }}</span>
-            <span>成功 {{ successCount }}</span>
-            <span>跳过 {{ skipCount }}</span>
-            <span>失败 {{ failedCount }}</span>
-            <span class="history-summary__controls">
-              <el-select v-model="historySortBy" size="small" class="history-summary__control" @change="handleHistorySortChange">
-                <el-option label="修改时间" value="modified_at" />
-                <el-option label="文件名称" value="name" />
-              </el-select>
-              <el-tooltip :content="historySortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="300">
-                <el-button class="history-sort-order-button" circle :aria-label="historySortOrder === 'asc' ? '正序' : '倒序'" @click="toggleHistorySortOrder">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" class="history-sort-order-button__icon">
-                    <path d="M7 5.2v13.6" />
-                    <path v-if="historySortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
-                    <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
-                    <path d="M13 7h7" />
-                    <path d="M13 12h5.2" />
-                    <path d="M13 17h3.4" />
-                  </svg>
-                </el-button>
-              </el-tooltip>
-              <el-select v-model="historyStatusFilter" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
-                <el-option label="全部状态" value="all" />
-                <el-option label="成功" value="success" />
-                <el-option label="失败" value="failed" />
-                <el-option label="跳过" value="skip" />
-              </el-select>
-              <el-select v-model="historyRuleTypeFilter" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
-                <el-option label="全部规则" value="all" />
-                <el-option label="归档规则" value="archive" />
-                <el-option label="净化规则" value="cleanup" />
-                <el-option label="链路规则" value="link" />
-                <el-option label="命名规则" value="naming" />
-                <el-option label="备份规则" value="backup" />
-              </el-select>
-            </span>
-          </div>
-          <div class="history-search">
+          <div class="history-header-controls">
+            <el-select v-model="historySortBy" size="small" class="history-summary__control" @change="handleHistorySortChange">
+              <el-option label="修改时间" value="modified_at" />
+              <el-option label="文件名称" value="name" />
+            </el-select>
+            <el-tooltip :content="historySortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="300">
+              <el-button class="history-sort-order-button" circle :aria-label="historySortOrder === 'asc' ? '正序' : '倒序'" @click="toggleHistorySortOrder">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="history-sort-order-button__icon">
+                  <path d="M7 5.2v13.6" />
+                  <path v-if="historySortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
+                  <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
+                  <path d="M13 7h7" />
+                  <path d="M13 12h5.2" />
+                  <path d="M13 17h3.4" />
+                </svg>
+              </el-button>
+            </el-tooltip>
+            <el-select v-model="historyStatusFilter" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
+              <el-option label="全部状态" value="all" />
+              <el-option label="成功" value="success" />
+              <el-option label="失败" value="failed" />
+              <el-option label="跳过" value="skip" />
+            </el-select>
+            <el-select v-model="historyRuleTypeFilter" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
+              <el-option label="全部规则" value="all" />
+              <el-option label="归档规则" value="archive" />
+              <el-option label="净化规则" value="cleanup" />
+              <el-option label="链路规则" value="link" />
+              <el-option label="命名规则" value="naming" />
+              <el-option label="备份规则" value="backup" />
+            </el-select>
             <!-- 搜索框回车即搜，不再挂「搜索 / 重置」按钮：清空有自带的小叉，回车就是提交。 -->
             <el-input
               v-model="historyKeywordInput"
               clearable
-              placeholder="关键词搜索（规则名 / 摘要），回车搜索"
+              class="history-search__input"
+              placeholder="搜索规则名 / 摘要，回车"
               @keyup.enter="handleHistorySearch"
             />
+            <!-- 原来是「删除成功 / 删除跳过 / 删除失败」三个按钮，收成一个下拉；
+                 每一项仍会弹一次确认框（见 clearHistory）。 -->
+            <el-dropdown trigger="click" @command="handleHistoryClear">
+              <el-button type="danger" plain>
+                删除<el-icon class="history-clear__caret"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="success">删除成功记录</el-dropdown-item>
+                  <el-dropdown-item command="skip">删除跳过记录</el-dropdown-item>
+                  <el-dropdown-item command="failed">删除失败记录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
+      </template>
 
         <el-table v-if="historyViewMode === 'flat'" v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
           <el-table-column label="规则 / 摘要" min-width="360">
@@ -169,6 +178,11 @@
               </button>
             </template>
           </el-table-column>
+          <!-- 时间紧跟在「折叠任务」后面，只到月日与时分秒：标题行已经不重复时间，
+               列里再带上年份只是噪音。 -->
+          <el-table-column label="时间" width="150">
+            <template #default="scope">{{ formatMonthDayTime(scope.row.started_at) }}</template>
+          </el-table-column>
           <el-table-column label="模式" width="120">
             <template #default="scope">
               <span class="custom-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
@@ -184,17 +198,6 @@
           </el-table-column>
           <el-table-column label="统计" width="140">
             <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
-          </el-table-column>
-          <el-table-column label="时间" min-width="180">
-            <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
-          </el-table-column>
-          <el-table-column label="大小" width="120">
-            <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="90">
-            <template #default="scope">
-              <el-button link type="primary" @click.stop="openHistoryDetailDialog(scope.row)">详情</el-button>
-            </template>
           </el-table-column>
         </el-table>
 
@@ -964,7 +967,7 @@
 </template>
 
 <script setup lang="ts">
-import { Delete, Edit } from '@element-plus/icons-vue'
+import { ArrowDown, Delete, Edit } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1322,6 +1325,20 @@ function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'wat
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
+}
+
+// 折叠任务列表的「时间」列：只到月日与时分秒（9/17 14:05:03）。
+// 折叠条目标题里已经不放时间了，列里再带上年份只是噪音。
+function formatMonthDayTime(value?: string) {
+  if (!value) {
+    return '—'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+  const pad = (input: number) => String(input).padStart(2, '0')
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 function formatHistorySize(sizeBytes?: number) {
@@ -2736,8 +2753,11 @@ function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
       failure_count: failed,
       size_bytes: sizeBytes,
       updated_at: updatedAt,
-      title: `${historyModeLabel(first)}任务 · ${formatDateTime(first.started_at)}`,
-      description: `${first.rule_name || '未知规则'} · ${historyTriggerText(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
+      // 标题 = 「是什么任务 + 这条规则的自定义名」（如「备份任务 · 剧集追更备份」）：
+      // 时间不放在这里，它在右侧的独立列里，两边重复没意义。
+      title: `${historyModeLabel(first)}任务 · ${first.rule_name || '未知规则'}`,
+      // 副行给「触发方式 + 操作量 + 明细条数」，折叠起来也看得出这次干了多少活。
+      description: `${historyTriggerPhrase(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
       is_group: true,
     }
   })
@@ -2773,12 +2793,13 @@ async function loadSelectedRunDetail(row: HistoryTreeRow) {
 }
 
 // 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
+// 标题 / 副行与折叠模式保持同一套措辞，免得同一个任务在两个视图里长得不一样。
 function openHistoryItemDetail(item: RunHistoryItem) {
   openHistoryDetailDialog({
     ...item,
     id: `single-${item.id}`,
-    title: `${historyModeLabel(item)}任务 · ${formatDateTime(item.started_at)}`,
-    description: `${item.rule_name || '未知规则'} · ${historyTriggerText(item)}`,
+    title: `${historyModeLabel(item)}任务 · ${item.rule_name || '未知规则'}`,
+    description: `${historyTriggerPhrase(item)} · 操作 ${Math.max(0, Number(item.processed_files || 0))} 个文件或文件夹`,
     is_group: true,
     source: item,
   })
@@ -2796,6 +2817,18 @@ function historyTriggerText(item?: { archive_mode?: string; trigger_mode?: strin
     return backupTriggerLabel(item.trigger_mode)
   }
   return triggerModeText(item?.trigger_mode)
+}
+
+// 折叠条目副行的触发措辞：统一带上「触发」二字
+//（实时监控触发 / 计划扫描触发 / 手动执行触发），各链路一视同仁。
+function historyTriggerPhrase(item?: { trigger_mode?: string }) {
+  if (item?.trigger_mode === 'watch') {
+    return '实时监控触发'
+  }
+  if (item?.trigger_mode === 'cron') {
+    return '计划扫描触发'
+  }
+  return '手动执行触发'
 }
 
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
@@ -3395,6 +3428,14 @@ async function clearHistory(status: HistoryStatus) {
   }
 }
 
+// 删除下拉（成功 / 跳过 / 失败）：由 el-dropdown 的 command 传进来，
+// 三个入口共用 clearHistory 里那套二次确认。
+function handleHistoryClear(command: string | number | object) {
+  if (command === 'success' || command === 'skip' || command === 'failed') {
+    void clearHistory(command)
+  }
+}
+
 async function removeHistoryItem(id: string) {
   try {
     await deleteRunHistoryItem(id)
@@ -3452,16 +3493,22 @@ onBeforeUnmount(() => {
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
-.history-actions { display: flex; gap: 8px; }
-.history-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.history-summary { display: flex; flex-wrap: wrap; gap: 12px; color: var(--el-text-color-secondary); }
-.history-summary__controls { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.history-summary__control { width: 120px; }
+/* 归巢历史的标题行要装下「统计 + 排序 + 筛选 + 搜索 + 删除」，比其它页签满得多，
+   所以这一页额外允许折行；其它页签的 .rules-card__header 不动。 */
+.history-card__header { flex-wrap: wrap; row-gap: 10px; }
+.rules-card__header-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; min-width: 0; }
+/* 右侧控件组：排序 / 状态 / 规则 / 搜索 / 删除。margin-left:auto 保证折行后也贴右。 */
+.history-header-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+/* 统计文字跟着标题走，比原来占一整行那版小一档，免得抢标题。 */
+.history-summary { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--el-text-color-secondary); }
+.history-summary__control { width: 118px; }
+/* 删除下拉的箭头：紧贴文字，别把按钮撑宽。 */
+.history-clear__caret { margin-left: 2px; font-size: 12px; }
 .history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
 .history-sort-order-button:not(.is-disabled):hover { color: #0975b8; border-color: rgba(32, 159, 238, 0.42); background: rgba(32, 159, 238, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
 .history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.history-search { display: flex; align-items: center; }
-.history-search :deep(.el-input) { width: 320px; }
+/* 标题行里的搜索框：比独占一行那版窄一档，给删除下拉留位置。 */
+.history-search__input { width: 230px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .history-rule { display: flex; flex-direction: column; gap: 6px; }
 .history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
@@ -3877,11 +3924,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .history-toolbar { flex-direction: column; align-items: stretch; }
-  .history-summary__controls { width: 100%; }
+  /* 标题行里的控件在窄屏铺满一行：搜索框跟着吃满剩余宽度。 */
+  .history-header-controls { justify-content: flex-start; }
   .history-summary__control { width: calc((100% - 48px) / 3); min-width: 0; }
-  .history-search { flex-wrap: wrap; }
-  .history-search :deep(.el-input) { width: 100%; }
+  .history-search__input { flex: 1 1 180px; width: auto; }
 }
 
 @media (max-width: 1440px) {
