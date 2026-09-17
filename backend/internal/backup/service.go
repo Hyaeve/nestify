@@ -32,6 +32,12 @@ const (
 	// 最多记录多少条文件明细，避免日志记录体积失控。
 	// 「跳过」不记明细，只累计数量（见 recordFile）。
 	maxFileEntriesPerAction = 200
+	// watchHistoryMergeWindow 是实时监控「连续执行合并」的时间窗：
+	// 上一次监控执行结束后，在这个时间内再次触发，视为同一次连续备份，
+	// 累加进同一条运行历史（见 recordRunHistory）。
+	// 监控每 5 秒轮询一次，源目录持续写入时若每次都新建记录，
+	// 归巢历史 / 任务日志会被几十条「上传 0，跳过 N」刷满。
+	watchHistoryMergeWindow = 10 * time.Minute
 )
 
 type taskState struct {
@@ -51,12 +57,23 @@ type taskState struct {
 	RecentLogs      []string
 }
 
+// watchMergeRecord 指向一条仍处于合并窗口内的「实时监控」运行历史。
+// 窗口内的下一次监控触发会累加进它，而不是新建记录。
+type watchMergeRecord struct {
+	historyID  string
+	finishedAt time.Time
+}
+
 type Service struct {
 	store *sqlite.Store
 
 	mu      sync.RWMutex
 	states  map[int64]*taskState
 	cancels map[int64]context.CancelFunc
+
+	// watchMerge 记录每个备份任务最近一条实时监控历史（taskID -> 记录）。
+	// 仅在内存里跟踪：进程重启后第一次监控触发会新建记录，之后继续合并。
+	watchMerge map[int64]watchMergeRecord
 
 	cronRunner *cron.Cron
 	cronIDs    map[int64]cron.EntryID
@@ -67,10 +84,11 @@ type Service struct {
 
 func NewService(store *sqlite.Store) *Service {
 	return &Service{
-		store:   store,
-		states:  make(map[int64]*taskState),
-		cancels: make(map[int64]context.CancelFunc),
-		cronIDs: make(map[int64]cron.EntryID),
+		store:      store,
+		states:     make(map[int64]*taskState),
+		cancels:    make(map[int64]context.CancelFunc),
+		watchMerge: make(map[int64]watchMergeRecord),
+		cronIDs:    make(map[int64]cron.EntryID),
 	}
 }
 
@@ -368,16 +386,12 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		if stats.Failed > 0 {
 			status = "failed"
 		}
-		summary := fmt.Sprintf("备份完成：扫描 %d，上传 %d，跳过 %d，删除 %d，失败 %d",
-			stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed)
 
 		s.mu.Lock()
 		if state, ok := s.states[task.ID]; ok {
 			// 手动停止优先于「成功 / 失败」判定：不算失败，措辞也换成停止。
 			if state.CancelRequested {
 				status = "cancelled"
-				summary = fmt.Sprintf("已手动停止：扫描 %d，上传 %d，跳过 %d，删除 %d，失败 %d",
-					stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed)
 			}
 			state.Running = false
 			state.CancelRequested = false
@@ -393,9 +407,15 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		}
 		s.mu.Unlock()
 
+		summary := describeBackupRunSummary(status, stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed)
 		s.log(task.ID, "%s", summary)
-		_ = s.store.UpdateBackupRunResult(task.ID, status, summary, startedAt.Format(time.RFC3339), stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted)
-		s.recordRunHistory(task, triggerMode, status, summary, startedAt, stats)
+
+		// 实时监控的连续触发会合并进同一条历史（见 recordRunHistory）。
+		// 卡片上的「上次备份」结果跟着用写回后的累计值，与归巢历史 / 任务日志保持一致。
+		if item, ok := s.recordRunHistory(task, triggerMode, status, startedAt, stats); ok {
+			_ = s.store.UpdateBackupRunResult(task.ID, item.Status, item.Summary,
+				startedAt.Format(time.RFC3339), item.ProcessedFiles, item.SuccessCount, item.SkipCount, item.DeletedCount)
+		}
 	}()
 
 	if len(task.SourceDirs) == 0 {
@@ -417,6 +437,10 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 	// 收集源文件清单（相对路径 -> 源绝对路径），供同步删除使用。
 	sourceIndex := make(map[string]string)
 	totalSources := len(task.SourceDirs)
+	// 筛选规则命中的目录 / 文件只累计数目：逐条打日志会把「最近日志」整屏刷成
+	// 「按筛选规则跳过…」，用户只需要知道跳过了多少（明细里也只有一个 skip 计数）。
+	skippedDirs := 0
+	skippedFiles := 0
 
 	for index, sourceDir := range task.SourceDirs {
 		s.setPhase(task.ID, "扫描源目录", fmt.Sprintf("%d/%d", index+1, totalSources))
@@ -449,7 +473,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 			if entry.IsDir() {
 				if matcher.excluded(relative, entry.Name(), true, 0) {
-					s.log(task.ID, "按筛选规则跳过目录：%s", relative)
+					skippedDirs++
 					return filepath.SkipDir
 				}
 				return nil
@@ -464,6 +488,7 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 
 			if matcher.excluded(relative, entry.Name(), false, fileInfo.Size()) {
 				stats.Skipped++
+				skippedFiles++
 				stats.recordFile(model.BackupFileEntry{
 					Path:   filepath.ToSlash(relative),
 					Action: model.BackupFileActionSkip,
@@ -480,6 +505,11 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 			stats.Failed++
 			s.log(task.ID, "扫描源目录失败：%s（%v）", sourceDir, err)
 		}
+	}
+
+	// 筛选规则命中的目录 / 文件不再逐条列日志，这里给一行汇总（数目为准）。
+	if skippedDirs > 0 || skippedFiles > 0 {
+		s.log(task.ID, "按筛选规则跳过 %d 个目录、%d 个文件", skippedDirs, skippedFiles)
 	}
 
 	s.setPhase(task.ID, "复制文件", fmt.Sprintf("共 %d 个文件", len(sourceIndex)))
@@ -601,26 +631,39 @@ func (s *Service) execute(task model.BackupTask, forceFull bool, triggerMode str
 		}
 	}
 
-	s.log(task.ID, "备份结束：上传 %d，跳过 %d，失败 %d", stats.Copied, stats.Skipped, stats.Failed)
+	// 收尾的统计行由 execute 的 defer 统一输出（describeBackupRunSummary），
+	// 这里不再重复打一遍，避免「最近日志」里同一件事出现两行。
 }
 
 // recordRunHistory 把一次备份执行写入运行日志（run_history），
 // 使用 archive_mode = "backup" 作为其专属模式标识，供日志页展示。
-func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status, summary string, startedAt time.Time, stats *runStats) {
+//
+// 实时监控触发的执行会被「收纳」：距上一条监控记录结束不超过
+// watchHistoryMergeWindow 时累加进那条记录，而不是新建 —— 监控每 5 秒轮询一次，
+// 源目录持续写入时若每次触发都新建，归巢历史 / 任务日志会刷出几十条「上传 0，跳过 N」。
+//
+// 返回写入后的记录（written=false 表示存储不可用，什么都没写）。
+func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status string, startedAt time.Time, stats *runStats) (model.RunHistoryItem, bool) {
 	if s.store == nil {
-		return
+		return model.RunHistoryItem{}, false
 	}
 
-	// 运行日志的状态语义：失败优先，其次全部跳过记 skip，否则 success。
-	historyStatus := status
-	if historyStatus != "failed" && stats.Copied == 0 && stats.Skipped > 0 {
-		historyStatus = "skip"
-	}
 	if strings.TrimSpace(triggerMode) == "" {
 		triggerMode = model.TriggerModeManual
 	}
 
 	finishedAt := time.Now().UTC()
+
+	if triggerMode == model.TriggerModeWatch {
+		if merged, ok := s.mergeWatchRunHistory(task, status, startedAt, finishedAt, stats); ok {
+			return merged, true
+		}
+	} else {
+		// 手动 / 定时执行会打断「一次连续监控」的语义：丢弃合并锚点，
+		// 免得后续监控触发被并进一条时间上更早、中间却夹着别的执行的记录里。
+		s.forgetWatchRunHistory(task.ID)
+	}
+
 	ruleID := task.ID
 	item := model.RunHistoryItem{
 		ID:             fmt.Sprintf("backup-%d-%d", task.ID, startedAt.UnixNano()),
@@ -628,19 +671,197 @@ func (s *Service) recordRunHistory(task model.BackupTask, triggerMode, status, s
 		RuleName:       task.Name,
 		TriggerMode:    triggerMode,
 		ArchiveMode:    "backup",
-		Status:         historyStatus,
+		Status:         resolveBackupHistoryStatus(status, stats.Copied, stats.Skipped, stats.Failed),
 		ProcessedFiles: stats.Scanned,
 		SuccessCount:   stats.Copied,
 		SkipCount:      stats.Skipped,
 		FailureCount:   stats.Failed,
 		DeletedCount:   stats.Deleted,
-		Summary:        summary,
+		Summary:        describeBackupRunSummary(status, stats.Scanned, stats.Copied, stats.Skipped, stats.Deleted, stats.Failed),
 		DetailJSON:     stats.buildBackupDetailJSON(),
 		StartedAt:      startedAt,
 		UpdatedAt:      finishedAt,
 		FinishedAt:     &finishedAt,
 	}
-	_ = s.store.UpsertRunHistory(item)
+	if err := s.store.UpsertRunHistory(item); err != nil {
+		return model.RunHistoryItem{}, false
+	}
+	if triggerMode == model.TriggerModeWatch {
+		s.rememberWatchRunHistory(task.ID, item)
+	}
+	return item, true
+}
+
+// mergeWatchRunHistory 尝试把本次实时监控执行并入上一条监控历史。
+// 命中条件：存在合并锚点，且距那次执行结束不超过 watchHistoryMergeWindow。
+// ok=false 表示未合并，调用方改为新建记录。
+func (s *Service) mergeWatchRunHistory(task model.BackupTask, status string, startedAt, finishedAt time.Time, stats *runStats) (model.RunHistoryItem, bool) {
+	s.mu.RLock()
+	anchor, ok := s.watchMerge[task.ID]
+	s.mu.RUnlock()
+	if !ok || !withinWatchMergeWindow(anchor.finishedAt, startedAt) {
+		return model.RunHistoryItem{}, false
+	}
+
+	previous, err := s.store.GetRunHistoryByID(anchor.historyID)
+	if err != nil {
+		// 记录已被清理（例如用户清空日志）：丢掉锚点，下次新建。
+		s.forgetWatchRunHistory(task.ID)
+		return model.RunHistoryItem{}, false
+	}
+
+	merged := mergeWatchRunHistoryItem(previous, task, status, startedAt, finishedAt, stats)
+	if err := s.store.UpsertRunHistory(merged); err != nil {
+		return model.RunHistoryItem{}, false
+	}
+	s.rememberWatchRunHistory(task.ID, merged)
+	return merged, true
+}
+
+// rememberWatchRunHistory 记下最新的监控历史，供窗口内的下一次触发累加。
+func (s *Service) rememberWatchRunHistory(taskID int64, item model.RunHistoryItem) {
+	finishedAt := item.UpdatedAt
+	if item.FinishedAt != nil {
+		finishedAt = *item.FinishedAt
+	}
+	s.mu.Lock()
+	s.watchMerge[taskID] = watchMergeRecord{historyID: item.ID, finishedAt: finishedAt}
+	s.mu.Unlock()
+}
+
+// forgetWatchRunHistory 丢弃合并锚点，使下一次监控触发新建记录。
+func (s *Service) forgetWatchRunHistory(taskID int64) {
+	s.mu.Lock()
+	delete(s.watchMerge, taskID)
+	s.mu.Unlock()
+}
+
+// withinWatchMergeWindow 判断本次触发是否紧跟上一次监控执行 —— 是则视为同一次连续备份。
+func withinWatchMergeWindow(lastFinishedAt, startedAt time.Time) bool {
+	if lastFinishedAt.IsZero() {
+		return false
+	}
+	gap := startedAt.Sub(lastFinishedAt)
+	if gap < 0 {
+		// 时钟回拨或记录时间异常：不合并，免得把两次无关执行粘在一起。
+		return false
+	}
+	return gap <= watchHistoryMergeWindow
+}
+
+// mergeWatchRunHistoryItem 把本次监控执行的统计与明细累加进上一条运行历史。
+//
+// 纯计算（便于单测）：计数按真实数量累加，状态与摘要按累计结果重算。
+// started_at / finished_at 都滚动到本次触发 —— 记录代表「这个任务最近的连续备份」，
+// 时间停留在最早一次会让它沉到历史列表下方（甚至掉出分页），用户反而找不到。
+func mergeWatchRunHistoryItem(previous model.RunHistoryItem, task model.BackupTask, status string, startedAt, finishedAt time.Time, stats *runStats) model.RunHistoryItem {
+	ruleID := task.ID
+	scanned := previous.ProcessedFiles + stats.Scanned
+	copied := previous.SuccessCount + stats.Copied
+	skipped := previous.SkipCount + stats.Skipped
+	deleted := previous.DeletedCount + stats.Deleted
+	failed := previous.FailureCount + stats.Failed
+
+	merged := previous
+	merged.RuleID = &ruleID
+	merged.RuleName = task.Name
+	merged.TriggerMode = model.TriggerModeWatch
+	merged.ArchiveMode = "backup"
+	merged.Status = resolveBackupHistoryStatus(status, copied, skipped, failed)
+	merged.ProcessedFiles = scanned
+	merged.SuccessCount = copied
+	merged.SkipCount = skipped
+	merged.FailureCount = failed
+	merged.DeletedCount = deleted
+	merged.Summary = describeBackupRunSummary(status, scanned, copied, skipped, deleted, failed)
+	merged.DetailJSON = mergeBackupDetailPayload(previous.DetailJSON, stats)
+	merged.StartedAt = startedAt
+	merged.UpdatedAt = finishedAt
+	merged.FinishedAt = &finishedAt
+	return merged
+}
+
+// resolveBackupHistoryStatus 归一化运行日志的状态：
+// 失败优先，其次「一个都没传、全是跳过」记 skip，其余保持传入状态（success / cancelled）。
+func resolveBackupHistoryStatus(status string, copied, skipped, failed int) string {
+	if failed > 0 || status == "failed" {
+		return "failed"
+	}
+	if status != "failed" && copied == 0 && skipped > 0 {
+		return "skip"
+	}
+	return status
+}
+
+// describeBackupRunSummary 生成运行历史的摘要，新建与合并共用同一套措辞，
+// 保证「一次连续备份」被合并后读起来仍是完整的一句话。
+func describeBackupRunSummary(status string, scanned, copied, skipped, deleted, failed int) string {
+	verb := "备份完成"
+	if status == "cancelled" {
+		verb = "已手动停止"
+	}
+	return fmt.Sprintf("%s：扫描 %d，上传 %d，跳过 %d，删除 %d，失败 %d",
+		verb, scanned, copied, skipped, deleted, failed)
+}
+
+// mergeBackupDetailPayload 把本次执行的明细并入上一条历史的载荷（detail_json）。
+//
+// counts 与 files_total 按真实数量累加；files 追加时仍遵守每个动作
+// maxFileEntriesPerAction 的上限，「跳过」照旧只体现在 counts 里、不落明细。
+func mergeBackupDetailPayload(previousJSON string, stats *runStats) string {
+	merged := model.RunDetail{Kind: model.RunDetailKindBackup}
+	if trimmed := strings.TrimSpace(previousJSON); trimmed != "" {
+		var stored model.RunDetail
+		if err := json.Unmarshal([]byte(trimmed), &stored); err == nil {
+			merged = stored
+		}
+	}
+	if strings.TrimSpace(merged.Kind) == "" {
+		merged.Kind = model.RunDetailKindBackup
+	}
+	if merged.Counts == nil {
+		merged.Counts = make(map[string]int, 4)
+	}
+
+	listed := make(map[string]int, 4)
+	for _, entry := range merged.Files {
+		listed[entry.Action]++
+	}
+
+	truncated := merged.FilesTruncated
+	for _, entry := range stats.Files {
+		listed[entry.Action]++
+		if listed[entry.Action] > maxFileEntriesPerAction {
+			truncated = true
+			continue
+		}
+		merged.Files = append(merged.Files, entry)
+	}
+	for action, count := range stats.fileCounts {
+		merged.Counts[action] += count
+	}
+
+	// files_total 不含跳过：只累加本次会列出来的明细（上传 / 失败 / 删除）。
+	listable := stats.fileTotal - stats.fileCounts[model.BackupFileActionSkip]
+	if listable < 0 {
+		listable = 0
+	}
+	merged.FilesTotal += listable
+	merged.FilesTruncated = truncated
+
+	total := 0
+	for _, count := range merged.Counts {
+		total += count
+	}
+	if len(merged.Files) == 0 && total == 0 {
+		return ""
+	}
+
+	encoded, err := json.Marshal(merged)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }
 
 type runStats struct {
