@@ -1120,14 +1120,14 @@ onMounted(async () => {
 
 .logs-detail-card__title {
   color: #0f172a;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 1.55;
 }
 
 .logs-detail-card__desc {
   color: #64748b;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 

@@ -3526,8 +3526,8 @@ onBeforeUnmount(() => {
 /* 折叠任务列的任务条目（标题 + 副行）用鸿蒙字体，见 styles/index.scss 顶部的 @font-face。
    只作用于这张折叠表（平铺表的行是另一套标记），不动页面其它文字。 */
 .history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; font-family: var(--font-harmony); }
-.history-detail-card__title { font-weight: 700; color: var(--el-text-color-primary); }
-.history-detail-card__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
+.history-detail-card__title { font-size: 16px; font-weight: 700; line-height: 1.55; color: var(--el-text-color-primary); }
+.history-detail-card__desc { font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
 /* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
    让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
 .detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; flex: 0 0 auto; gap: 18px; margin-bottom: 8px; padding: 8px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-fill-color-extra-light); }
