@@ -133,43 +133,7 @@
         </div>
       </template>
 
-        <el-table v-if="historyViewMode === 'flat'" v-loading="historyLoading" :data="historyItems" class="rules-table" table-layout="auto">
-          <el-table-column label="规则 / 摘要" min-width="360">
-            <template #default="scope">
-              <div class="history-rule">
-                <div class="history-rule__title">{{ scope.row.rule_name || '未知规则' }}</div>
-                <div class="history-rule__desc">{{ formatRunHistorySummary(scope.row.summary) || '—' }}</div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="模式" width="120">
-            <template #default="scope">
-              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="scope">
-              <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="统计" width="140">
-            <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
-          </el-table-column>
-          <el-table-column label="时间" min-width="180">
-            <template #default="scope">{{ formatDateTime(scope.row.started_at) }}</template>
-          </el-table-column>
-          <el-table-column label="大小" width="120">
-            <template #default="scope">{{ formatHistorySize(scope.row.size_bytes) }}</template>
-          </el-table-column>
-          <el-table-column label="操作" width="130">
-            <template #default="scope">
-              <el-button link type="primary" @click="openHistoryItemDetail(scope.row)">详情</el-button>
-              <el-button link type="danger" @click="removeHistoryItem(scope.row.id)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-table v-else v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" @row-click="openHistoryDetailDialog">
+        <el-table v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" @row-click="openHistoryDetailDialog">
           <el-table-column label="折叠任务" width="620">
             <template #default="scope">
               <button type="button" class="history-detail-card" @click.stop="openHistoryDetailDialog(scope.row)">
@@ -990,21 +954,18 @@ import { cancelRun, fetchActiveRuns, prepareRuleExecution, type RunInstance } fr
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
 import {
   clearRunHistory,
-  deleteRunHistoryItem,
   emptyRunHistory,
   fetchRunHistory,
   fetchRunHistoryDetail,
   type RunHistoryItem,
   type RunHistorySummary,
 } from '../api/runHistory'
-import { fetchSettings } from '../api/system'
 import {
   backupTriggerLabel,
   buildRunDetailSummarySegments,
   parseRunDetail,
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
-import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
@@ -1017,7 +978,6 @@ type CleanupOptionValueKey = 'cleanup_retention_days'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text' | 'merge_same_name_dirs'
 type PurifyArchiveMode = 'cleanup' | 'transform'
 type HistoryStatus = 'success' | 'skip' | 'failed'
-type HistoryViewMode = 'flat' | 'tree'
 type HistoryTreeRow = RunHistoryItem & {
   id: string
   title: string
@@ -1063,10 +1023,6 @@ const transformModeOptions = [
   { key: 'filter_matching_text', label: '匹配过滤', description: '按自定义规则过滤文件夹名称中的指定片段，支持普通文本与正则匹配，命中后会在重命名结果中移除匹配内容。' },
   { key: 'merge_same_name_dirs', label: '同名合并', description: '默认不勾选；关闭时文件夹转换后若出现同名冲突，则自动追加 -re、-re1、-re2……；开启后会将转换后同名的文件夹自动合并为一个目录。' },
 ] as const
-
-function normalizeHistoryViewMode(value?: string): HistoryViewMode {
-  return value === 'tree' ? 'tree' : 'flat'
-}
 
 function createDefaultPackageOptions(): Record<PackageOptionKey, boolean> {
   return { flat_archive: false, include_manifest: true, verify_after_archive: true, cleanup_source_after_archive: false, package_nested_folders: true, match_archive: false, match_archive_parent_rename: false, single_file_nesting: false, hierarchical_archive: false }
@@ -1336,10 +1292,6 @@ function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'wat
   return 'once'
 }
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
-}
-
 // 折叠任务列表的「时间」列：只到月日与时分秒（9/17 14:05:03）。
 // 折叠条目标题里已经不放时间了，列里再带上年份只是噪音。
 function formatMonthDayTime(value?: string) {
@@ -1352,23 +1304,6 @@ function formatMonthDayTime(value?: string) {
   }
   const pad = (input: number) => String(input).padStart(2, '0')
   return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
-
-function formatHistorySize(sizeBytes?: number) {
-  const size = Number(sizeBytes || 0)
-  if (!Number.isFinite(size) || size <= 0) {
-    return '—'
-  }
-
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let value = size
-  let index = 0
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024
-    index += 1
-  }
-
-  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(2)} ${units[index]}`
 }
 
 const RULES_WHEEL_SCROLLBAR_BAND = 10
@@ -1619,7 +1554,6 @@ const historySortBy = ref<'name' | 'modified_at'>('modified_at')
 const historySortOrder = ref<'asc' | 'desc'>('desc')
 const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
 const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'>('all')
-const historyViewMode = ref<HistoryViewMode>('flat')
 const historyDetailDialogVisible = ref(false)
 const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
@@ -2579,15 +2513,6 @@ async function handleRuleReorder(ruleType: RuleListType, oldIndex: number, newIn
   }
 }
 
-async function loadHistoryViewModeSetting() {
-  try {
-    const response = await fetchSettings()
-    historyViewMode.value = normalizeHistoryViewMode(response.data?.history_view_mode)
-  } catch {
-    historyViewMode.value = 'flat'
-  }
-}
-
 async function loadHistory() {
   historyLoading.value = true
   errorMessage.value = ''
@@ -2600,7 +2525,8 @@ async function loadHistory() {
       rule_type: historyRuleTypeFilter.value === 'all' ? undefined : historyRuleTypeFilter.value,
       sort_by: historySortBy.value,
       sort_order: historySortOrder.value,
-      view_mode: historyViewMode.value,
+      // 展示方式固定为折叠（分组）视图，平铺已取消。
+      view_mode: 'tree',
     })
     historyItems.value = response.data?.items ?? []
     historyTotal.value = response.data?.total ?? 0
@@ -2651,7 +2577,6 @@ async function switchTab(tab: TabKey) {
     return
   }
 
-  await loadHistoryViewModeSetting()
   await loadHistory()
 }
 
@@ -2808,19 +2733,6 @@ async function loadSelectedRunDetail(row: HistoryTreeRow) {
   } catch {
     selectedRunDetail.value = null
   }
-}
-
-// 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
-// 标题 / 副行与折叠模式保持同一套措辞，免得同一个任务在两个视图里长得不一样。
-function openHistoryItemDetail(item: RunHistoryItem) {
-  openHistoryDetailDialog({
-    ...item,
-    id: `single-${item.id}`,
-    title: `${historyModeLabel(item)}任务 · ${item.rule_name || '未知规则'}`,
-    description: `${historyTriggerPhrase(item)} · 操作 ${Math.max(0, Number(item.processed_files || 0))} 个文件或文件夹`,
-    is_group: true,
-    source: item,
-  })
 }
 
 function triggerModeText(mode?: string) {
@@ -3454,16 +3366,6 @@ function handleHistoryClear(command: string | number | object) {
   }
 }
 
-async function removeHistoryItem(id: string) {
-  try {
-    await deleteRunHistoryItem(id)
-    await loadHistory()
-    ElMessage.success('历史记录已删除')
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '删除历史记录失败'
-  }
-}
-
 onMounted(() => {
   window.addEventListener('wheel', handleRulesTableWheel, { passive: false })
 
@@ -3528,9 +3430,6 @@ onBeforeUnmount(() => {
 /* 标题行里的搜索框：比独占一行那版窄一档，给删除下拉留位置。 */
 .history-search__input { width: 230px; }
 .history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
-.history-rule { display: flex; flex-direction: column; gap: 6px; }
-.history-rule__title { font-weight: 600; color: var(--el-text-color-primary); }
-.history-rule__desc { line-height: 1.6; color: var(--el-text-color-secondary); }
 .history-tree-table :deep(.el-table__row) { cursor: pointer; }
 /* 折叠任务列：文字整体往右挪一档（表头与内容一起挪，保持对齐）。
    为了让后面几列往左靠，任务列宽度由 min-width 改成了定宽，见模板注释。
@@ -3538,9 +3437,10 @@ onBeforeUnmount(() => {
    （那要求 el-table 是它的后代，永远匹配不上）。 */
 .history-tree-table :deep(th:first-child .cell),
 .history-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
-/* 折叠任务列的任务条目（标题 + 副行）用鸿蒙字体，见 styles/index.scss 顶部的 @font-face。
-   只作用于这张折叠表（平铺表的行是另一套标记），不动页面其它文字。 */
-.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; font-family: var(--font-harmony); }
+/* 折叠任务列的任务条目（标题 + 副行）：走系统默认 UI 字体（--font-ui），与运行日志、
+   页面其它文字一致。原来是自托管的鸿蒙字体，用户反馈不好看，已去掉。
+   这里必须显式声明：这个节点是 <button>，浏览器对按钮默认用表单控件字体，不继承 body。 */
+.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; font-family: var(--font-ui); }
 .history-detail-card__title { font-size: 16px; font-weight: 700; line-height: 1.55; color: var(--el-text-color-primary); }
 .history-detail-card__desc { font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
 /* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，

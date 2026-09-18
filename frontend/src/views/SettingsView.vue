@@ -66,48 +66,6 @@
               </el-select>
             </div>
 
-            <div class="settings-field-card settings-field-card--mode">
-              <div class="settings-field-card__main">
-                <div class="settings-field-card__label">归巢历史展示方式</div>
-              </div>
-              <div class="settings-view-mode-group" role="group" aria-label="归巢历史展示方式">
-                <el-tooltip content="平铺" placement="top" :show-after="300">
-                  <button
-                    type="button"
-                    class="settings-view-mode-button"
-                    :class="{ 'is-active': settingsForm.historyViewMode === 'flat' }"
-                    aria-label="平铺"
-                    :aria-pressed="settingsForm.historyViewMode === 'flat'"
-                    @click="settingsForm.historyViewMode = 'flat'"
-                  >
-                    <svg class="settings-view-mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M5 6.5h14" />
-                      <path d="M5 12h14" />
-                      <path d="M5 17.5h14" />
-                    </svg>
-                  </button>
-                </el-tooltip>
-                <el-tooltip content="折叠" placement="top" :show-after="300">
-                  <button
-                    type="button"
-                    class="settings-view-mode-button"
-                    :class="{ 'is-active': settingsForm.historyViewMode === 'tree' }"
-                    aria-label="折叠"
-                    :aria-pressed="settingsForm.historyViewMode === 'tree'"
-                    @click="settingsForm.historyViewMode = 'tree'"
-                  >
-                    <svg class="settings-view-mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 6.5h12" />
-                      <path d="M6 6.5v11" />
-                      <path d="M9 12h9" />
-                      <path d="M9 17.5h9" />
-                      <path d="M6 12h3" />
-                      <path d="M6 17.5h3" />
-                    </svg>
-                  </button>
-                </el-tooltip>
-              </div>
-            </div>
           </el-form>
         </section>
 
@@ -291,18 +249,11 @@ const adminForm = reactive({
   password: '',
 })
 
-type HistoryViewMode = 'flat' | 'tree'
-
-function normalizeHistoryViewMode(value?: string): HistoryViewMode {
-  return value === 'tree' ? 'tree' : 'flat'
-}
-
 const settingsForm = reactive({
   logRetentionDays: 5,
   logRetentionMaxRecords: 10000,
   defaultPage: 'dashboard',
   pageSize: 50,
-  historyViewMode: 'flat' as HistoryViewMode,
 })
 
 // —— 临时缓存设置 ——
@@ -342,7 +293,6 @@ async function loadSettings() {
     if (response.data) {
       settingsForm.logRetentionDays = response.data.log_retention_days || 5
       settingsForm.logRetentionMaxRecords = response.data.log_retention_max_records || 10000
-      settingsForm.historyViewMode = normalizeHistoryViewMode(response.data.history_view_mode)
       settingsForm.defaultPage = response.data.default_page || 'dashboard'
       settingsForm.pageSize = response.data.page_size || 50
       cacheForm.cacheDir = response.data.cache_dir || '/tmp'
@@ -360,7 +310,6 @@ async function submitSettings() {
     await updateSettings({
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
-      history_view_mode: settingsForm.historyViewMode,
       default_page: settingsForm.defaultPage,
       page_size: settingsForm.pageSize,
       cache_dir: cacheForm.cacheDir,
@@ -410,7 +359,6 @@ async function persistCacheSettings() {
     await updateSettings({
       log_retention_days: settingsForm.logRetentionDays,
       log_retention_max_records: settingsForm.logRetentionMaxRecords,
-      history_view_mode: settingsForm.historyViewMode,
       default_page: settingsForm.defaultPage,
       page_size: settingsForm.pageSize,
       cache_dir: cacheForm.cacheDir,
@@ -880,10 +828,6 @@ async function handleBackupFileChange(file: UploadFile) {
   width: 148px;
 }
 
-.settings-field-card--mode {
-  align-items: center;
-}
-
 .settings-submit-row {
   display: flex;
   margin-top: 4px;
@@ -1091,58 +1035,4 @@ async function handleBackupFileChange(file: UploadFile) {
   background: transparent;
 }
 
-.settings-view-mode-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  padding: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
-  background: rgba(248, 250, 252, 0.72);
-  backdrop-filter: blur(8px);
-}
-
-.settings-view-mode-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 12px;
-  color: #64748b;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.settings-view-mode-button:hover {
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.14);
-}
-
-.settings-view-mode-button.is-active {
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(32, 159, 238, 0.18), 0 8px 18px rgba(32, 159, 238, 0.1);
-}
-
-.settings-view-mode-button:active {
-  transform: translateY(1px);
-}
-
-.settings-view-mode-icon {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 </style>

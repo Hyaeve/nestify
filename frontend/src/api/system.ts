@@ -33,6 +33,8 @@ export interface SettingsPayload {
   log_level: string
   log_retention_days: number
   log_retention_max_records: number
+  /** 已废弃（轮 93）：归巢历史 / 运行日志的展示方式固定为「折叠」，前端不再读写它。
+      后端字段保留只为兼容旧库，别再拿它决定展示方式。 */
   history_view_mode: string
   default_page: string
   page_size: number
@@ -49,7 +51,8 @@ export interface SettingsPayload {
 export interface UpdateSettingsPayload {
   log_retention_days: number
   log_retention_max_records: number
-  history_view_mode: string
+  /** 已废弃（轮 93），见 SettingsPayload.history_view_mode。 */
+  history_view_mode?: string
   default_page: string
   page_size: number
   cache_dir: string

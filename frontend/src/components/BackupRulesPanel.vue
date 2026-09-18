@@ -652,7 +652,8 @@ async function saveResourceLimit() {
     await updateSettings({
       log_retention_days: current.data?.log_retention_days ?? 5,
       log_retention_max_records: current.data?.log_retention_max_records ?? 10000,
-      history_view_mode: current.data?.history_view_mode ?? 'flat',
+      // 已废弃（轮 93）：展示方式固定为折叠。这里是整体覆盖式 PUT，原样回传只是别把旧值改掉。
+      history_view_mode: current.data?.history_view_mode ?? 'tree',
       default_page: current.data?.default_page ?? 'dashboard',
       page_size: current.data?.page_size ?? 50,
       cache_dir: current.data?.cache_dir ?? '/tmp',

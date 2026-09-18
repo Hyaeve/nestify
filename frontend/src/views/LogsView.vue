@@ -50,7 +50,7 @@
       <div class="logs-toolbar-panel">
         <div class="logs-toolbar">
           <el-select v-model="statusFilter" class="logs-toolbar__select" placeholder="状态" @change="handleFiltersChange">
-            <el-option label="全部级别" value="all" />
+            <el-option label="全部结果" value="all" />
             <el-option label="成功" value="success" />
             <el-option label="失败" value="failed" />
             <el-option label="跳过" value="skip" />
@@ -113,92 +113,11 @@
             <span v-if="searchKeyword">关键字：{{ searchKeyword }}</span>
           </div>
 
-          <div class="logs-view-toggle" role="group" aria-label="日志展示方式">
-            <el-tooltip content="平铺" placement="top" :show-after="300">
-              <button
-                type="button"
-                class="logs-view-toggle__button"
-                :class="{ 'is-active': logsViewMode === 'flat' }"
-                aria-label="平铺"
-                :aria-pressed="logsViewMode === 'flat'"
-                @click="logsViewMode = 'flat'"
-              >
-                <svg class="logs-view-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 6.5h14" />
-                  <path d="M5 12h14" />
-                  <path d="M5 17.5h14" />
-                </svg>
-              </button>
-            </el-tooltip>
-            <el-tooltip content="折叠" placement="top" :show-after="300">
-              <button
-                type="button"
-                class="logs-view-toggle__button"
-                :class="{ 'is-active': logsViewMode === 'tree' }"
-                aria-label="折叠"
-                :aria-pressed="logsViewMode === 'tree'"
-                @click="logsViewMode = 'tree'"
-              >
-                <svg class="logs-view-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6 6.5h12" />
-                  <path d="M6 6.5v11" />
-                  <path d="M9 12h9" />
-                  <path d="M9 17.5h9" />
-                  <path d="M6 12h3" />
-                  <path d="M6 17.5h3" />
-                </svg>
-              </button>
-            </el-tooltip>
-          </div>
         </div>
       </div>
 
       <div class="logs-table-shell">
-        <el-table v-if="logsViewMode === 'flat'" v-loading="loading" :data="historyItems" class="logs-table" empty-text="暂无运行日志">
-          <el-table-column label="时间" min-width="180">
-            <template #default="scope">
-              <span class="logs-time">{{ formatDateTime(scope.row.started_at) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="级别" width="120" align="center">
-            <template #default="scope">
-              <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="模式" width="130" align="center">
-            <template #default="scope">
-              <span class="logs-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="消息" min-width="520">
-            <template #default="scope">
-              <div class="logs-message">
-                <div class="logs-message__title">
-                  {{ formatRunHistorySummary(scope.row.summary) || '—' }}
-                </div>
-                <div class="logs-message__meta">
-                  <span>{{ scope.row.rule_name || '手动任务' }}</span>
-                  <span>{{ logTriggerText(scope.row) }}</span>
-                  <span>处理 {{ scope.row.processed_files }}</span>
-                  <span>成功 {{ scope.row.success_count }}</span>
-                  <span>跳过 {{ scope.row.skip_count }}</span>
-                  <span>失败 {{ scope.row.failure_count }}</span>
-                </div>
-              </div>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="操作" width="90" align="center">
-            <template #default="scope">
-              <el-button link type="primary" @click="openLogItemDetail(scope.row)">详情</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-table v-else v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无运行日志" @row-click="openLogDetailDialog">
+        <el-table v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无运行日志" @row-click="openLogDetailDialog">
           <!-- 「折叠任务」原来是唯一的弹性列，会把表格剩余宽度全部吃掉（实测 854px），
                后面的列因此被顶到很远。改成定宽后，剩余宽度交给末尾的弹性空列。
                780 = 表格宽 1364 − 后面四列 510 − 右边留白 74（与归巢历史折叠表同款留白），
@@ -226,7 +145,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="级别" width="120" align="center">
+          <el-table-column label="结果" width="120" align="center">
             <template #default="scope">
               <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
             </template>
@@ -288,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import RunDetailList from '../components/RunDetailList.vue'
@@ -299,12 +218,10 @@ import {
   parseRunDetail,
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
-import { formatRunHistorySummary } from '../utils/runHistorySummary'
 import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
 
-type LogsViewMode = 'flat' | 'tree'
 type LogTreeRow = RunHistoryItem & {
-  // 分组行 / 平铺行的 id 都加了前缀，仅用于表格 row-key。
+  // 分组行的 id 加了前缀，仅用于表格 row-key。
   id: string
   // 原始运行日志 id：拉取执行明细（detail_json）时要用它。
   historyId: string
@@ -323,28 +240,6 @@ function createDefaultHistorySummary(): RunHistorySummary {
   }
 }
 
-const logsViewModeStorageKey = 'nestify.logs.viewMode'
-
-function normalizeLogsViewMode(value: unknown): LogsViewMode {
-  return value === 'tree' ? 'tree' : 'flat'
-}
-
-function readLogsViewModePreference(): LogsViewMode {
-  if (typeof window === 'undefined') {
-    return 'flat'
-  }
-
-  return normalizeLogsViewMode(window.localStorage.getItem(logsViewModeStorageKey))
-}
-
-function persistLogsViewModePreference(mode: LogsViewMode) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  window.localStorage.setItem(logsViewModeStorageKey, mode)
-}
-
 const loading = ref(false)
 const historyItems = ref<RunHistoryItem[]>([])
 const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
@@ -359,7 +254,6 @@ const settingsStore = useSettingsStore()
 const logsPageSizeOptions = settingsPageSizeOptions
 const logsPageSize = ref(settingsStore.pageSize || 50)
 const logsCurrentPage = ref(1)
-const logsViewMode = ref<LogsViewMode>(readLogsViewModePreference())
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
@@ -405,7 +299,8 @@ async function loadHistory() {
       rule_type: ruleTypeFilter.value !== 'all' ? ruleTypeFilter.value : undefined,
       sort_by: logsSortBy.value,
       sort_order: logsSortOrder.value,
-      view_mode: logsViewMode.value,
+      // 展示方式固定为折叠（分组）视图，平铺已取消。
+      view_mode: 'tree',
     })
     historyItems.value = response.data?.items ?? []
     filteredTotal.value = response.data?.total ?? 0
@@ -477,19 +372,6 @@ async function handleClearHistory() {
 
     ElMessage.error(error instanceof Error ? error.message : '清空运行日志失败')
   }
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return '—'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 // 折叠列表的「时间」列：只到月日与时分秒（9/17 20:15:03）。
@@ -635,19 +517,6 @@ function openLogDetailDialog(row: LogTreeRow) {
   void loadSelectedRunDetail(row)
 }
 
-// 平铺视图里把单条记录包装成任务分组，同样可以打开详情。
-// 标题 / 副行与折叠模式保持同一套措辞，免得同一个任务在两个视图里长得不一样。
-function openLogItemDetail(item: RunHistoryItem) {
-  openLogDetailDialog({
-    ...item,
-    id: `single-${item.id}`,
-    historyId: item.id,
-    title: `${historyModeLabel(item)}任务 · ${item.rule_name || '手动任务'}`,
-    description: `${logTriggerPhrase(item)} · 操作 ${Math.max(0, Number(item.processed_files || 0))} 个文件或文件夹`,
-    is_group: true,
-  })
-}
-
 function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
   switch (item?.archive_mode) {
     case 'package':
@@ -691,12 +560,6 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
       return ''
   }
 }
-
-watch(logsViewMode, (mode) => {
-  persistLogsViewModePreference(mode)
-  logsCurrentPage.value = 1
-  void loadHistory()
-})
 
 onMounted(async () => {
   await settingsStore.ensureLoaded()
@@ -921,61 +784,6 @@ onMounted(async () => {
   box-shadow: 0 0 0 1px #e2e8f0 inset;
 }
 
-.logs-view-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 42px;
-  padding: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 16px;
-  background: rgba(248, 250, 252, 0.72);
-  backdrop-filter: blur(8px);
-}
-
-.logs-view-toggle__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: 0;
-  border-radius: 12px;
-  color: #64748b;
-  background: transparent;
-  cursor: pointer;
-  transition:
-    color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
-}
-
-.logs-view-toggle__button:hover {
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.14);
-}
-
-.logs-view-toggle__button.is-active {
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(32, 159, 238, 0.18), 0 8px 18px rgba(32, 159, 238, 0.1);
-}
-
-.logs-view-toggle__button:active {
-  transform: translateY(1px);
-}
-
-.logs-view-toggle__icon {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .logs-action {
   min-height: 42px;
   border: 0;
@@ -1063,9 +871,12 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+/* 「结果」列的 成功 / 失败 / 跳过 标签：与「折叠任务」列同一套字体（系统默认 UI 字体），
+   不再跟随自托管的鸿蒙字体。 */
 .logs-level-tag {
   min-width: 58px;
   border-radius: 999px;
+  font-family: var(--font-ui);
   font-weight: 700;
 }
 
@@ -1103,8 +914,10 @@ onMounted(async () => {
 .logs-tree-table :deep(th:first-child .cell),
 .logs-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
 
-/* 折叠任务列的任务条目（标题 + 副行）用鸿蒙字体，见 styles/index.scss 顶部的 @font-face。
-   只作用于这张折叠表（平铺表的行是另一套标记），不动页面其它文字。 */
+/* 折叠任务列的任务条目（标题 + 副行）：走系统默认 UI 字体（--font-ui），
+   与页面其它文字一致。原来是自托管的鸿蒙字体，用户反馈不好看，已去掉。
+   注意这里必须显式声明：这个节点是 <button>，浏览器对按钮默认用表单控件字体，
+   不会继承 body 的 font-family。 */
 .logs-detail-card {
   display: flex;
   flex-direction: column;
@@ -1115,7 +928,7 @@ onMounted(async () => {
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-family: var(--font-harmony);
+  font-family: var(--font-ui);
 }
 
 .logs-detail-card__title {
@@ -1175,37 +988,6 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-}
-
-.logs-message {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.logs-message__title {
-  color: #0f172a;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
-.logs-message__meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: #64748b;
-  font-size: 12px;
-}
-
-.logs-message__meta span {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #f8fafc;
 }
 
 .logs-pagination {
