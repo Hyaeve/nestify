@@ -36,11 +36,13 @@ func detailEntriesByAction(detail model.RunDetail, action string) []model.RunFil
 	return entries
 }
 
-// TestRunDetailCollectorCapsPerAction 锁定「每个动作最多 200 条明细」的约定：
-// 超出部分只体现在 counts 里，避免明细载荷把日志接口撑爆。
-func TestRunDetailCollectorCapsPerAction(t *testing.T) {
+// TestRunDetailCollectorKeepsAllEntries 锁定「明细不再按动作封顶」（轮 96）：
+// 一次执行动了多少条就记多少条，counts / files / files_total 三者恒等，
+// 任务详情窗口靠分页查看（一页条数跟随系统设置）。
+func TestRunDetailCollectorKeepsAllEntries(t *testing.T) {
+	const total = 230
 	collector := newRunDetailCollector(model.RunDetailKindStrm)
-	for index := 0; index < maxDetailEntriesPerAction+30; index++ {
+	for index := 0; index < total; index++ {
 		collector.record(model.RunFileEntry{
 			Path:   "媒体/" + string(rune('a'+index%26)) + ".mkv",
 			Action: model.RunFileActionStrm,
@@ -52,14 +54,17 @@ func TestRunDetailCollectorCapsPerAction(t *testing.T) {
 		t.Fatalf("解析明细失败: %v", err)
 	}
 
-	if got := len(detail.Files); got != maxDetailEntriesPerAction {
-		t.Fatalf("明细条数 = %d, want %d", got, maxDetailEntriesPerAction)
+	if got := len(detail.Files); got != total {
+		t.Fatalf("明细条数 = %d, want %d（不再截断）", got, total)
 	}
-	if got := detail.Counts[model.RunFileActionStrm]; got != maxDetailEntriesPerAction+30 {
-		t.Fatalf("counts 应保留真实数量 %d，实际 %d", maxDetailEntriesPerAction+30, got)
+	if got := detail.Counts[model.RunFileActionStrm]; got != total {
+		t.Fatalf("counts = %d, want %d", got, total)
 	}
-	if !detail.FilesTruncated {
-		t.Fatal("超出上限时应标记 files_truncated")
+	if detail.FilesTotal != total {
+		t.Fatalf("files_total = %d, want %d", detail.FilesTotal, total)
+	}
+	if detail.FilesTruncated {
+		t.Fatal("已无每动作上限，不应再标记 files_truncated")
 	}
 }
 

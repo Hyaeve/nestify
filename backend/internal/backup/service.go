@@ -28,10 +28,9 @@ import (
 const (
 	monitorPollInterval = 5 * time.Second
 	maxRecentLogs       = 60
-	// maxFileEntriesPerAction 限制运行日志详情里每个动作（上传/失败/删除）
-	// 最多记录多少条文件明细，避免日志记录体积失控。
-	// 「跳过」不记明细，只累计数量（见 recordFile）。
-	maxFileEntriesPerAction = 200
+	// 明细不再按动作封顶（轮 96）：备份了多少个文件就记多少条明细，
+	// counts / files / files_total 三者恒等，任务详情窗口靠分页查看
+	// （一页条数跟随系统设置里的「每页文件数」）。
 	// watchHistoryMergeWindow 是实时监控「连续执行合并」的时间窗：
 	// 上一次监控执行结束后，在这个时间内再次触发，视为同一次连续备份，
 	// 累加进同一条运行历史（见 recordRunHistory）。
@@ -981,8 +980,8 @@ func describeBackupRunSummary(status string, scanned, copied, skipped, deleted, 
 
 // mergeBackupDetailPayload 把本次执行的明细并入上一条历史的载荷（detail_json）。
 //
-// counts 与 files_total 按真实数量累加；files 追加时仍遵守每个动作
-// maxFileEntriesPerAction 的上限，「跳过」照旧只体现在 counts 里、不落明细。
+// counts 与 files_total 按真实数量累加，files 也全部保留（轮 96 起不再有每动作上限）——
+// 合并后的 counts / files / files_total 三者恒等，「跳过」同样逐条落明细。
 func mergeBackupDetailPayload(previousJSON string, stats *runStats) string {
 	merged := model.RunDetail{Kind: model.RunDetailKindBackup}
 	if trimmed := strings.TrimSpace(previousJSON); trimmed != "" {
@@ -998,27 +997,15 @@ func mergeBackupDetailPayload(previousJSON string, stats *runStats) string {
 		merged.Counts = make(map[string]int, 4)
 	}
 
-	listed := make(map[string]int, 4)
-	for _, entry := range merged.Files {
-		listed[entry.Action]++
-	}
-
-	truncated := merged.FilesTruncated
 	for _, entry := range stats.Files {
-		listed[entry.Action]++
-		if listed[entry.Action] > maxFileEntriesPerAction {
-			truncated = true
-			continue
-		}
 		merged.Files = append(merged.Files, entry)
 	}
 	for action, count := range stats.fileCounts {
 		merged.Counts[action] += count
 	}
 
-	// files_total 累加本次会列出来的明细（上传 / 失败 / 删除 / 跳过）。
+	// files_total 累加本次列出的明细（上传 / 失败 / 删除 / 跳过）——与条目数恒等。
 	merged.FilesTotal += stats.fileTotal
-	merged.FilesTruncated = truncated
 
 	// 根路径随明细一起带上：实时监控的连续触发会走到这里合并，本次任务配置的根路径为准。
 	if roots := normalizeBackupRoots(stats.SourceRoots); len(roots) > 0 {
@@ -1054,7 +1041,6 @@ type runStats struct {
 	Files      []model.BackupFileEntry
 	fileCounts map[string]int
 	fileTotal  int
-	truncated  bool
 
 	// SourceRoots / TargetRoots 是任务配置里的源 / 目标根路径，随明细一起入库：
 	// 前端把目标端绝对路径裁成「根路径下一级」显示，避免长路径把明细列挤爆。
@@ -1062,13 +1048,11 @@ type runStats struct {
 	TargetRoots []string
 }
 
-// recordFile 采集一条文件明细。每个动作最多保留 maxFileEntriesPerAction 条，
-// 但 fileCounts / fileTotal 始终按真实数量累加（详情面板用它显示准确条数）。
+// recordFile 采集一条文件明细：条目全部保留（轮 96 起不再按动作封顶），
+// fileCounts / fileTotal 与条目数恒等。
 //
 // 「跳过」也逐条落盘：用户要能在任务详情里看到「到底是哪些文件被跳过了」
-// （筛选规则排除、目标同名文件都会走这里）。同样受每动作 200 条上限约束，
-// 所以海量跳过只会撑满「跳过」自己的额度，不会挤掉上传 / 失败条目，
-// 也不会把 detail_json 撑大。
+// （筛选规则排除、目标同名文件都会走这里），条数与统计数字一致。
 func (s *runStats) recordFile(entry model.BackupFileEntry) {
 	if s == nil || strings.TrimSpace(entry.Path) == "" {
 		return
@@ -1079,11 +1063,6 @@ func (s *runStats) recordFile(entry model.BackupFileEntry) {
 	}
 	s.fileCounts[entry.Action]++
 	s.fileTotal++
-
-	if s.fileCounts[entry.Action] > maxFileEntriesPerAction {
-		s.truncated = true
-		return
-	}
 	s.Files = append(s.Files, entry)
 }
 
@@ -1118,18 +1097,16 @@ func (s *runStats) buildBackupDetailJSON() string {
 		return ""
 	}
 
-	// files_total 只统计会被列出的明细。「跳过」现在也逐条列出，与其它动作一样计入其中
-	// （超出条数上限的部分由 counts 体现）。
+	// files_total 与 counts 之和、files 条数三者恒等（轮 96 起不再有每动作上限）。
 	filesTotal := s.fileTotal
 
 	encoded, err := json.Marshal(model.BackupDetail{
-		Kind:           "backup",
-		Files:          s.Files,
-		Counts:         s.fileCounts,
-		FilesTotal:     filesTotal,
-		FilesTruncated: s.truncated,
-		SourceRoots:    normalizeBackupRoots(s.SourceRoots),
-		TargetRoots:    normalizeBackupRoots(s.TargetRoots),
+		Kind:        "backup",
+		Files:       s.Files,
+		Counts:      s.fileCounts,
+		FilesTotal:  filesTotal,
+		SourceRoots: normalizeBackupRoots(s.SourceRoots),
+		TargetRoots: normalizeBackupRoots(s.TargetRoots),
 	})
 	if err != nil {
 		return ""

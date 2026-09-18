@@ -239,8 +239,8 @@ export function buildRunDetailSummarySegments(
 
 // filterRunDetailFiles 按统计项筛明细；未选中任何项（null）时返回整份明细。
 //
-// 「跳过」现在也有逐条明细，点它就只看被跳过的那些文件（后端每动作最多 200 条，
-// 超出部分只在统计数字里体现，所以筛出来的条数可能少于统计值）。
+// 「跳过」也有逐条明细，点它就只看被跳过的那些文件。后端不再限制每动作条数
+// （轮 96），所以筛出来的条数与统计数字一致。
 //
 // kind 只在净化链路（cleanup）上用一下：净化规则干的活就是删除，后端也把删除计进
 // success_count，所以它的「成功」要连删除条目一起筛出来 —— 否则「成功 N」点开是空的，
@@ -337,8 +337,8 @@ export function parseRunDetail(item?: { archive_mode?: string; detail_json?: str
     return null
   }
 
-  // 「共 N 项」按 counts 求和（含跳过，跳过现在也逐条列出）。counts 是真实数量，
-  // 明细条数可能因为每动作 200 条的上限少于它。
+  // 「共 N 项」按 counts 求和（含跳过，跳过也逐条列出）。轮 96 起不再限制每动作条数，
+  // counts 与明细条数恒等。
   const listedTotal = runFileActionOrder.reduce((total, action) => total + counts[action], 0)
   const total = listedTotal > 0 ? listedTotal : files.length
 

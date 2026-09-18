@@ -9,10 +9,9 @@ import (
 	"nestify/backend/internal/model"
 )
 
-// maxDetailEntriesPerAction 每个动作最多保留的明细条数，与备份链路的
-// maxFileEntriesPerAction 保持一致：明细是用来「看清这次到底动了哪些文件」的，
-// 不做完整账本，超出部分由 counts 里的真实数量体现。
-const maxDetailEntriesPerAction = 200
+// 明细不再按动作封顶（轮 96）：一次执行动了多少个文件就记多少条，
+// counts 与 files 因此恒等 —— 统计里写多少，点开就能看到多少条。
+// 条目再多也不怕：任务详情窗口用**分页**查看，一页条数跟随系统设置的「每页文件数」。
 
 // 跳过原因的统一样板：同一类跳过在归档 / 打包 / 收集 / strm 链路 / 备份里必须用同一句文案，
 // 否则同一个原因在明细的悬浮提示里会出现好几种说法。
@@ -44,12 +43,11 @@ const (
 //
 // 采集器自带锁：strm 的并发列举（下载线程数 > 1）会多线程写入。
 type runDetailCollector struct {
-	mu        sync.Mutex
-	kind      string
-	files     []model.RunFileEntry
-	counts    map[string]int
-	total     int
-	truncated bool
+	mu     sync.Mutex
+	kind   string
+	files  []model.RunFileEntry
+	counts map[string]int
+	total  int
 	// aggregate 记录「逐条列出太占地方」的动作的累计值（数量 + 总大小），
 	// 收尾时由 summarizeAggregated 压成一条汇总明细。当前用于 strm 的元数据同步：
 	// 一次任务常见成百上千个封面 / 字幕 / nfo，逐条列出只会把明细面板撑满。
@@ -111,8 +109,8 @@ func normalizeDetailRoots(roots []string) []string {
 	return out
 }
 
-// record 记录一条明细：累加计数，同一动作超过上限后只计数不再追加。
-// 「跳过」走 recordSkip，它同样限量，不占其它动作的额度。
+// record 记录一条明细：累加计数并保留条目（不再有每动作条数上限）。
+// 「跳过」走 recordSkip，与其它动作记在同一份明细里。
 func (c *runDetailCollector) record(entry model.RunFileEntry) {
 	if c == nil {
 		return
@@ -133,10 +131,6 @@ func (c *runDetailCollector) record(entry model.RunFileEntry) {
 
 	c.counts[action]++
 	c.total++
-	if c.counts[action] > maxDetailEntriesPerAction {
-		c.truncated = true
-		return
-	}
 	c.files = append(c.files, entry)
 }
 
@@ -145,9 +139,8 @@ func (c *runDetailCollector) record(entry model.RunFileEntry) {
 // note 写明跳过原因（筛选名单命中 / 后缀不匹配 / 目标已存在 / 小于阈值 …），
 // 前端悬浮时能看到；dir 用于区分被跳过的目录与文件。
 //
-// 走 record 的同一套额度：每个动作各自最多 maxDetailEntriesPerAction 条，
-// 所以海量跳过只会撑满「跳过」自己的额度，既不会挤掉成功 / 失败条目的位置，
-// 也不会把明细载荷撑大（counts.skip 仍是真实数量）。
+// 与 record 完全一致地落明细：跳过也逐条列出，counts.skip 与条目数恒等，
+// 前端点「跳过」筛出来的条数与统计数字一致。
 func (c *runDetailCollector) recordSkip(path, note string, dir bool) {
 	if c == nil {
 		return
@@ -261,18 +254,16 @@ func (c *runDetailCollector) buildJSON() string {
 	for action, count := range c.counts {
 		counts[action] = count
 	}
-	// files_total 只统计会被列出的明细。「跳过」现在也逐条列出，与其它动作一样
-	// 计入其中（超出条数上限的部分由 counts 体现）。
+	// files_total 与 counts 之和、files 条数三者恒等：「跳过」现在也逐条列出（轮 96 起不再上限）。
 	filesTotal := c.total
 
 	encoded, err := json.Marshal(model.RunDetail{
-		Kind:           c.kind,
-		Files:          c.files,
-		Counts:         counts,
-		FilesTotal:     filesTotal,
-		FilesTruncated: c.truncated,
-		SourceRoots:    c.sourceRoots,
-		TargetRoots:    c.targetRoots,
+		Kind:        c.kind,
+		Files:       c.files,
+		Counts:      counts,
+		FilesTotal:  filesTotal,
+		SourceRoots: c.sourceRoots,
+		TargetRoots: c.targetRoots,
 	})
 	if err != nil {
 		return ""

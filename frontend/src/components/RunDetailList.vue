@@ -2,72 +2,88 @@
   <div class="run-detail">
     <!-- 文件级明细：一行一条（悬浮看完整路径与备注）。
          备份任务改成两行——第一行源路径，第二行箭头 + 落地的目标文件夹（见 backupMode）。
-         窗口高度固定，这里不翻页——整份明细一次性铺出来，靠滚动条上下查看，
-         所以行高与内边距都压到最小，同样高度里尽量多显示几行。
 
          面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
-         「这次确实没动文件」，无论这条记录是成功、失败还是跳过。 -->
-    <el-table
-      :data="rows"
-      class="run-detail__table"
-      size="small"
-      height="100%"
-    >
-      <template #empty>
-        <div class="run-detail__empty">{{ emptyText }}</div>
-      </template>
+         「这次确实没动文件」，无论这条记录是成功、失败还是跳过。
 
-      <el-table-column :label="sourceColumnLabel" min-width="360">
-        <template #default="scope">
-          <!-- 悬浮提示：在**条目下方**弹出，鼠标停够 0.5s 才出现（扫过整列时不会一路弹），
-               移开立刻收回（hide-after=0，EP 默认还要再等 200ms）。enterable=false 让指针一旦
-               离开条目就关闭——只做「看一眼完整路径」的用途，不需要能点进提示框里。 -->
-          <el-tooltip
-            placement="bottom"
-            effect="light"
-            popper-class="run-detail-tip"
-            :show-after="500"
-            :hide-after="0"
-            :enterable="false"
-            :offset="6"
-          >
-            <template #content>
-              <div class="run-detail-tip__path">{{ scope.row.entry.path }}</div>
-              <div v-if="scope.row.entry.target" class="run-detail-tip__target">→ {{ scope.row.entry.target }}</div>
-              <div v-if="scope.row.entry.note" class="run-detail-tip__note">{{ scope.row.entry.note }}</div>
-            </template>
-            <span class="run-detail__cell">
-              <span class="run-detail__line">
-                <el-icon class="run-detail__icon">
-                  <Folder v-if="scope.row.entry.dir" />
-                  <Document v-else />
-                </el-icon>
-                <span class="run-detail__path">{{ scope.row.source }}</span>
+         分页：一次执行动辄成百上千个文件，整份铺出来只能靠滚动条硬翻。
+         一页条数**跟随系统设置里的「每页文件数」**（与运行日志 / 文件管理同一处），
+         底部只留翻页与总数，不给独立的页大小下拉——条数统一由设置控制。 -->
+    <div class="run-detail__body">
+      <el-table
+        :data="pagedRows"
+        class="run-detail__table"
+        size="small"
+        height="100%"
+      >
+        <template #empty>
+          <div class="run-detail__empty">{{ emptyText }}</div>
+        </template>
+
+        <el-table-column :label="sourceColumnLabel" min-width="360">
+          <template #default="scope">
+            <!-- 悬浮提示：在**条目下方**弹出，鼠标停够 0.5s 才出现（扫过整列时不会一路弹），
+                 移开立刻收回（hide-after=0，EP 默认还要再等 200ms）。enterable=false 让指针一旦
+                 离开条目就关闭——只做「看一眼完整路径」的用途，不需要能点进提示框里。 -->
+            <el-tooltip
+              placement="bottom"
+              effect="light"
+              popper-class="run-detail-tip"
+              :show-after="500"
+              :hide-after="0"
+              :enterable="false"
+              :offset="6"
+            >
+              <template #content>
+                <div class="run-detail-tip__path">{{ scope.row.entry.path }}</div>
+                <div v-if="scope.row.entry.target" class="run-detail-tip__target">→ {{ scope.row.entry.target }}</div>
+                <div v-if="scope.row.entry.note" class="run-detail-tip__note">{{ scope.row.entry.note }}</div>
+              </template>
+              <span class="run-detail__cell">
+                <span class="run-detail__line">
+                  <el-icon class="run-detail__icon">
+                    <Folder v-if="scope.row.entry.dir" />
+                    <Document v-else />
+                  </el-icon>
+                  <span class="run-detail__path">{{ scope.row.source }}</span>
+                </span>
+                <!-- 第二行只在备份任务、且有内容时出现：优先「落地的目标文件夹」，
+                     没有目标（跳过 / 未传到）就退回备注（跳过原因等）。 -->
+                <span v-if="backupMode && scope.row.secondary" class="run-detail__line">
+                  <span class="run-detail__arrow" aria-hidden="true">↳</span>
+                  <span class="run-detail__target" :class="{ 'is-note': !scope.row.target }">{{ scope.row.secondary }}</span>
+                </span>
               </span>
-              <!-- 第二行只在备份任务、且有内容时出现：优先「落地的目标文件夹」，
-                   没有目标（跳过 / 未传到）就退回备注（跳过原因等）。 -->
-              <span v-if="backupMode && scope.row.secondary" class="run-detail__line">
-                <span class="run-detail__arrow" aria-hidden="true">↳</span>
-                <span class="run-detail__target" :class="{ 'is-note': !scope.row.target }">{{ scope.row.secondary }}</span>
-              </span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="结果" width="126" align="center">
+          <template #default="scope">
+            <span class="run-detail__action" :class="actionClass(scope.row.action)">
+              {{ actionLabel(scope.row.action) }}
             </span>
-          </el-tooltip>
-        </template>
-      </el-table-column>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
-      <el-table-column label="结果" width="126" align="center">
-        <template #default="scope">
-          <span class="run-detail__action" :class="actionClass(scope.row.action)">
-            {{ actionLabel(scope.row.action) }}
-          </span>
-        </template>
-      </el-table-column>
-    </el-table>
+    <!-- 只要有明细就出这一条：总数让「这次到底动了几个文件」一目了然，
+         页数少了也只是「共 N 条」一行，不会白占高度。 -->
+    <div v-if="rows.length > 0" class="run-detail__pager">
+      <el-pagination
+        v-model:current-page="currentPage"
+        :page-size="pageSize"
+        :total="rows.length"
+        background
+        layout="total, prev, pager, next"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Document, Folder } from '@element-plus/icons-vue'
 
 import {
@@ -82,6 +98,7 @@ import {
   type RunDetailSummaryKey,
   type RunFileAction,
 } from '../utils/backupDetail'
+import { defaultPageSize, useSettingsStore } from '../stores/settings'
 
 const props = defineProps<{
   manifest: BackupFileManifest | null
@@ -89,11 +106,19 @@ const props = defineProps<{
   filterKey?: RunDetailSummaryKey | null
 }>()
 
+const settingsStore = useSettingsStore()
+
 // 备份任务的明细是「备份操作」：第一行源路径，第二行箭头 + 目标端落地的文件夹。
 // 其它链路仍是「源路径 + 结果」，目标路径只在悬浮提示里给（它们的产物是 .strm / 压缩包，
 // 没有「备份到哪个文件夹」这层语义）。
 const backupMode = computed(() => (props.manifest?.kind || '').trim() === 'backup')
 const sourceColumnLabel = computed(() => (backupMode.value ? '备份操作' : '源路径'))
+
+// 一页条数跟随系统设置（基础设置窗口的「每页文件数」）；未加载出设置时按默认值兜底。
+const pageSize = computed(() => {
+  const size = Number(settingsStore.pageSize)
+  return Number.isFinite(size) && size > 0 ? size : defaultPageSize
+})
 
 interface RunDetailRow {
   entry: BackupFileEntry
@@ -106,6 +131,7 @@ interface RunDetailRow {
   secondary: string
 }
 
+// 当前筛选下的**全部**条目（未分页）——总数与翻页都基于它。
 const rows = computed<RunDetailRow[]>(() => {
   const manifest = props.manifest
   const sourceRoots = manifest?.sourceRoots ?? []
@@ -123,6 +149,22 @@ const rows = computed<RunDetailRow[]>(() => {
     }
   })
 })
+
+const currentPage = ref(1)
+
+// 表格只渲染当前这一页。
+const pagedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return rows.value.slice(start, start + pageSize.value)
+})
+
+// 换筛选 / 换记录 / 改「每页文件数」都回到第一页，避免停在已不存在的页码上。
+watch(
+  [() => props.filterKey, () => props.manifest, pageSize],
+  () => {
+    currentPage.value = 1
+  },
+)
 
 // 空态要分清「本来就没有明细」与「筛出来是空的」。
 const emptyText = computed(() => {
@@ -151,11 +193,27 @@ function actionClass(action: RunFileAction) {
   min-height: 0;
 }
 
+/* 表格区：独占除翻页条以外的全部高度。包一层是为了让 el-table 的 height:100%
+   有一个高度确定、可伸缩的父级（翻页条是它的兄弟，不能再算进 100%）。 */
+.run-detail__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* 表格高度由组件的 height="100%" 写成内联样式，这里再兜一层 flex，保证它是唯一的伸缩项。 */
 .run-detail__table {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
+}
+
+/* 翻页条：固定高度、不参与伸缩，右对齐与运行日志页保持一致。 */
+.run-detail__pager {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  padding: 10px 4px 2px;
 }
 
 /* 一行一条：把单元格的上下内边距压到最小，同样高度里能多铺几行。

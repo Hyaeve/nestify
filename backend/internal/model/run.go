@@ -124,15 +124,16 @@ type RunFileEntry struct {
 type BackupFileEntry = RunFileEntry
 
 // RunDetail 是运行详情的载荷（run_history.detail_json），备份 / strm / 打包等链路共用。
-// Files 为明细列表（每个动作只保留有限条数，见 backup.maxFileEntriesPerAction 与
-// executor.maxDetailEntriesPerAction）；Counts 是采集到的真实数量（可能大于列表条数，
-// 例如超出上限的跳过），FilesTotal 是明细总数，均不受截断影响。
+// 轮 96 起明细不再按动作封顶：Files 条数 = FilesTotal = Counts 之和，
+// 任务详情窗口用分页查看（一页条数跟随系统设置的「每页文件数」）。
 type RunDetail struct {
-	Kind           string         `json:"kind"`
-	Files          []RunFileEntry `json:"files"`
-	Counts         map[string]int `json:"counts,omitempty"`
-	FilesTotal     int            `json:"files_total"`
-	FilesTruncated bool           `json:"files_truncated,omitempty"`
+	Kind       string         `json:"kind"`
+	Files      []RunFileEntry `json:"files"`
+	Counts     map[string]int `json:"counts,omitempty"`
+	FilesTotal int            `json:"files_total"`
+	// FilesTruncated 是旧版「每个动作最多 200 条」时代留下的标记，现在恒为 false，
+	// 保留字段只为还能解析轮 96 之前写下的历史记录。
+	FilesTruncated bool `json:"files_truncated,omitempty"`
 	// SourceRoots / TargetRoots 是本次执行使用的源 / 目标根路径（规则里配置的路径）。
 	//
 	// 前端的文件明细表按「根路径下一级」显示：绝对路径太长的两列会被挤成几个字，

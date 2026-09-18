@@ -667,7 +667,7 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 		stats.SkipCount++
 		stats.Detail.recordSkip(sourcePath, skipReasonExistingMeta, false)
 		// 已存在的元数据不逐条打印日志：第二次跑全量时每个封面 / 字幕都会命中这里，
-		// 逐条写日志只会把运行日志刷满（明细条数另有上限，见 maxDetailEntriesPerAction）。
+		// 逐条写日志只会把运行日志刷满（明细里照记一条跳过，供详情窗口查看）。
 		return
 	}
 

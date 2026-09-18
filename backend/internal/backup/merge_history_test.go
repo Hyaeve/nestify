@@ -156,18 +156,17 @@ func TestMergeBackupDetailPayloadAccumulates(t *testing.T) {
 	}
 }
 
-// 合并后仍要守住每个动作的明细上限：超出部分只计数、标记截断。
-func TestMergeBackupDetailPayloadRespectsPerActionCap(t *testing.T) {
+// 合并后不再有每动作上限：两边的条目全部保留，counts / files_total 与条目数恒等。
+func TestMergeBackupDetailPayloadKeepsAllEntries(t *testing.T) {
+	const previous = 200
 	previousStats := &runStats{}
-	for index := 0; index < maxFileEntriesPerAction; index++ {
+	for index := 0; index < previous; index++ {
 		previousStats.recordFile(model.BackupFileEntry{Path: "剧集/老.mkv", Action: model.BackupFileActionUpload})
 	}
-	if previousStats.truncated {
-		t.Fatalf("上一条刚好到上限时不应标记截断")
-	}
 
+	const added = 5
 	nextStats := &runStats{}
-	for index := 0; index < 5; index++ {
+	for index := 0; index < added; index++ {
 		nextStats.recordFile(model.BackupFileEntry{Path: "剧集/新.mkv", Action: model.BackupFileActionUpload})
 	}
 
@@ -175,17 +174,17 @@ func TestMergeBackupDetailPayloadRespectsPerActionCap(t *testing.T) {
 	if err := json.Unmarshal([]byte(mergeBackupDetailPayload(previousStats.buildBackupDetailJSON(), nextStats)), &detail); err != nil {
 		t.Fatalf("decode merged payload: %v", err)
 	}
-	if len(detail.Files) != maxFileEntriesPerAction {
-		t.Fatalf("明细应停在上限：got %d", len(detail.Files))
+	if len(detail.Files) != previous+added {
+		t.Fatalf("明细应全部保留：got %d, want %d", len(detail.Files), previous+added)
 	}
-	if !detail.FilesTruncated {
-		t.Fatalf("超出上限应标记截断")
+	if detail.FilesTruncated {
+		t.Fatalf("已无每动作上限，不应标记截断")
 	}
-	if detail.Counts[model.BackupFileActionUpload] != maxFileEntriesPerAction+5 {
-		t.Fatalf("counts 仍应按真实数量累加：%+v", detail.Counts)
+	if detail.Counts[model.BackupFileActionUpload] != previous+added {
+		t.Fatalf("counts 应与条目数一致：%+v", detail.Counts)
 	}
-	if detail.FilesTotal != maxFileEntriesPerAction+5 {
-		t.Fatalf("files_total 也按真实数量：got %d", detail.FilesTotal)
+	if detail.FilesTotal != previous+added {
+		t.Fatalf("files_total 应与条目数一致：got %d", detail.FilesTotal)
 	}
 }
 

@@ -8,12 +8,12 @@ import (
 	"nestify/backend/internal/model"
 )
 
-// 每个动作的采集上限为 maxFileEntriesPerAction，超出后不再记录明细，
-// 但计数仍按真实数量累加 —— 详情面板依赖这个语义显示「共 N 项（仅记录前 X 项）」。
-func TestRunStatsRecordFileCapsPerAction(t *testing.T) {
+// 明细不再按动作封顶（轮 96）：记多少条就有多少条，counts / files / files_total 三者恒等，
+// 任务详情窗口靠分页查看（一页条数跟随系统设置）。
+func TestRunStatsRecordFileKeepsAllEntries(t *testing.T) {
 	stats := &runStats{}
 
-	total := maxFileEntriesPerAction + 25
+	total := 225
 	for index := 0; index < total; index++ {
 		stats.recordFile(model.BackupFileEntry{
 			Path:   "移动云盘/剧集/" + string(rune('a'+index%26)) + ".mkv",
@@ -24,14 +24,8 @@ func TestRunStatsRecordFileCapsPerAction(t *testing.T) {
 		stats.recordFile(model.BackupFileEntry{Path: "失败.txt", Action: model.BackupFileActionFail})
 	}
 
-	if len(stats.Files) != maxFileEntriesPerAction+3 {
-		t.Fatalf("unexpected recorded entries: got %d, want %d", len(stats.Files), maxFileEntriesPerAction+3)
-	}
-	if !stats.truncated {
-		t.Fatalf("expected truncated flag to be set")
-	}
-	if stats.fileCounts[model.BackupFileActionUpload] != total {
-		t.Fatalf("upload count should keep real total: got %d, want %d", stats.fileCounts[model.BackupFileActionUpload], total)
+	if len(stats.Files) != total+3 {
+		t.Fatalf("unexpected recorded entries: got %d, want %d", len(stats.Files), total+3)
 	}
 
 	encoded := stats.buildBackupDetailJSON()
@@ -46,11 +40,14 @@ func TestRunStatsRecordFileCapsPerAction(t *testing.T) {
 	if detail.Kind != "backup" {
 		t.Fatalf("unexpected kind: %s", detail.Kind)
 	}
+	if len(detail.Files) != total+3 {
+		t.Fatalf("明细条数 = %d, want %d（不再截断）", len(detail.Files), total+3)
+	}
 	if detail.FilesTotal != total+3 {
 		t.Fatalf("unexpected files_total: got %d, want %d", detail.FilesTotal, total+3)
 	}
-	if !detail.FilesTruncated {
-		t.Fatalf("expected files_truncated in payload")
+	if detail.FilesTruncated {
+		t.Fatalf("已无每动作上限，不应再标记 files_truncated")
 	}
 	if detail.Counts[model.BackupFileActionUpload] != total {
 		t.Fatalf("unexpected counts payload: %+v", detail.Counts)
@@ -103,12 +100,13 @@ func TestRunStatsRecordsSkipEntries(t *testing.T) {
 	}
 }
 
-// 跳过条目同样受「每个动作最多 200 条」约束：海量跳过只撑满自己的额度，
-// 不挤掉上传 / 失败条目的位置，counts 里仍是真实数量。
-func TestRunStatsCapsSkipEntriesPerAction(t *testing.T) {
+// 海量跳过同样逐条保留（不再截断），也不会挤掉上传 / 失败条目；
+// counts.skip 与明细里的跳过条数恒等。
+func TestRunStatsKeepsAllSkipEntries(t *testing.T) {
+	const skips = 210
 	stats := &runStats{}
 	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionUpload})
-	for index := 0; index < maxFileEntriesPerAction+10; index++ {
+	for index := 0; index < skips; index++ {
 		stats.recordFile(model.BackupFileEntry{Path: "剧集/已存在.mkv", Action: model.BackupFileActionSkip})
 	}
 
@@ -116,27 +114,27 @@ func TestRunStatsCapsSkipEntriesPerAction(t *testing.T) {
 	if err := json.Unmarshal([]byte(stats.buildBackupDetailJSON()), &detail); err != nil {
 		t.Fatalf("decode detail json: %v", err)
 	}
-	if detail.Counts[model.BackupFileActionSkip] != maxFileEntriesPerAction+10 {
-		t.Fatalf("counts.skip 应为真实数量，实际 %d", detail.Counts[model.BackupFileActionSkip])
+	if detail.Counts[model.BackupFileActionSkip] != skips {
+		t.Fatalf("counts.skip = %d, want %d", detail.Counts[model.BackupFileActionSkip], skips)
 	}
-	skips := 0
-	uploads := 0
+	gotSkips := 0
+	gotUploads := 0
 	for _, entry := range detail.Files {
 		switch entry.Action {
 		case model.BackupFileActionSkip:
-			skips++
+			gotSkips++
 		case model.BackupFileActionUpload:
-			uploads++
+			gotUploads++
 		}
 	}
-	if skips != maxFileEntriesPerAction {
-		t.Fatalf("跳过条目应被截到 %d，实际 %d", maxFileEntriesPerAction, skips)
+	if gotSkips != skips {
+		t.Fatalf("跳过条目 = %d, want %d（不再截断）", gotSkips, skips)
 	}
-	if uploads != 1 {
-		t.Fatalf("上传条目不应被跳过额度挤掉，实际 %d 条", uploads)
+	if gotUploads != 1 {
+		t.Fatalf("上传条目不应被跳过条目影响，实际 %d 条", gotUploads)
 	}
-	if !detail.FilesTruncated {
-		t.Fatal("超出上限时应标记 files_truncated")
+	if detail.FilesTruncated {
+		t.Fatal("已无每动作上限，不应再标记 files_truncated")
 	}
 }
 

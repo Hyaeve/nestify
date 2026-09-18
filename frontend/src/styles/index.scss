@@ -222,7 +222,8 @@ body {
 
 /* —— 任务详情弹窗（归巢历史 / 运行日志）——
    窗口大小固定，不随记录条数跳动：正文做成竖向 flex，顶部摘要是定高块，剩下多少高度
-   全给文件明细表，明细靠自身滚动条（细浅、鼠标移入才显现）上下查看、不再翻页。
+   全给文件明细表（明细区自带分页，一页条数跟随系统设置的「每页文件数」，
+   见 RunDetailList.vue；表内仍保留细浅滚动条，鼠标移入才显现）。
    teleport 到 body，所以排版必须写全局（见 MEMORY.md 的弹层约定）。 */
 .el-dialog.logs-detail-dialog,
 .el-dialog.history-detail-dialog {
