@@ -103,6 +103,31 @@ export function stripDetailRoot(path: string, roots: string[]): string {
   return rest || normalized
 }
 
+// detailTargetFolder 把明细里的目标路径裁成「目标根路径之下的文件夹路径」。
+//
+// 备份任务的明细里 Target 是落地文件的完整路径，第二行只展示它所在的**文件夹**：
+// 先裁掉目标根（用户配置的目标路径就是根），再切掉最后一段文件名
+// （/media/backup/剧集/A/A1.mkv → 剧集/A）；多源备份多出来的「源目录名」前缀会一并保留。
+// 目录条目（dir）本身就是文件夹，不再切最后一段；文件直接躺在目标根下时没有子文件夹，
+// 返回空串，调用方据此退回备注或只显示一行。
+export function detailTargetFolder(path: string, roots: string[], isDir = false): string {
+  const relative = stripDetailRoot(path, roots)
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '')
+  if (!relative) {
+    return ''
+  }
+
+  const parts = relative.split('/').filter(Boolean)
+  if (isDir) {
+    return parts.join('/')
+  }
+  if (parts.length <= 1) {
+    return ''
+  }
+  return parts.slice(0, -1).join('/')
+}
+
 // normalizeDetailRoots 把载荷里的根路径整理成前端可用的形式：去尾部斜杠、去重复、丢空值。
 function normalizeDetailRoots(value: unknown): string[] {
   if (!Array.isArray(value)) {

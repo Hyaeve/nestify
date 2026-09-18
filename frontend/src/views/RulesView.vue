@@ -825,7 +825,6 @@
           <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="createLinkForm.strm_overwrite" /></el-form-item></el-col>
           <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="级联删除"><el-switch v-model="createLinkForm.strm_cascade_delete" /></el-form-item></el-col>
         </el-row>
-        <div v-if="createLinkForm.link_mode === 'strm'" class="strm-options-hint">级联删除：源端已删掉的文件 / 文件夹，执行时把目标端对应的 Strm、元数据一并删掉；整个文件夹在源端没了则整个文件夹一起删（源端为空时自动跳过，避免误删）。</div>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
     </el-dialog>
@@ -918,7 +917,6 @@
           <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="editLinkForm.strm_overwrite" /></el-form-item></el-col>
           <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="级联删除"><el-switch v-model="editLinkForm.strm_cascade_delete" /></el-form-item></el-col>
         </el-row>
-        <div v-if="editLinkForm.link_mode === 'strm'" class="strm-options-hint">级联删除：源端已删掉的文件 / 文件夹，执行时把目标端对应的 Strm、元数据一并删掉；整个文件夹在源端没了则整个文件夹一起删（源端为空时自动跳过，避免误删）。</div>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
     </el-dialog>
@@ -1575,7 +1573,8 @@ const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 失败不再是死文本，
+// 详情窗口标题下的第一段文字：只留触发方式。标题已经是「X任务 · 规则自定义名」，
+// 小字里再重复一遍规则名是纯冗余（用户点名去掉）。成功 / 跳过 / 失败不再是死文本，
 // 而是后面的可点击统计项（见 selectedHistoryGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedHistoryGroupLeading = computed(() => {
@@ -1583,7 +1582,7 @@ const selectedHistoryGroupLeading = computed(() => {
   if (!group) {
     return ''
   }
-  return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)}`
+  return historyTriggerText(group)
 })
 // 统计项：成功 / 跳过 / 失败 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedHistoryGroupSegments = computed(() =>

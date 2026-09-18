@@ -269,7 +269,8 @@ const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 失败不再是死文本，
+// 详情窗口标题下的第一段文字：只留触发方式。标题已经是「X任务 · 规则自定义名」，
+// 小字里再重复一遍规则名是纯冗余（用户点名去掉）。成功 / 跳过 / 失败不再是死文本，
 // 而是后面的可点击统计项（见 selectedLogGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedLogGroupLeading = computed(() => {
@@ -277,7 +278,7 @@ const selectedLogGroupLeading = computed(() => {
   if (!group) {
     return ''
   }
-  return `${group.rule_name || '手动任务'} · ${logTriggerText(group)}`
+  return logTriggerText(group)
 })
 // 统计项：成功 / 跳过 / 失败 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedLogGroupSegments = computed(() =>

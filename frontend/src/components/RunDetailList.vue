@@ -1,10 +1,14 @@
 <template>
-  <div v-if="manifest" class="run-detail">
-    <!-- 文件级明细：源路径 / 目标路径左右分列，一行一条（悬浮看完整路径与备注）。
+  <div class="run-detail">
+    <!-- 文件级明细：一行一条（悬浮看完整路径与备注）。
+         备份任务改成两行——第一行源路径，第二行箭头 + 落地的目标文件夹（见 backupMode）。
          窗口高度固定，这里不翻页——整份明细一次性铺出来，靠滚动条上下查看，
-         所以行高与内边距都压到最小，同样高度里尽量多显示几行。 -->
+         所以行高与内边距都压到最小，同样高度里尽量多显示几行。
+
+         面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
+         「这次确实没动文件」，无论这条记录是成功、失败还是跳过。 -->
     <el-table
-      :data="files"
+      :data="rows"
       class="run-detail__table"
       size="small"
       height="100%"
@@ -13,7 +17,7 @@
         <div class="run-detail__empty">{{ emptyText }}</div>
       </template>
 
-      <el-table-column label="源路径" min-width="360">
+      <el-table-column :label="sourceColumnLabel" min-width="360">
         <template #default="scope">
           <!-- 悬浮提示：在**条目下方**弹出，鼠标停够 0.5s 才出现（扫过整列时不会一路弹），
                移开立刻收回（hide-after=0，EP 默认还要再等 200ms）。enterable=false 让指针一旦
@@ -28,16 +32,24 @@
             :offset="6"
           >
             <template #content>
-              <div class="run-detail-tip__path">{{ scope.row.path }}</div>
-              <div v-if="scope.row.target" class="run-detail-tip__target">→ {{ scope.row.target }}</div>
-              <div v-if="scope.row.note" class="run-detail-tip__note">{{ scope.row.note }}</div>
+              <div class="run-detail-tip__path">{{ scope.row.entry.path }}</div>
+              <div v-if="scope.row.entry.target" class="run-detail-tip__target">→ {{ scope.row.entry.target }}</div>
+              <div v-if="scope.row.entry.note" class="run-detail-tip__note">{{ scope.row.entry.note }}</div>
             </template>
             <span class="run-detail__cell">
-              <el-icon class="run-detail__icon">
-                <Folder v-if="scope.row.dir" />
-                <Document v-else />
-              </el-icon>
-              <span class="run-detail__path">{{ displaySource(scope.row) }}</span>
+              <span class="run-detail__line">
+                <el-icon class="run-detail__icon">
+                  <Folder v-if="scope.row.entry.dir" />
+                  <Document v-else />
+                </el-icon>
+                <span class="run-detail__path">{{ scope.row.source }}</span>
+              </span>
+              <!-- 第二行只在备份任务、且有内容时出现：优先「落地的目标文件夹」，
+                   没有目标（跳过 / 未传到）就退回备注（跳过原因等）。 -->
+              <span v-if="backupMode && scope.row.secondary" class="run-detail__line">
+                <span class="run-detail__arrow" aria-hidden="true">↳</span>
+                <span class="run-detail__target" :class="{ 'is-note': !scope.row.target }">{{ scope.row.secondary }}</span>
+              </span>
             </span>
           </el-tooltip>
         </template>
@@ -61,6 +73,7 @@ import { Document, Folder } from '@element-plus/icons-vue'
 import {
   backupFileActionClass,
   backupFileActionLabel,
+  detailTargetFolder,
   filterRunDetailFiles,
   runDetailSummaryLabels,
   stripDetailRoot,
@@ -76,7 +89,39 @@ const props = defineProps<{
   filterKey?: RunDetailSummaryKey | null
 }>()
 
-const files = computed(() => filterRunDetailFiles(props.manifest?.files ?? [], props.filterKey ?? null))
+// 备份任务的明细是「备份操作」：第一行源路径，第二行箭头 + 目标端落地的文件夹。
+// 其它链路仍是「源路径 + 结果」，目标路径只在悬浮提示里给（它们的产物是 .strm / 压缩包，
+// 没有「备份到哪个文件夹」这层语义）。
+const backupMode = computed(() => (props.manifest?.kind || '').trim() === 'backup')
+const sourceColumnLabel = computed(() => (backupMode.value ? '备份操作' : '源路径'))
+
+interface RunDetailRow {
+  entry: BackupFileEntry
+  action: RunFileAction
+  // 源路径裁掉源根后的显示值（备份链路记的本来就是相对路径，裁剪不命中即原样）。
+  source: string
+  // 目标端「落地的文件夹」，已裁掉目标根；没有目标（跳过 / 未传到）时为空。
+  target: string
+  // 第二行真正显示的内容：优先目标文件夹，没有就退回备注。
+  secondary: string
+}
+
+const rows = computed<RunDetailRow[]>(() => {
+  const manifest = props.manifest
+  const sourceRoots = manifest?.sourceRoots ?? []
+  const targetRoots = manifest?.targetRoots ?? []
+
+  return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null).map((entry) => {
+    const target = entry.target ? detailTargetFolder(entry.target, targetRoots, entry.dir === true) : ''
+    return {
+      entry,
+      action: entry.action,
+      source: stripDetailRoot(entry.path, sourceRoots),
+      target,
+      secondary: target || entry.note || '',
+    }
+  })
+})
 
 // 空态要分清「本来就没有明细」与「筛出来是空的」。
 const emptyText = computed(() => {
@@ -86,12 +131,6 @@ const emptyText = computed(() => {
   }
   return `本次执行没有「${runDetailSummaryLabels[key]}」明细`
 })
-
-// 源路径列只显示「配置根路径下一级」开始的相对路径：绝对路径太长，一行根本读不出差别；
-// 完整源路径 / 目标路径放在悬浮提示里（见模板里的 el-tooltip）。
-function displaySource(row: BackupFileEntry) {
-  return stripDetailRoot(row.path, props.manifest?.sourceRoots ?? [])
-}
 
 function actionLabel(action: RunFileAction) {
   return backupFileActionLabel(action)
@@ -132,7 +171,15 @@ function actionClass(action: RunFileAction) {
   padding-bottom: 0;
 }
 
+/* 一个条目 = 一列（备份任务是两行，其它链路只有第一行），行内各自是 flex 横排。 */
 .run-detail__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.run-detail__line {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -154,6 +201,33 @@ function actionClass(action: RunFileAction) {
   color: var(--el-text-color-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 第二行行首的箭头：与上一行的图标（14px）同宽，两行文字因此左对齐。 */
+.run-detail__arrow {
+  flex: 0 0 14px;
+  width: 14px;
+  color: #6f97a6;
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* 目标端落地的文件夹（已裁掉目标根）：备份语义色 + 比源路径小一档。 */
+.run-detail__target {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5f7fa8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 没有目标路径时第二行退回备注（跳过原因 / 失败原因），用更弱的中性色区分。 */
+.run-detail__target.is-note {
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
 }
 
 /* 筛选后没有条目时的说明文案（el-table 的 empty 插槽）。 */
