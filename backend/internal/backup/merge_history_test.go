@@ -112,7 +112,7 @@ func TestMergeWatchRunHistoryItemRecomputesStatus(t *testing.T) {
 	})
 }
 
-// 明细载荷合并：counts / files_total 累加，跳过只进 counts，明细列表只留上传与失败。
+// 明细载荷合并：counts / files_total 累加，跳过也逐条进明细列表。
 func TestMergeBackupDetailPayloadAccumulates(t *testing.T) {
 	previousStats := &runStats{}
 	previousStats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionUpload})
@@ -133,19 +133,23 @@ func TestMergeBackupDetailPayloadAccumulates(t *testing.T) {
 	if detail.Kind != model.RunDetailKindBackup {
 		t.Fatalf("unexpected kind: %s", detail.Kind)
 	}
-	if len(detail.Files) != 3 {
-		t.Fatalf("明细应只含上传与失败：got %d (%+v)", len(detail.Files), detail.Files)
+	if len(detail.Files) != 6 {
+		t.Fatalf("明细应含上传 / 失败 / 跳过：got %d (%+v)", len(detail.Files), detail.Files)
 	}
+	skips := 0
 	for _, entry := range detail.Files {
 		if entry.Action == model.BackupFileActionSkip {
-			t.Fatalf("跳过不应出现在明细列表里：%+v", entry)
+			skips++
 		}
+	}
+	if skips != 3 {
+		t.Fatalf("合并后的跳过条目应为 3 条（上一条 x.mkv + 本次 y/z），实际 %d", skips)
 	}
 	if detail.Counts[model.BackupFileActionUpload] != 2 || detail.Counts[model.BackupFileActionSkip] != 3 {
 		t.Fatalf("counts 应累加：%+v", detail.Counts)
 	}
-	if detail.FilesTotal != 3 {
-		t.Fatalf("files_total 应累加且不含跳过：got %d", detail.FilesTotal)
+	if detail.FilesTotal != 6 {
+		t.Fatalf("files_total 应累加且含跳过：got %d", detail.FilesTotal)
 	}
 	if detail.FilesTruncated {
 		t.Fatalf("未触到上限不应标记截断")

@@ -133,6 +133,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, true)
 			}
 			return nil
 		}
@@ -143,6 +144,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, false)
 			}
 			return nil
 		}
@@ -193,6 +195,7 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 
 		if req.ArchiveMode == "package" {
 			stats.SkipCount++
+			stats.Detail.recordSkip(entryPath, skipReasonPackageLeftover, false)
 			s.persistRunHistory(runID, fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath), &stats)
 			s.appendLog(runID, "info", fmt.Sprintf("left non-image file in source directory %s: package mode only moves matched custom archive targets", entryPath))
 			return nil
@@ -260,6 +263,9 @@ func (s *Service) executeRule(runID string, req ExecuteRuleRequest) (executionSt
 	} else {
 		stats.Summary = fmt.Sprintf("归档完成：打包 %d 卷、移动 %d 个文件、跳过 %d 项、失败 %d 项", stats.PackedVolumes, stats.MovedFiles, stats.SkipCount, stats.FailureCount)
 	}
+	// 「跳过」逐条写进明细，收尾把「只统计到数量、拿不到路径」的整轮跳过补齐到 counts，
+	// 免得明细里的跳过条数少于统计数字（见 reconcileSkipCount）。
+	stats.Detail.reconcileSkipCount(stats.SkipCount)
 
 	if stats.FailureCount > 0 {
 		return stats, fmt.Errorf("archive finished with %d failures", stats.FailureCount)
@@ -437,8 +443,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats); err != nil {
 		return *stats, err
 	}
-	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
-	detail.recordSkip(stats.SkipCount)
+	// 「跳过」逐条写进明细（筛选命中 / 后缀不匹配 / 目标已存在都会落到这里）。
 	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
 	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
@@ -459,6 +464,9 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		}
 	}
+	// 把「只统计到数量、拿不到路径」的整轮跳过（含上面刚置的「未发现可生成 Strm 的文件」）
+	// 补齐到 counts，保证 counts.skip 与运行记录里的 skip_count 一致。
+	detail.reconcileSkipCount(stats.SkipCount)
 
 	if stats.FailureCount > 0 {
 		return *stats, fmt.Errorf("strm execution finished with %d failures", stats.FailureCount)
@@ -483,6 +491,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
 				stats.SkipCount++
+				stats.Detail.recordSkip(sourcePath, skipReasonFiltered, true)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))
 				return nil
 			}
@@ -491,12 +500,14 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 
 		if matchesFileName(entry.Name(), false, matchers) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(sourcePath, skipReasonFiltered, false)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm file %s", sourcePath))
 			return nil
 		}
 
 		if !matchesStrmExtension(entry.Name(), strmExtensions) && !matchesStrmExtension(entry.Name(), metadataExtensions) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(sourcePath, skipReasonExtension, false)
 			return nil
 		}
 
@@ -511,6 +522,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 		if minVideoBytes > 0 && isStrmVideoFile(entry.Name()) {
 			if info, statErr := entry.Info(); statErr == nil && shouldSkipByMinVideoSize(entry.Name(), info.Size(), minVideoBytes) {
 				stats.SkipCount++
+				stats.Detail.recordSkip(sourcePath, skipReasonMinVideo, false)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped small video %s (%.1fMB)", sourcePath, float64(info.Size())/(1024*1024)))
 				return nil
 			}
@@ -533,6 +545,7 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 			existed = true
 			if !overwrite {
 				stats.SkipCount++
+				stats.Detail.recordSkip(sourcePath, skipReasonExistingStrm, false)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped existing strm target %s", targetPath))
 				return nil
 			}
@@ -612,8 +625,9 @@ func (s *Service) syncStrmMetadataFile(runID, rootPath, sourcePath, targetRoot s
 	}
 	if skip {
 		stats.SkipCount++
-		// 已存在的元数据只计数、不逐条打印：第二次跑全量时每个封面 / 字幕都会命中这里，
-		// 逐条写日志只会把运行日志刷满（明细同理，见 executeStrmRule 的汇总）。
+		stats.Detail.recordSkip(sourcePath, skipReasonExistingMeta, false)
+		// 已存在的元数据不逐条打印日志：第二次跑全量时每个封面 / 字幕都会命中这里，
+		// 逐条写日志只会把运行日志刷满（明细条数另有上限，见 maxDetailEntriesPerAction）。
 		return
 	}
 
@@ -709,6 +723,7 @@ func (s *Service) removeExistingStrmFiles(runID, currentPath, compatibilityMode 
 			return nil
 		}
 		stats.SkipCount++
+		stats.Detail.recordSkip(entryPath, skipReasonFullSyncRemove, false)
 		s.appendLog(runID, "info", fmt.Sprintf("removed existing strm %s", entryPath))
 		return nil
 	})
@@ -857,6 +872,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootD
 	entries = limitEntriesForMode(compatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount++
+		stats.Detail.recordSkip(seriesPath, skipReasonEmptyDir, true)
 		s.persistRunHistory(runID, fmt.Sprintf("skipped empty series %s", seriesPath), stats)
 		_ = os.Remove(seriesPath)
 		return nil
@@ -892,6 +908,7 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootD
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, true)
 			}
 			return nil
 		}
@@ -902,12 +919,14 @@ func (s *Service) processSeriesDir(runID, rootSourceDir, seriesPath, targetRootD
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, false)
 			}
 			return nil
 		}
 		if entry.IsDir() {
 			if archiveMode == "collect" && !collectRecursiveEnabled {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonNestedCollect, true)
 				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
 				return nil
@@ -951,6 +970,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootD
 	entries = limitEntriesForMode(compatibilityMode, entries)
 	if len(entries) == 0 {
 		stats.SkipCount++
+		stats.Detail.recordSkip(volumePath, skipReasonEmptyDir, true)
 		s.persistRunHistory(runID, fmt.Sprintf("已跳过空分卷目录 %s", volumePath), stats)
 		_ = os.Remove(volumePath)
 		return nil
@@ -978,6 +998,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootD
 
 	if archiveMode == "package" && packageStage != nil && packageStage.hasSubdirs && !packageNestedFolders {
 		stats.SkipCount++
+		stats.Detail.recordSkip(volumePath, skipReasonNestedPackage, true)
 		s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s", volumePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: package_nested_folders disabled", volumePath))
 		return nil
@@ -1007,6 +1028,7 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootD
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive directory %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, true)
 			}
 			return nil
 		}
@@ -1017,12 +1039,14 @@ func (s *Service) processVolumeDir(runID, rootSourceDir, volumePath, targetRootD
 				s.appendLog(runID, "error", fmt.Sprintf("trash filtered archive file %s failed: %v", entryPath, err))
 			} else {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonFiltered, false)
 			}
 			return nil
 		}
 		if entry.IsDir() {
 			if archiveMode == "collect" && !collectRecursiveEnabled {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entryPath, skipReasonNestedCollect, true)
 				s.persistRunHistory(runID, fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath), stats)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped nested directory %s: recursive_collect disabled", entryPath))
 				return nil
@@ -1070,6 +1094,7 @@ func (s *Service) moveLooseFile(runID, sourcePath, targetDir, archiveMode string
 	if actionSummary == "skip-same-file" {
 		stats.ProcessedFiles++
 		stats.SkipCount++
+		stats.Detail.recordSkip(sourcePath, skipReasonDuplicate, false)
 		s.persistRunHistory(runID, fmt.Sprintf("skipped duplicate file %s", sourcePath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("skipped duplicate file %s: same file already exists", sourcePath))
 		if cleanupSourceAfterArchive {

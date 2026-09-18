@@ -57,9 +57,9 @@ func TestRunStatsRecordFileCapsPerAction(t *testing.T) {
 	}
 }
 
-// 「跳过」只累计数量，不写进明细列表；files_total 也只统计会列出的明细。
-// 归巢历史 / 运行日志的详情只关心备份了什么、什么失败了，跳过的只需要数目。
-func TestRunStatsKeepsSkipCountWithoutEntries(t *testing.T) {
+// 「跳过」也逐条写进明细列表：任务详情要能看出「到底是哪些文件被跳过了」，
+// 只有数目不够；files_total 同样把跳过算进去。
+func TestRunStatsRecordsSkipEntries(t *testing.T) {
 	stats := &runStats{}
 
 	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionUpload})
@@ -72,13 +72,8 @@ func TestRunStatsKeepsSkipCountWithoutEntries(t *testing.T) {
 		})
 	}
 
-	if len(stats.Files) != 2 {
-		t.Fatalf("skip entries should not be listed: got %d, want 2", len(stats.Files))
-	}
-	for _, entry := range stats.Files {
-		if entry.Action == model.BackupFileActionSkip {
-			t.Fatalf("unexpected skip entry in detail list: %+v", entry)
-		}
+	if len(stats.Files) != 7 {
+		t.Fatalf("skip entries should be listed: got %d, want 7", len(stats.Files))
 	}
 
 	var detail model.BackupDetail
@@ -88,15 +83,64 @@ func TestRunStatsKeepsSkipCountWithoutEntries(t *testing.T) {
 	if detail.Counts[model.BackupFileActionSkip] != 5 {
 		t.Fatalf("skip count must stay accurate: %+v", detail.Counts)
 	}
-	if detail.FilesTotal != 2 {
-		t.Fatalf("files_total should exclude skipped entries: got %d, want 2", detail.FilesTotal)
+	if detail.FilesTotal != 7 {
+		t.Fatalf("files_total should include skipped entries: got %d, want 7", detail.FilesTotal)
 	}
 	if detail.FilesTruncated {
-		t.Fatalf("skip counting must not mark the payload as truncated")
+		t.Fatalf("five skip entries must not mark the payload as truncated")
+	}
+	skipEntries := 0
+	for _, entry := range detail.Files {
+		if entry.Action == model.BackupFileActionSkip {
+			skipEntries++
+			if entry.Note == "" {
+				t.Fatalf("跳过条目应带原因备注: %+v", entry)
+			}
+		}
+	}
+	if skipEntries != 5 {
+		t.Fatalf("明细里的跳过条数 = %d, want 5", skipEntries)
 	}
 }
 
-// 一次执行全部跳过时仍然要写 detail_json（前端靠 counts.skip 展示跳过数目，列表为空）。
+// 跳过条目同样受「每个动作最多 200 条」约束：海量跳过只撑满自己的额度，
+// 不挤掉上传 / 失败条目的位置，counts 里仍是真实数量。
+func TestRunStatsCapsSkipEntriesPerAction(t *testing.T) {
+	stats := &runStats{}
+	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionUpload})
+	for index := 0; index < maxFileEntriesPerAction+10; index++ {
+		stats.recordFile(model.BackupFileEntry{Path: "剧集/已存在.mkv", Action: model.BackupFileActionSkip})
+	}
+
+	var detail model.BackupDetail
+	if err := json.Unmarshal([]byte(stats.buildBackupDetailJSON()), &detail); err != nil {
+		t.Fatalf("decode detail json: %v", err)
+	}
+	if detail.Counts[model.BackupFileActionSkip] != maxFileEntriesPerAction+10 {
+		t.Fatalf("counts.skip 应为真实数量，实际 %d", detail.Counts[model.BackupFileActionSkip])
+	}
+	skips := 0
+	uploads := 0
+	for _, entry := range detail.Files {
+		switch entry.Action {
+		case model.BackupFileActionSkip:
+			skips++
+		case model.BackupFileActionUpload:
+			uploads++
+		}
+	}
+	if skips != maxFileEntriesPerAction {
+		t.Fatalf("跳过条目应被截到 %d，实际 %d", maxFileEntriesPerAction, skips)
+	}
+	if uploads != 1 {
+		t.Fatalf("上传条目不应被跳过额度挤掉，实际 %d 条", uploads)
+	}
+	if !detail.FilesTruncated {
+		t.Fatal("超出上限时应标记 files_truncated")
+	}
+}
+
+// 一次执行全部跳过时仍然要写 detail_json（前端靠 counts.skip 展示跳过数目）。
 func TestRunStatsWritesPayloadWhenEverythingSkipped(t *testing.T) {
 	stats := &runStats{}
 	stats.recordFile(model.BackupFileEntry{Path: "剧集/a.mkv", Action: model.BackupFileActionSkip})
@@ -110,8 +154,8 @@ func TestRunStatsWritesPayloadWhenEverythingSkipped(t *testing.T) {
 	if err := json.Unmarshal([]byte(payload), &detail); err != nil {
 		t.Fatalf("decode detail json: %v", err)
 	}
-	if len(detail.Files) != 0 || detail.FilesTotal != 0 {
-		t.Fatalf("all-skip run should have no listed files: %+v", detail)
+	if len(detail.Files) != 1 || detail.FilesTotal != 1 {
+		t.Fatalf("all-skip run should list the skipped file: %+v", detail)
 	}
 	if detail.Counts[model.BackupFileActionSkip] != 1 {
 		t.Fatalf("unexpected counts payload: %+v", detail.Counts)

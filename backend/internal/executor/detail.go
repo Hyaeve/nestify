@@ -14,6 +14,22 @@ import (
 // 不做完整账本，超出部分由 counts 里的真实数量体现。
 const maxDetailEntriesPerAction = 200
 
+// 跳过原因的统一样板：同一类跳过在归档 / 打包 / 收集 / strm 链路 / 备份里必须用同一句文案，
+// 否则同一个原因在明细的悬浮提示里会出现好几种说法。
+const (
+	skipReasonFiltered        = "命中过滤名单，已移入回收站"
+	skipReasonPackageLeftover = "打包模式不处理该文件，保留在源目录"
+	skipReasonEmptyDir        = "空目录，已清理"
+	skipReasonExtension       = "后缀不在 Strm / 元数据名单内"
+	skipReasonMinVideo        = "视频小于「最小视频」阈值"
+	skipReasonExistingStrm    = "目标已有同名 Strm，按增量跳过"
+	skipReasonExistingMeta    = "目标已有该元数据文件"
+	skipReasonDuplicate       = "目标已有相同文件，按去重跳过"
+	skipReasonNestedPackage   = "「处理嵌套文件夹」未开启，未进入该子目录"
+	skipReasonNestedCollect   = "「递归收集」未开启，未进入该子目录"
+	skipReasonFullSyncRemove  = "全量同步：删除了目标端旧的 Strm"
+)
+
 // runDetailCollector 采集一次执行「到底动了哪些文件」的明细，序列化进
 // run_history.detail_json（与备份共用同一载荷结构，只是 kind 与 action 不同）。
 //
@@ -87,7 +103,7 @@ func normalizeDetailRoots(roots []string) []string {
 }
 
 // record 记录一条明细：累加计数，同一动作超过上限后只计数不再追加。
-// 「跳过」不应走这里（见 recordSkip），否则海量跳过会把明细撑爆。
+// 「跳过」走 recordSkip，它同样限量，不占其它动作的额度。
 func (c *runDetailCollector) record(entry model.RunFileEntry) {
 	if c == nil {
 		return
@@ -115,16 +131,45 @@ func (c *runDetailCollector) record(entry model.RunFileEntry) {
 	c.files = append(c.files, entry)
 }
 
-// recordSkip 只累计「跳过」数量，不产生逐条明细：
-// 筛选名单命中的文件既没有被生成 strm 也没有被复制，逐条列出没有意义。
-func (c *runDetailCollector) recordSkip(count int) {
-	if c == nil || count <= 0 {
+// recordSkip 登记一条「跳过」明细：这个文件确实被扫到了，但没有被处理。
+//
+// note 写明跳过原因（筛选名单命中 / 后缀不匹配 / 目标已存在 / 小于阈值 …），
+// 前端悬浮时能看到；dir 用于区分被跳过的目录与文件。
+//
+// 走 record 的同一套额度：每个动作各自最多 maxDetailEntriesPerAction 条，
+// 所以海量跳过只会撑满「跳过」自己的额度，既不会挤掉成功 / 失败条目的位置，
+// 也不会把明细载荷撑大（counts.skip 仍是真实数量）。
+func (c *runDetailCollector) recordSkip(path, note string, dir bool) {
+	if c == nil {
+		return
+	}
+	c.record(model.RunFileEntry{
+		Path:   strings.TrimSpace(path),
+		Action: model.BackupFileActionSkip,
+		Note:   strings.TrimSpace(note),
+		Dir:    dir,
+	})
+}
+
+// reconcileSkipCount 用运行统计里的 SkipCount 补齐「只知数量、拿不到路径」的跳过。
+//
+// 有些跳过本来就没有具体文件：源目录为空、未发现可归档项目、净化规则没开启任何动作……
+// 这类整轮跳过只会把 stats.SkipCount 置 1，没有路径可记。
+// 收尾时按「总数 − 已登记条数」补差，保证 counts.skip 恒等于运行记录里的 skip_count，
+// 不会出现「统计写 5、点进去只有 3 条」的错位。
+//
+// 差额只进 counts，不产生条目：前端点「跳过」筛出来的是有路径的那部分，
+// 数量上的缺口由这里兜住。
+func (c *runDetailCollector) reconcileSkipCount(total int) {
+	if c == nil || total <= 0 {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.counts[model.BackupFileActionSkip] += count
-	c.total += count
+	if diff := total - c.counts[model.BackupFileActionSkip]; diff > 0 {
+		c.counts[model.BackupFileActionSkip] += diff
+		c.total += diff
+	}
 }
 
 // addAggregated 累计一个「逐条列出太占地方」的动作（当前用于 strm 的元数据同步）。
@@ -207,11 +252,9 @@ func (c *runDetailCollector) buildJSON() string {
 	for action, count := range c.counts {
 		counts[action] = count
 	}
-	// files_total 只统计会被列出的明细（跳过是纯计数，只出现在 counts 里）。
-	filesTotal := c.total - counts[model.BackupFileActionSkip]
-	if filesTotal < 0 {
-		filesTotal = 0
-	}
+	// files_total 只统计会被列出的明细。「跳过」现在也逐条列出，与其它动作一样
+	// 计入其中（超出条数上限的部分由 counts 体现）。
+	filesTotal := c.total
 
 	encoded, err := json.Marshal(model.RunDetail{
 		Kind:           c.kind,

@@ -121,8 +121,8 @@ type BackupFileEntry = RunFileEntry
 
 // RunDetail 是运行详情的载荷（run_history.detail_json），备份 / strm / 打包等链路共用。
 // Files 为明细列表（每个动作只保留有限条数，见 backup.maxFileEntriesPerAction 与
-// executor.maxDetailEntriesPerAction）；Counts 是采集到的真实数量（含只计数的 skip），
-// FilesTotal 是明细总数（不含跳过），均不受截断影响。
+// executor.maxDetailEntriesPerAction）；Counts 是采集到的真实数量（可能大于列表条数，
+// 例如超出上限的跳过），FilesTotal 是明细总数，均不受截断影响。
 type RunDetail struct {
 	Kind           string         `json:"kind"`
 	Files          []RunFileEntry `json:"files"`

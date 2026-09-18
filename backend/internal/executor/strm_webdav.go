@@ -133,8 +133,7 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 			return *stats, err
 		}
 	}
-	// 「跳过」只计数不列明细：筛选名单命中、已有同名产物、后缀不匹配都会落到这里。
-	detail.recordSkip(stats.SkipCount)
+	// 「跳过」逐条写进明细（筛选命中 / 后缀不匹配 / 目标已存在都会落到这里）。
 	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
 	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
@@ -158,6 +157,9 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
 		}
 	}
+	// 把「只统计到数量、拿不到路径」的整轮跳过（含上面刚置的「未发现可生成 Strm 的媒体文件」）
+	// 补齐到 counts，保证 counts.skip 与运行记录里的 skip_count 一致。
+	detail.reconcileSkipCount(stats.SkipCount)
 
 	if stats.FailureCount > 0 {
 		return *stats, fmt.Errorf("strm execution finished with %d failures", stats.FailureCount)
@@ -205,6 +207,7 @@ func (s *Service) walkOpenListStrmRecursive(
 		}
 		if matchesFileName(entry.Name, entry.IsDir, matchers) || isUnderFilteredDir(entry.Path, matchers) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonFiltered, entry.IsDir)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
 			continue
 		}
@@ -215,6 +218,7 @@ func (s *Service) walkOpenListStrmRecursive(
 
 		if !matchesStrmExtension(entry.Name, strmExtensions) && !matchesStrmExtension(entry.Name, metadataExtensions) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonExtension, false)
 			continue
 		}
 
@@ -228,6 +232,7 @@ func (s *Service) walkOpenListStrmRecursive(
 				stats.MetadataCount++
 			case strmMetadataSkipped:
 				stats.SkipCount++
+				stats.Detail.recordSkip(entry.Path, skipReasonExistingMeta, false)
 			case strmMetadataFailed:
 				stats.FailureCount++
 			}
@@ -236,6 +241,7 @@ func (s *Service) walkOpenListStrmRecursive(
 
 		if shouldSkipByMinVideoSize(entry.Name, entry.Size, minVideoBytes) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonMinVideo, false)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped small video %s (%.1fMB)", entry.Path, float64(entry.Size)/(1024*1024)))
 			continue
 		}
@@ -252,6 +258,7 @@ func (s *Service) walkOpenListStrmRecursive(
 			existed = true
 			if !overwrite {
 				stats.SkipCount++
+				stats.Detail.recordSkip(entry.Path, skipReasonExistingStrm, false)
 				continue
 			}
 		}
@@ -405,6 +412,7 @@ func (s *Service) processWebdavStrmDir(
 		if matchesFileName(entry.Name, entry.IsDir, matchers) {
 			statsMu.Lock()
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonFiltered, entry.IsDir)
 			statsMu.Unlock()
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
 			continue
@@ -418,6 +426,7 @@ func (s *Service) processWebdavStrmDir(
 		if !matchesStrmExtension(entry.Name, strmExtensions) && !matchesStrmExtension(entry.Name, metadataExtensions) {
 			statsMu.Lock()
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonExtension, false)
 			statsMu.Unlock()
 			continue
 		}
@@ -433,6 +442,7 @@ func (s *Service) processWebdavStrmDir(
 				stats.MetadataCount++
 			case strmMetadataSkipped:
 				stats.SkipCount++
+				stats.Detail.recordSkip(entry.Path, skipReasonExistingMeta, false)
 			case strmMetadataFailed:
 				stats.FailureCount++
 			}
@@ -443,6 +453,7 @@ func (s *Service) processWebdavStrmDir(
 		if shouldSkipByMinVideoSize(entry.Name, entry.Size, minVideoBytes) {
 			statsMu.Lock()
 			stats.SkipCount++
+			stats.Detail.recordSkip(entry.Path, skipReasonMinVideo, false)
 			statsMu.Unlock()
 			s.appendLog(runID, "info", fmt.Sprintf("skipped small video %s (%.1fMB)", entry.Path, float64(entry.Size)/(1024*1024)))
 			continue
@@ -461,6 +472,7 @@ func (s *Service) processWebdavStrmDir(
 			if !overwrite {
 				statsMu.Lock()
 				stats.SkipCount++
+				stats.Detail.recordSkip(entry.Path, skipReasonExistingStrm, false)
 				statsMu.Unlock()
 				continue
 			}

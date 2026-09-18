@@ -37,10 +37,11 @@ function isRunFileAction(value: unknown): value is RunFileAction {
   return typeof value === 'string' && (runFileActions as string[]).includes(value)
 }
 
-// 明细面板的筛选页签顺序：先列「这次产出了什么」，再列失败与删除。
-export const runFileActionOrder: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move', 'fail', 'delete']
+// 会被列出的动作顺序。这个数组参与「共 N 项」的求和，必须覆盖所有会落明细的动作，
+// 顺序本身沿用「先列这次产出了什么，再列失败与删除，最后是跳过」。
+export const runFileActionOrder: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move', 'fail', 'delete', 'skip']
 
-// 明细面板只列「真的动了文件」的结果；跳过只显示数目，不参与筛选。
+// 明细面板只列「真的动了文件」的结果。
 export type BackupFileFilter = 'all' | RunFileAction
 
 export interface BackupFileEntry {
@@ -160,7 +161,7 @@ export type RunDetailSummaryKey = 'success' | 'skip' | 'failure' | 'strm' | 'met
 export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
   success: '成功',
   skip: '跳过',
-  failure: '错误',
+  failure: '失败',
   strm: 'Strm',
   metadata: '元数据',
 }
@@ -170,7 +171,7 @@ export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
 // 只在「全部」视图里出现。
 const runDetailSummaryActions: Record<RunDetailSummaryKey, RunFileAction[]> = {
   success: ['upload', 'strm', 'metadata', 'pack', 'move'],
-  skip: [],
+  skip: ['skip'],
   failure: ['fail'],
   strm: ['strm'],
   metadata: ['metadata'],
@@ -203,8 +204,8 @@ export function buildRunDetailSummarySegments(
 
 // filterRunDetailFiles 按统计项筛明细；未选中任何项（null）时返回整份明细。
 //
-// 「跳过」在明细载荷里只累计数量、不产生逐条明细，所以筛出来必然是空 ——
-// 调用方据此给一句说明文案（见 RunDetailList 的空态），不要让它看起来像「坏了」。
+// 「跳过」现在也有逐条明细，点它就只看被跳过的那些文件（后端每动作最多 200 条，
+// 超出部分只在统计数字里体现，所以筛出来的条数可能少于统计值）。
 export function filterRunDetailFiles(
   files: BackupFileEntry[],
   key: RunDetailSummaryKey | null,
@@ -259,10 +260,8 @@ export function parseRunDetail(item?: { archive_mode?: string; detail_json?: str
       continue
     }
     const action = normalizeAction(entry.action)
-    // 「跳过」不列明细（旧记录里可能存过这类条目，这里一并丢掉），只用 counts.skip 显示数目。
-    if (action === 'skip') {
-      continue
-    }
+    // 「跳过」同样逐条列出：任务详情要能看出「到底是哪些文件被跳过了」，
+    // 只有统计数字不够（旧记录里也可能存过这类条目，一并展示）。
     files.push({
       path,
       action,
@@ -294,7 +293,8 @@ export function parseRunDetail(item?: { archive_mode?: string; detail_json?: str
     return null
   }
 
-  // 「共 N 项」只算会被列出的动作：旧记录的 files_total 含跳过，不能直接用。
+  // 「共 N 项」按 counts 求和（含跳过，跳过现在也逐条列出）。counts 是真实数量，
+  // 明细条数可能因为每动作 200 条的上限少于它。
   const listedTotal = runFileActionOrder.reduce((total, action) => total + counts[action], 0)
   const total = listedTotal > 0 ? listedTotal : files.length
 

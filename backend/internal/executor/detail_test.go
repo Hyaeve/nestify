@@ -63,26 +63,63 @@ func TestRunDetailCollectorCapsPerAction(t *testing.T) {
 	}
 }
 
-// TestRunDetailCollectorSkipIsCountOnly 锁定「跳过只计数不列明细」：
-// 跳过数量计入 counts，但不参与 files_total，也不产生逐条明细。
-func TestRunDetailCollectorSkipIsCountOnly(t *testing.T) {
+// TestRunDetailCollectorRecordsSkipEntries 锁定「跳过也逐条落明细」：
+// 跳过数量进 counts，条目进 files 并计入 files_total，备注写明跳过原因。
+func TestRunDetailCollectorRecordsSkipEntries(t *testing.T) {
 	collector := newRunDetailCollector(model.RunDetailKindStrm)
 	collector.record(model.RunFileEntry{Path: "A.mkv", Action: model.RunFileActionStrm})
-	collector.recordSkip(9)
+	collector.recordSkip("B.txt", skipReasonExtension, false)
+	collector.recordSkip("过滤目录", skipReasonFiltered, true)
 
 	var detail model.RunDetail
 	if err := json.Unmarshal([]byte(collector.buildJSON()), &detail); err != nil {
 		t.Fatalf("解析明细失败: %v", err)
 	}
 
-	if detail.Counts[model.BackupFileActionSkip] != 9 {
-		t.Fatalf("counts.skip = %d, want 9", detail.Counts[model.BackupFileActionSkip])
+	skipEntries := detailEntriesByAction(detail, model.BackupFileActionSkip)
+	if len(skipEntries) != 2 {
+		t.Fatalf("跳过明细条数 = %d, want 2", len(skipEntries))
 	}
-	if detail.FilesTotal != 1 {
-		t.Fatalf("files_total = %d, want 1（跳过不计入）", detail.FilesTotal)
+	if detail.Counts[model.BackupFileActionSkip] != 2 {
+		t.Fatalf("counts.skip = %d, want 2", detail.Counts[model.BackupFileActionSkip])
 	}
-	if len(detail.Files) != 1 {
-		t.Fatalf("明细条数 = %d, want 1", len(detail.Files))
+	if detail.FilesTotal != 3 {
+		t.Fatalf("files_total = %d, want 3（跳过也计入）", detail.FilesTotal)
+	}
+	if skipEntries[0].Note != skipReasonExtension {
+		t.Fatalf("跳过备注 = %q, want %q", skipEntries[0].Note, skipReasonExtension)
+	}
+	if skipEntries[1].Dir != true {
+		t.Fatal("被跳过的目录要带 Dir 标记")
+	}
+}
+
+// TestRunDetailCollectorReconcilesSkipCount 锁定「统计与明细对齐」：
+// 没有具体文件的整轮跳过（源目录为空之类）只把 SkipCount 置 1，收尾按差额补齐 counts，
+// 保证 counts.skip 恒等于运行记录里的 skip_count，明细条数不会多于统计数字。
+func TestRunDetailCollectorReconcilesSkipCount(t *testing.T) {
+	collector := newRunDetailCollector(model.RunDetailKindArchive)
+	collector.recordSkip("A.mkv", skipReasonFiltered, false)
+	collector.reconcileSkipCount(4)
+
+	var detail model.RunDetail
+	if err := json.Unmarshal([]byte(collector.buildJSON()), &detail); err != nil {
+		t.Fatalf("解析明细失败: %v", err)
+	}
+	if detail.Counts[model.BackupFileActionSkip] != 4 {
+		t.Fatalf("counts.skip = %d, want 4（与运行统计一致）", detail.Counts[model.BackupFileActionSkip])
+	}
+	if len(detailEntriesByAction(detail, model.BackupFileActionSkip)) != 1 {
+		t.Fatal("补齐的差额只进 counts，不产生条目")
+	}
+	// 反向情形：明细条数多于传入值时不回退（明细是已经发生的事实）。
+	collector.reconcileSkipCount(2)
+	var again model.RunDetail
+	if err := json.Unmarshal([]byte(collector.buildJSON()), &again); err != nil {
+		t.Fatalf("解析明细失败: %v", err)
+	}
+	if again.Counts[model.BackupFileActionSkip] != 4 {
+		t.Fatalf("counts.skip = %d, want 4（不回退）", again.Counts[model.BackupFileActionSkip])
 	}
 }
 
@@ -173,12 +210,20 @@ func TestExecuteStrmRuleRecordsRunDetail(t *testing.T) {
 		t.Fatalf("元数据汇总 Note = %q, want %q", metadataEntries[0].Note, want)
 	}
 
-	// 未命中后缀的文件只计入跳过，不产生明细。
+	// 未命中后缀的文件（notes.txt）计入跳过的同时也要有一条明细：用户要能看到
+	// 「到底是哪些文件被跳过了」，只有数目不够。
 	if detail.Counts[model.BackupFileActionSkip] == 0 {
 		t.Fatal("跳过数量应计入 counts")
 	}
-	if len(detailEntriesByAction(detail, model.BackupFileActionSkip)) != 0 {
-		t.Fatal("跳过不应产生逐条明细")
+	skipEntries := detailEntriesByAction(detail, model.BackupFileActionSkip)
+	if len(skipEntries) != 1 {
+		t.Fatalf("跳过明细条数 = %d, want 1", len(skipEntries))
+	}
+	if want := filepath.Join(sourceDir, "剧集", "notes.txt"); skipEntries[0].Path != want {
+		t.Fatalf("跳过明细 Path = %q, want %q", skipEntries[0].Path, want)
+	}
+	if skipEntries[0].Note != skipReasonExtension {
+		t.Fatalf("跳过备注 = %q, want %q", skipEntries[0].Note, skipReasonExtension)
 	}
 }
 

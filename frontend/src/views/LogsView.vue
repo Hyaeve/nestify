@@ -32,7 +32,7 @@
         <section class="metric-card metric-card--danger">
           <div class="metric-card__icon metric-card__icon--danger">!</div>
           <div class="metric-card__body">
-            <div class="metric-card__label">错误</div>
+            <div class="metric-card__label">失败</div>
             <div class="metric-card__value">{{ failedLogs }}</div>
           </div>
         </section>
@@ -52,7 +52,7 @@
           <el-select v-model="statusFilter" class="logs-toolbar__select" placeholder="状态" @change="handleFiltersChange">
             <el-option label="全部级别" value="all" />
             <el-option label="成功" value="success" />
-            <el-option label="错误" value="failed" />
+            <el-option label="失败" value="failed" />
             <el-option label="跳过" value="skip" />
           </el-select>
 
@@ -185,7 +185,7 @@
                   <span>处理 {{ scope.row.processed_files }}</span>
                   <span>成功 {{ scope.row.success_count }}</span>
                   <span>跳过 {{ scope.row.skip_count }}</span>
-                  <span>错误 {{ scope.row.failure_count }}</span>
+                  <span>失败 {{ scope.row.failure_count }}</span>
                 </div>
               </div>
             </template>
@@ -247,7 +247,7 @@
             <div class="logs-detail-summary__main">
               <div class="logs-detail-summary__title">{{ selectedLogGroup.title }}</div>
               <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
-                   右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、错误本来就同在一行。 -->
+                   右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、失败本来就同在一行。 -->
               <div class="logs-detail-summary__desc">
                 <span class="detail-summary__leading">{{ selectedLogGroupLeading }}</span>
                 <span class="detail-summary__sep">·</span>
@@ -375,7 +375,7 @@ const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 错误不再是死文本，
+// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 失败不再是死文本，
 // 而是后面的可点击统计项（见 selectedLogGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedLogGroupLeading = computed(() => {
@@ -385,7 +385,7 @@ const selectedLogGroupLeading = computed(() => {
   }
   return `${group.rule_name || '手动任务'} · ${logTriggerText(group)}`
 })
-// 统计项：成功 / 跳过 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
+// 统计项：成功 / 跳过 / 失败 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedLogGroupSegments = computed(() =>
   buildRunDetailSummarySegments(selectedLogGroup.value ?? {}, selectedRunDetailManifest.value),
 )
@@ -511,7 +511,7 @@ function statusLabel(status: string) {
     return '成功'
   }
   if (status === 'failed') {
-    return '错误'
+    return '失败'
   }
   if (status === 'cancelled') {
     return '已停止'

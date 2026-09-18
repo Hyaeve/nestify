@@ -78,15 +78,11 @@ const props = defineProps<{
 
 const files = computed(() => filterRunDetailFiles(props.manifest?.files ?? [], props.filterKey ?? null))
 
-// 空态要分清「本来就没有明细」与「筛出来是空的」：跳过压根不写明细，得说清楚，
-// 否则点进去会像界面坏了。
+// 空态要分清「本来就没有明细」与「筛出来是空的」。
 const emptyText = computed(() => {
   const key = props.filterKey
   if (!key) {
     return '本次执行没有文件级明细'
-  }
-  if (key === 'skip') {
-    return '被跳过的文件只计入「跳过」数量，不记录文件明细'
   }
   return `本次执行没有「${runDetailSummaryLabels[key]}」明细`
 })

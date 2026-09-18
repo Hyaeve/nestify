@@ -210,7 +210,7 @@
               <div class="detail-dialog-summary__main">
                 <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
                 <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
-                     右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、错误本来就同在一行。 -->
+                     右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、失败本来就同在一行。 -->
                 <div class="detail-dialog-summary__desc">
                   <span class="detail-summary__leading">{{ selectedHistoryGroupLeading }}</span>
                   <span class="detail-summary__sep">·</span>
@@ -1631,7 +1631,7 @@ const failedCount = computed(() => historySummary.value.failed)
 const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 错误不再是死文本，
+// 详情窗口标题下的第一段文字：规则名 + 触发方式。成功 / 跳过 / 失败不再是死文本，
 // 而是后面的可点击统计项（见 selectedHistoryGroupSegments）。
 // strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
 const selectedHistoryGroupLeading = computed(() => {
@@ -1641,7 +1641,7 @@ const selectedHistoryGroupLeading = computed(() => {
   }
   return `${group.rule_name || '未知规则'} · ${historyTriggerText(group)}`
 })
-// 统计项：成功 / 跳过 / 错误 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
+// 统计项：成功 / 跳过 / 失败 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
 const selectedHistoryGroupSegments = computed(() =>
   buildRunDetailSummarySegments(selectedHistoryGroup.value ?? {}, selectedRunDetailManifest.value),
 )
