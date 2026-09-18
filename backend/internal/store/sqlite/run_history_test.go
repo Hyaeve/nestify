@@ -81,3 +81,67 @@ func TestRunHistoryDetailJSONRoundTrip(t *testing.T) {
 		t.Fatalf("expected ErrRunHistoryNotFound, got %v", err)
 	}
 }
+
+// TestListRunHistoryGroupPrefersCompleteDetail 锁定「折叠组取到的是最完整的那份明细」。
+//
+// 一次执行会写出多行历史（每处理一个文件落一行），它们共享同一个 started_at、id 又是随机的。
+// 前端「折叠任务」组取的是**组内第一条**的 detail_json，只按 id 兜底时这条是随机的，
+// 明细就可能只显示前几个文件。明细逐步累积写出、长度单调不减，所以按长度降序稳定取到最全的一份。
+func TestListRunHistoryGroupPrefersCompleteDetail(t *testing.T) {
+	store, err := Open(config.Env{DBPath: filepath.Join(t.TempDir(), "nestify-test.db")})
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	started := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	ruleID := int64(11)
+	shortDetail := `{"kind":"cleanup","files":[{"path":"A.txt","action":"delete","note":"命中清理名单"}],"counts":{"delete":1},"files_total":1}`
+	longDetail := `{"kind":"cleanup","files":[{"path":"A.txt","action":"delete","note":"命中清理名单"},{"path":"B.txt","action":"delete","note":"命中清理名单"},{"path":"C.txt","action":"delete","note":"命中清理名单"}],"counts":{"delete":3},"files_total":3}`
+
+	// id 特意让「最短明细」排在最前（DESC 下 zzz 最大）：只按 id 兜底时会取错。
+	base := model.RunHistoryItem{
+		RuleID:         &ruleID,
+		RuleName:       "净化任务",
+		TriggerMode:    model.TriggerModeManual,
+		ArchiveMode:    "cleanup",
+		Status:         "success",
+		ProcessedFiles: 3,
+		SuccessCount:   3,
+		StartedAt:      started,
+		UpdatedAt:      started.Add(time.Minute),
+	}
+	rows := []model.RunHistoryItem{
+		{ID: "zzz-run-a", DetailJSON: shortDetail},
+		{ID: "mmm-run-b", DetailJSON: shortDetail},
+		{ID: "aaa-run-c", DetailJSON: longDetail},
+	}
+	for index := range rows {
+		rows[index].RuleID = base.RuleID
+		rows[index].RuleName = base.RuleName
+		rows[index].TriggerMode = base.TriggerMode
+		rows[index].ArchiveMode = base.ArchiveMode
+		rows[index].Status = base.Status
+		rows[index].ProcessedFiles = base.ProcessedFiles
+		rows[index].SuccessCount = base.SuccessCount
+		rows[index].StartedAt = base.StartedAt
+		rows[index].UpdatedAt = base.UpdatedAt
+		if err := store.UpsertRunHistory(rows[index]); err != nil {
+			t.Fatalf("upsert run history %s: %v", rows[index].ID, err)
+		}
+	}
+
+	items, total, err := store.ListRunHistoryGroupPage(1, 50, "", "", "", "", "started_at", "desc")
+	if err != nil {
+		t.Fatalf("list grouped run history: %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("同一轮执行应折叠成一组，实际 %d 组", total)
+	}
+	if len(items) != 3 {
+		t.Fatalf("组内应返回 3 行，实际 %d", len(items))
+	}
+	if items[0].DetailJSON != longDetail {
+		t.Fatalf("组内第一条应是明细最完整的那份，实际拿到 %q", items[0].DetailJSON)
+	}
+}

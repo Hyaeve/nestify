@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"nestify/backend/internal/model"
 )
 
 type fileNameMatcher struct {
@@ -64,6 +66,12 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 		return stats, nil
 	}
 
+	// 净化链路的明细就是「这次删掉了什么」：删除动作（delete）与备份删源、strm 级联删除
+	// 共用同一个统计项，所以任务详情窗口里的「删除」对净化规则同样成立（kind = cleanup）。
+	// 根路径取监控目录，前端据此把绝对路径裁成相对路径显示。
+	stats.detail(model.RunDetailKindCleanup)
+	stats.Detail.setRoots([]string{sourceDir}, nil)
+
 	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles, cleanupRetentionDays, matchers, whitelist, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
@@ -101,6 +109,12 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			if cleanupMatchingFiles && matchesFileName(entry.Name(), true, matchers) {
 				if err := os.RemoveAll(entryPath); err != nil {
 					stats.FailureCount++
+					stats.Detail.record(model.RunFileEntry{
+						Path:   entryPath,
+						Action: model.BackupFileActionFail,
+						Dir:    true,
+						Note:   fmt.Sprintf("删除失败：%v", err),
+					})
 					s.persistRunHistory(runID, fmt.Sprintf("remove matched directory %s failed: %v", entryPath, err), stats)
 					s.appendLog(runID, "error", fmt.Sprintf("remove matched directory %s failed: %v", entryPath, err))
 				} else {
@@ -108,6 +122,14 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
 					stats.SizeBytes += dirSizeOrZero(entryPath)
+					// 明细先于 persistRunHistory 落：每条运行记录带的是「写它那一刻」的明细快照，
+					// 顺序反了这条删除就不在快照里。
+					stats.Detail.record(model.RunFileEntry{
+						Path:   entryPath,
+						Action: model.BackupFileActionDelete,
+						Dir:    true,
+						Note:   deleteNoteMatchedDir,
+					})
 					s.persistRunHistory(runID, fmt.Sprintf("已删除匹配目录 %s", entryPath), stats)
 					s.appendLog(runID, "info", fmt.Sprintf("已删除匹配目录 %s", entryPath))
 				}
@@ -118,6 +140,12 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
 				if removeErr != nil {
 					stats.FailureCount++
+					stats.Detail.record(model.RunFileEntry{
+						Path:   entryPath,
+						Action: model.BackupFileActionFail,
+						Dir:    true,
+						Note:   fmt.Sprintf("删除失败：%v", removeErr),
+					})
 					s.persistRunHistory(runID, fmt.Sprintf("remove empty directory %s failed: %v", entryPath, removeErr), stats)
 					s.appendLog(runID, "error", fmt.Sprintf("remove empty directory %s failed: %v", entryPath, removeErr))
 				} else if removed {
@@ -125,6 +153,12 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 					stats.SuccessCount++
 					stats.CleanupRemovedDirs++
 					stats.SizeBytes += dirSizeOrZero(entryPath)
+					stats.Detail.record(model.RunFileEntry{
+						Path:   entryPath,
+						Action: model.BackupFileActionDelete,
+						Dir:    true,
+						Note:   deleteNoteEmptyDir,
+					})
 					s.persistRunHistory(runID, fmt.Sprintf("已删除空目录 %s", entryPath), stats)
 					s.appendLog(runID, "info", fmt.Sprintf("已删除空目录 %s", entryPath))
 				}
@@ -135,6 +169,11 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		if cleanupMatchingFiles && matchesFileName(entry.Name(), false, matchers) {
 			if err := os.Remove(entryPath); err != nil {
 				stats.FailureCount++
+				stats.Detail.record(model.RunFileEntry{
+					Path:   entryPath,
+					Action: model.BackupFileActionFail,
+					Note:   fmt.Sprintf("删除失败：%v", err),
+				})
 				s.persistRunHistory(runID, fmt.Sprintf("remove file %s failed: %v", entryPath, err), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("remove file %s failed: %v", entryPath, err))
 				return nil
@@ -144,6 +183,11 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			stats.SuccessCount++
 			stats.CleanupRemovedFiles++
 			stats.SizeBytes += fileSizeOrZero(entryPath)
+			stats.Detail.record(model.RunFileEntry{
+				Path:   entryPath,
+				Action: model.BackupFileActionDelete,
+				Note:   deleteNoteMatchedFile,
+			})
 			s.persistRunHistory(runID, fmt.Sprintf("已删除匹配文件 %s", entryPath), stats)
 			s.appendLog(runID, "info", fmt.Sprintf("已删除匹配文件 %s", entryPath))
 			return nil
@@ -155,6 +199,11 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 
 		if err := os.Remove(entryPath); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   entryPath,
+				Action: model.BackupFileActionFail,
+				Note:   fmt.Sprintf("删除失败：%v", err),
+			})
 			s.persistRunHistory(runID, fmt.Sprintf("remove expired file %s failed: %v", entryPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("remove expired file %s failed: %v", entryPath, err))
 			return nil
@@ -164,6 +213,11 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 		stats.SuccessCount++
 		stats.CleanupRemovedFiles++
 		stats.SizeBytes += fileSizeOrZero(entryPath)
+		stats.Detail.record(model.RunFileEntry{
+			Path:   entryPath,
+			Action: model.BackupFileActionDelete,
+			Note:   deleteNoteExpiredFile,
+		})
 		s.persistRunHistory(runID, fmt.Sprintf("已删除过期文件 %s", entryPath), stats)
 		s.appendLog(runID, "info", fmt.Sprintf("已删除过期文件 %s", entryPath))
 		return nil

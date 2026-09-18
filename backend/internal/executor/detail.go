@@ -30,6 +30,15 @@ const (
 	skipReasonFullSyncRemove  = "全量同步：删除了目标端旧的 Strm"
 )
 
+// 删除原因的统一样板：删除动作（delete）在备份删源、strm 级联删除、净化规则上都出现，
+// 明细里要能一眼看出「为什么删」。
+const (
+	deleteNoteMatchedFile = "命中清理名单"
+	deleteNoteMatchedDir  = "命中清理名单（整个目录一起删）"
+	deleteNoteExpiredFile = "超过保留天数"
+	deleteNoteEmptyDir    = "空目录"
+)
+
 // runDetailCollector 采集一次执行「到底动了哪些文件」的明细，序列化进
 // run_history.detail_json（与备份共用同一载荷结构，只是 kind 与 action 不同）。
 //

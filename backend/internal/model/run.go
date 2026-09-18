@@ -100,6 +100,10 @@ const (
 	RunDetailKindPackage = "package"
 	RunDetailKindCollect = "collect"
 	RunDetailKindArchive = "archive"
+	// RunDetailKindCleanup 净化规则：这次执行删掉了哪些文件 / 文件夹。
+	// 删除动作（delete）不只在备份删源与 strm 级联删除上出现，净化链路同样会落这类明细，
+	// 前端「删除」统计项因此对净化规则也成立。
+	RunDetailKindCleanup = "cleanup"
 )
 
 // RunFileEntry 记录一次执行中单个文件（或文件夹）的处理结果。

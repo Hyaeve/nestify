@@ -169,6 +169,7 @@ const runDetailTitles: Record<string, string> = {
   package: '打包产出',
   collect: '收集明细',
   archive: '归档明细',
+  cleanup: '清理明细',
 }
 
 export function runDetailTitle(kind?: string): string {
@@ -180,22 +181,23 @@ export function runDetailTitle(kind?: string): string {
 // ---------------------------------------------------------------------------
 
 // 统计项标识。成功 / 跳过 / 失败 来自运行记录本身（run_history 的计数），
-// 已删除 / Strm / 元数据 来自明细载荷的动作构成（「已删除」只在真有删除时出现：
-// 备份的删源、strm 链路的级联删除都会落到这个动作上）。
+// 删除 / Strm / 元数据 来自明细载荷的动作构成（「删除」只在真有删除时出现）。
+//
+// 「删除」这个统计项不专属某条链路：备份的删源、strm 链路的级联删除、净化规则删掉的
+// 文件与文件夹都会落到删除动作上，所以任何链路只要真的删了东西就会多出这一项。
 export type RunDetailSummaryKey = 'success' | 'skip' | 'failure' | 'delete' | 'strm' | 'metadata'
 
 export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
   success: '成功',
   skip: '跳过',
   failure: '失败',
-  delete: '已删除',
+  delete: '删除',
   strm: 'Strm',
   metadata: '元数据',
 }
 
 // 统计项 → 明细动作。点「成功」不该把失败条目带出来，点「Strm」只看真的生成了 strm 的那些。
-// 「已删除」是独立的收尾动作：不计入成功数，单独给一个筛选口，
-// 级联删除（源端已不存在 → 目标端移除）删了哪些文件在这里看。
+// 「删除」是独立动作：单独给一个筛选口，删了哪些文件点它就能看到。
 const runDetailSummaryActions: Record<RunDetailSummaryKey, RunFileAction[]> = {
   success: ['upload', 'strm', 'metadata', 'pack', 'move'],
   skip: ['skip'],
@@ -213,7 +215,7 @@ export interface RunDetailSummarySegment {
 
 // buildRunDetailSummarySegments 拼出标题下展示（且可点击筛选）的统计项。
 // 「Strm / 元数据」只有 strm 链路才区分，其它链路不占篇幅；
-// 「已删除」只在本次执行真的删过东西时出现（没删除的历史记录一个像素都不变）。
+// 「删除」只在本次执行真的删过东西时出现（没删除的历史记录一个像素都不变）。
 export function buildRunDetailSummarySegments(
   counts: { success_count?: number; skip_count?: number; failure_count?: number },
   manifest: BackupFileManifest | null,
@@ -239,9 +241,15 @@ export function buildRunDetailSummarySegments(
 //
 // 「跳过」现在也有逐条明细，点它就只看被跳过的那些文件（后端每动作最多 200 条，
 // 超出部分只在统计数字里体现，所以筛出来的条数可能少于统计值）。
+//
+// kind 只在净化链路（cleanup）上用一下：净化规则干的活就是删除，后端也把删除计进
+// success_count，所以它的「成功」要连删除条目一起筛出来 —— 否则「成功 N」点开是空的，
+// 而下面明明列着 N 条删除。其它链路的删除（备份删源、strm 级联删除）不算成功，
+// 不能带进来。
 export function filterRunDetailFiles(
   files: BackupFileEntry[],
   key: RunDetailSummaryKey | null,
+  kind?: string,
 ): BackupFileEntry[] {
   if (!key) {
     return files
@@ -249,6 +257,9 @@ export function filterRunDetailFiles(
   const actions = runDetailSummaryActions[key]
   if (!actions.length) {
     return []
+  }
+  if (key === 'success' && (kind || '').trim() === 'cleanup') {
+    return files.filter((file) => actions.includes(file.action) || file.action === 'delete')
   }
   return files.filter((file) => actions.includes(file.action))
 }
@@ -349,7 +360,7 @@ export function backupFileActionLabel(action: RunFileAction): string {
     case 'fail':
       return '失败'
     case 'delete':
-      return '已删除'
+      return '删除'
     case 'strm':
       return '生成 Strm'
     case 'metadata':

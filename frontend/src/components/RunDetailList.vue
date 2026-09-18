@@ -111,7 +111,8 @@ const rows = computed<RunDetailRow[]>(() => {
   const sourceRoots = manifest?.sourceRoots ?? []
   const targetRoots = manifest?.targetRoots ?? []
 
-  return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null).map((entry) => {
+  // kind 传下去：净化链路的「成功」要把删除条目一并筛出来（见 filterRunDetailFiles）。
+  return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null, manifest?.kind).map((entry) => {
     const target = entry.target ? detailTargetFolder(entry.target, targetRoots, entry.dir === true) : ''
     return {
       entry,

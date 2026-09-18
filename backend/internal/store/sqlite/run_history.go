@@ -320,6 +320,18 @@ func buildRunHistoryGroupOrderClause(sortBy, sortOrder string) string {
 	}
 }
 
+// runHistoryDetailTieBreak 是同一次执行内部各行的排序兜底。
+//
+// 一次执行会写出**多行**历史（每处理一个文件 / 文件夹落一行），这些行共享同一个
+// started_at，而 id 是随机十六进制 —— 只按 `started_at DESC, id DESC` 排的话，
+// 组内谁排在第一条完全是随机的。前端「折叠任务」组取的正是**组内第一条**的
+// detail_json（见 runDetail 按需拉取），随机就意味着详情有时只显示前几个文件。
+//
+// 明细是逐步累积写出的（每条运行记录带的是「写它那一刻」的快照），长度单调不减，
+// 所以按明细长度降序排就能稳定拿到**最完整的那一份**，长度相同（例如明细被
+// 200 条上限截断后不再增长）时再按 id 兜底。
+const runHistoryDetailTieBreak = "LENGTH(COALESCE(detail_json, '')) DESC, id DESC"
+
 func buildRunHistoryOrderClause(sortBy, sortOrder string) string {
 	direction := "DESC"
 	if strings.EqualFold(strings.TrimSpace(sortOrder), "asc") {
@@ -328,11 +340,11 @@ func buildRunHistoryOrderClause(sortBy, sortOrder string) string {
 
 	switch strings.ToLower(strings.TrimSpace(sortBy)) {
 	case "name":
-		return "LOWER(COALESCE(rule_name, '')) " + direction + ", started_at DESC, id DESC"
+		return "LOWER(COALESCE(rule_name, '')) " + direction + ", started_at DESC, " + runHistoryDetailTieBreak
 	case "modified_at":
-		return "started_at " + direction + ", id DESC"
+		return "started_at " + direction + ", " + runHistoryDetailTieBreak
 	default:
-		return "started_at DESC, id DESC"
+		return "started_at DESC, " + runHistoryDetailTieBreak
 	}
 }
 
