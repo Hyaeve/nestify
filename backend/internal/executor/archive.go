@@ -33,10 +33,18 @@ type executionStats struct {
 	HistoryEvents       int
 	// MetadataCount 记录 strm 链路里作为实体文件落地的元数据文件数（图片 / 字幕 / nfo）。
 	MetadataCount int
+	// CascadeDeletedFiles / CascadeDeletedDirs 记录 strm 链路「级联删除」从目标端移走的条目数
+	// （源端已不存在的文件 / 目录，见 strm_cascade.go）。与净化链路的 CleanupRemovedFiles /
+	// CleanupRemovedDirs 同款：删除是独立动作，不混进成功 / 跳过。
+	CascadeDeletedFiles int
+	CascadeDeletedDirs  int
 	// Detail 采集「哪些文件生成了 strm / 下载了元数据 / 打出哪些包」的明细，
 	// 序列化后写入 run_history.detail_json（与备份共用同一载荷结构，见 detail.go）。
-	Detail  *runDetailCollector
-	Summary string
+	Detail *runDetailCollector
+	// SourceSnapshot 只在 strm 链路开启「级联删除」时创建：枚举源端时顺手登记
+	// 「源端现在还剩什么」，收尾据此清理目标端（见 strm_cascade.go）。nil 表示不做级联删除。
+	SourceSnapshot *strmSourceSnapshot
+	Summary        string
 }
 
 type packageStageResult struct {
@@ -427,6 +435,13 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	// 明细里的源 / 目标根路径：前端据此把绝对路径裁成「根路径下一级」显示（见 model.RunDetail）。
 	detail.setRoots([]string{sourceDir}, []string{targetDir})
 
+	// 「级联删除」同样要在枚举之前把快照建好：枚举时顺手登记源端还剩什么，
+	// 收尾据此把目标端对齐（源端删掉的文件 / 目录从目标端移除，见 strm_cascade.go）。
+	cascadeDelete := req.Options["strm_cascade_delete"]
+	if cascadeDelete {
+		stats.enableCascadeDelete()
+	}
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
@@ -439,6 +454,9 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	if len(metadataExtensions) > 0 {
 		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：按实体文件复制到目标目录，不生成 Strm", describeExtensionSet(metadataExtensions)))
 	}
+	if cascadeDelete {
+		s.appendLog(runID, "info", "级联删除：已开启，本次执行会把目标端「源端已不存在」的文件与目录一并移除")
+	}
 
 	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats); err != nil {
 		return *stats, err
@@ -447,7 +465,15 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
 	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
-	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+	// 级联删除排在生成之后：先保证这次该生成的都生成了，再清理源端已经没有了的东西。
+	if cascadeDelete {
+		if err := s.cascadeDeleteStrmTarget(runID, targetDir, metadataExtensions, stats); err != nil {
+			return *stats, err
+		}
+	}
+	deleted := describeCascadeDelete(stats.CascadeDeletedFiles, stats.CascadeDeletedDirs)
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 && deleted == "" {
 		stats.SkipCount = 1
 		stats.Summary = "未发现可生成 Strm 的文件"
 	} else {
@@ -457,11 +483,11 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		}
 		if overwrite {
 			syncLabel += "·覆盖生成"
-			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项%s",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount, deleted)
 		} else {
-			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项%s",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount, deleted)
 		}
 	}
 	// 把「只统计到数量、拿不到路径」的整轮跳过（含上面刚置的「未发现可生成 Strm 的文件」）
@@ -482,14 +508,28 @@ func (s *Service) syncStrmDirectory(runID, rootPath, currentPath, targetRoot, co
 	}
 	entries = limitEntriesForMode(compatibilityMode, entries)
 
+	// 源端快照（只开了「级联删除」时才存在）：枚举时顺手登记源端现在还剩哪些文件与目录。
+	// 登记必须排在任何过滤判定之前 —— 过滤名单命中的东西在源端确实还在，
+	// 不能因为「本轮不处理它」就让目标端对应内容被级联删掉。
+	snapshot := stats.SourceSnapshot
+	relDir := cascadeRelativeDir(rootPath, currentPath)
+	if snapshot != nil && relDir == "" {
+		snapshot.addRootEntries(len(entries))
+	}
+
 	sortEntriesNaturally(entries)
 	return processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		if s.runAborted(runID) {
 			return errRunCancelled
 		}
 		sourcePath := filepath.Join(currentPath, entry.Name())
+		relPath := joinCascadeRel(relDir, entry.Name())
+		snapshot.record(relPath, entry.IsDir())
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
+				// 过滤名单命中的目录整棵跳过，其内容不会被登记 ——
+				// 必须标记成不可触碰，否则目标端对应子树会被当成「源端已不存在」删掉。
+				snapshot.protectDir(relPath)
 				stats.SkipCount++
 				stats.Detail.recordSkip(sourcePath, skipReasonFiltered, true)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted strm directory %s", sourcePath))

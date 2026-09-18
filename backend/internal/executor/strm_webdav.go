@@ -90,6 +90,14 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	// 源设为挂载根时 internalPath 为空，会被归一化丢掉 —— 那时整条远端路径就是相对内容。
 	detail.setRoots([]string{internalPath}, []string{targetDir})
 
+	// 「级联删除」：枚举远端时顺手登记挂载里还剩什么，收尾把目标端对齐
+	// （远端已删掉的文件 / 目录从本地目标端移除，见 strm_cascade.go）。
+	// 与明细采集器同理，必须在并发列举之前建好，多线程共用同一份快照。
+	cascadeDelete := req.Options["strm_cascade_delete"]
+	if cascadeDelete {
+		stats.enableCascadeDelete()
+	}
+
 	if req.Options["strm_full_sync"] {
 		if err := s.removeExistingStrmFiles(runID, targetDir, req.CompatibilityMode, stats); err != nil {
 			return *stats, err
@@ -110,6 +118,9 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 
 	if len(metadataExtensions) > 0 {
 		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：从挂载下载为实体文件，不生成 Strm", describeExtensionSet(metadataExtensions)))
+	}
+	if cascadeDelete {
+		s.appendLog(runID, "info", "级联删除：已开启，本次执行会把目标端「远端已不存在」的文件与目录一并移除")
 	}
 
 	// OpenList 挂载优先走原生递归列举：一次 PROPFIND（Depth: infinity）取回整棵子树，
@@ -137,7 +148,15 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	// 元数据同步同样只留一条汇总（一次任务动辄成百上千个封面 / 字幕 / nfo）。
 	s.recordStrmMetadataSummary(runID, detail, stats, sourceDir, targetDir)
 
-	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
+	// 级联删除排在生成之后：先保证这次该生成的都生成了，再清理远端已经没有的东西。
+	if cascadeDelete {
+		if err := s.cascadeDeleteStrmTarget(runID, targetDir, metadataExtensions, stats); err != nil {
+			return *stats, err
+		}
+	}
+	deleted := describeCascadeDelete(stats.CascadeDeletedFiles, stats.CascadeDeletedDirs)
+
+	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 && deleted == "" {
 		stats.SkipCount = 1
 		stats.Summary = "未发现可生成 Strm 的媒体文件"
 	} else {
@@ -150,11 +169,11 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 		}
 		if overwrite {
 			syncLabel += "·覆盖生成"
-			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成/覆盖 %d 个 Strm%s，跳过 %d 项，失败 %d 项%s",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount, deleted)
 		} else {
-			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项",
-				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount)
+			stats.Summary = fmt.Sprintf("Strm%s完成（http strm）：%s -> %s；生成 %d 个 Strm%s，跳过 %d 项，失败 %d 项%s",
+				syncLabel, sourceDir, targetDir, stats.SuccessCount-stats.MetadataCount, describeMetadataCount(stats.MetadataCount), stats.SkipCount, stats.FailureCount, deleted)
 		}
 	}
 	// 把「只统计到数量、拿不到路径」的整轮跳过（含上面刚置的「未发现可生成 Strm 的媒体文件」）
@@ -203,9 +222,26 @@ func (s *Service) walkOpenListStrmRecursive(
 
 	for _, entry := range entries {
 		if s.runAborted(runID) {
+			// 停止时列举不完整：快照不能用来做级联删除（半个快照会误删目标端）。
+			stats.SourceSnapshot.markIncomplete()
 			return true, errRunCancelled
 		}
+
+		// 源端快照只开了「级联删除」时才有；登记排在任何过滤判定之前 ——
+		// 过滤名单命中的东西在远端确实还在，不能因为「本轮不处理它」就让目标端对应内容被删掉。
+		relative := strmRelativeFromRoot(entry.Path, rootInternal)
+		snapshot := stats.SourceSnapshot
+		if snapshot != nil && relative != "" {
+			if !strings.Contains(relative, "/") {
+				snapshot.addRootEntries(1)
+			}
+			snapshot.record(relative, entry.IsDir)
+		}
+
 		if matchesFileName(entry.Name, entry.IsDir, matchers) || isUnderFilteredDir(entry.Path, matchers) {
+			if entry.IsDir && relative != "" {
+				snapshot.protectDir(relative)
+			}
 			stats.SkipCount++
 			stats.Detail.recordSkip(entry.Path, skipReasonFiltered, entry.IsDir)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted entry %s", entry.Path))
@@ -246,8 +282,6 @@ func (s *Service) walkOpenListStrmRecursive(
 			continue
 		}
 
-		relative := strings.TrimPrefix(entry.Path, rootInternal)
-		relative = strings.TrimLeft(relative, "/")
 		if relative == "" {
 			continue
 		}
@@ -292,6 +326,15 @@ func (s *Service) walkOpenListStrmRecursive(
 	}
 
 	return true, nil
+}
+
+// strmRelativeFromRoot 把挂载内的远端路径换算成「相对源根」的相对路径：
+// 去掉源根前缀与首斜杠，始终用斜杠分隔 —— 这就是目标端目录结构里的位置。
+//
+// 与生成 strm 时的换算完全一致（否则级联删除的快照键会对不上目标端）。
+func strmRelativeFromRoot(path, rootInternal string) string {
+	relative := strings.TrimPrefix(strings.TrimSpace(path), strings.TrimSpace(rootInternal))
+	return strings.TrimLeft(relative, "/")
 }
 
 // isUnderFilteredDir 判断条目是否位于「命中过滤名单的目录」之内。
@@ -368,6 +411,9 @@ func (s *Service) walkWebdavStrm(
 				// 直接 return 会让 pending 永远归不了零，其它线程会卡死在 cond.Wait()。
 				if !s.runAborted(runID) {
 					s.processWebdavStrmDir(ctx, runID, worker, dir, rootInternal, targetRoot, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, &statsMu, stats, queue)
+				} else {
+					// 停止时目录没走完，源端快照是残缺的：整轮放弃级联删除。
+					stats.SourceSnapshot.markIncomplete()
 				}
 				queue.done()
 			}
@@ -401,15 +447,39 @@ func (s *Service) processWebdavStrmDir(
 		statsMu.Lock()
 		stats.FailureCount++
 		statsMu.Unlock()
+		// 这个目录没能列出来，里面还有什么无从得知：它对应的目标端子目录不能碰。
+		// 连源根都列不出来时，整轮放弃级联删除（半个快照会误删目标端）。
+		if relative := strmRelativeFromRoot(currentInternal, rootInternal); relative == "" {
+			stats.SourceSnapshot.markIncomplete()
+		} else {
+			stats.SourceSnapshot.protectDir(relative)
+		}
 		s.appendLog(runID, "error", fmt.Sprintf("列出 WebDAV 目录 %s 失败：%v", currentInternal, err))
 		return
 	}
 
+	if normalizeCascadePath(currentInternal) == normalizeCascadePath(rootInternal) {
+		stats.SourceSnapshot.addRootEntries(len(entries))
+	}
+
 	for _, entry := range entries {
 		if s.runAborted(runID) {
+			stats.SourceSnapshot.markIncomplete()
 			return
 		}
+
+		// 源端快照（只开了「级联删除」时才有）：登记排在任何过滤判定之前 ——
+		// 过滤名单命中的东西在远端确实还在，不能因为「本轮不处理它」就让目标端对应内容被删掉。
+		relative := strmRelativeFromRoot(entry.Path, rootInternal)
+		snapshot := stats.SourceSnapshot
+		if snapshot != nil && relative != "" {
+			snapshot.record(relative, entry.IsDir)
+		}
+
 		if matchesFileName(entry.Name, entry.IsDir, matchers) {
+			if entry.IsDir && relative != "" {
+				snapshot.protectDir(relative)
+			}
 			statsMu.Lock()
 			stats.SkipCount++
 			stats.Detail.recordSkip(entry.Path, skipReasonFiltered, entry.IsDir)
@@ -459,8 +529,6 @@ func (s *Service) processWebdavStrmDir(
 			continue
 		}
 
-		relative := strings.TrimPrefix(entry.Path, rootInternal)
-		relative = strings.TrimLeft(relative, "/")
 		if relative == "" {
 			continue
 		}

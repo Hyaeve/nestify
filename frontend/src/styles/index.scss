@@ -571,7 +571,7 @@ body {
   border-color: rgba(217, 134, 26, 0.55);
 }
 
-/* 错误：砖红（与明细里的失败标签同色） */
+/* 失败：砖红（与明细里的失败标签同色） */
 .detail-summary__chip.is-failure {
   color: #c4562f;
   background: rgba(196, 86, 47, 0.09);
@@ -584,6 +584,22 @@ body {
 .detail-summary__chip.is-failure.is-active {
   background: rgba(196, 86, 47, 0.2);
   border-color: rgba(196, 86, 47, 0.5);
+}
+
+/* 已删除：备份语义色（与明细条目上的「已删除」标签同色）。
+   备份的删源与 strm 链路的级联删除都会落到这个动作上；只在真的删过东西时才出现。 */
+.detail-summary__chip.is-delete {
+  color: #5f7fa8;
+  background: rgba(95, 127, 168, 0.1);
+}
+
+.detail-summary__chip.is-delete:hover {
+  background: rgba(95, 127, 168, 0.17);
+}
+
+.detail-summary__chip.is-delete.is-active {
+  background: rgba(95, 127, 168, 0.22);
+  border-color: rgba(95, 127, 168, 0.52);
 }
 
 /* Strm：青 */

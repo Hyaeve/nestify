@@ -856,10 +856,12 @@
           <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
-          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="createLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col>
+          <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="createLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="createLinkForm.strm_overwrite" /></el-form-item></el-col>
+          <el-col v-if="createLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="级联删除"><el-switch v-model="createLinkForm.strm_cascade_delete" /></el-form-item></el-col>
         </el-row>
+        <div v-if="createLinkForm.link_mode === 'strm'" class="strm-options-hint">级联删除：源端已删掉的文件 / 文件夹，执行时把目标端对应的 Strm、元数据一并删掉；整个文件夹在源端没了则整个文件夹一起删（源端为空时自动跳过，避免误删）。</div>
       </el-form>
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
     </el-dialog>
@@ -947,10 +949,12 @@
           <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
-          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="editLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col>
+          <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="实时监控"><el-switch v-model="editLinkForm.monitor_enabled" /></el-form-item></el-col>
           <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="覆盖生成"><el-switch v-model="editLinkForm.strm_overwrite" /></el-form-item></el-col>
+          <el-col v-if="editLinkForm.link_mode === 'strm'" :span="linkSwitchSpan(true)"><el-form-item label="级联删除"><el-switch v-model="editLinkForm.strm_cascade_delete" /></el-form-item></el-col>
         </el-row>
+        <div v-if="editLinkForm.link_mode === 'strm'" class="strm-options-hint">级联删除：源端已删掉的文件 / 文件夹，执行时把目标端对应的 Strm、元数据一并删掉；整个文件夹在源端没了则整个文件夹一起删（源端为空时自动跳过，避免误删）。</div>
       </el-form>
       <template #footer><el-button @click="editLinkDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdateLinkRule">保存</el-button></template>
     </el-dialog>
@@ -1205,7 +1209,7 @@ function parseFiltersArray(raw?: string) {
   }
 }
 
-const strmOptionDefaults = { strm_full_sync: false, strm_overwrite: false }
+const strmOptionDefaults = { strm_full_sync: false, strm_overwrite: false, strm_cascade_delete: false }
 
 function parseStrmSyncMode(raw?: string): StrmSyncMode {
   return parseOptionJSON(raw, strmOptionDefaults).strm_full_sync ? 'full' : 'incremental'
@@ -1216,14 +1220,20 @@ function parseStrmOverwrite(raw?: string): boolean {
   return parseOptionJSON(raw, strmOptionDefaults).strm_overwrite
 }
 
-function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean) {
-  return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite }
+// 级联删除：源端已删除的文件 / 文件夹，执行时把目标端对应内容一并删掉
+// （含元数据文件；整个源目录没了就把目标端整个文件夹删掉）。
+function parseStrmCascadeDelete(raw?: string): boolean {
+  return parseOptionJSON(raw, strmOptionDefaults).strm_cascade_delete
 }
 
-// 链路规则底部的开关行：Strm 模式下「实时监控 / 启用规则 / 覆盖生成」三个开关并排（各 8 栅格），
-// 其它模式只有两个开关（实时监控 / 启用规则），保持各占一半。
-function linkSwitchSpan(showOverwrite: boolean) {
-  return showOverwrite ? 8 : 12
+function buildStrmOptions(syncMode: StrmSyncMode, overwrite: boolean, cascadeDelete: boolean) {
+  return { strm_full_sync: syncMode === 'full', strm_overwrite: overwrite, strm_cascade_delete: cascadeDelete }
+}
+
+// 链路规则底部的开关行：Strm 模式下「启用规则 / 实时监控 / 覆盖生成 / 级联删除」四个开关并排（各 6 栅格），
+// 其它模式只有两个开关（启用规则 / 实时监控），保持各占一半。
+function linkSwitchSpan(showStrmSwitches: boolean) {
+  return showStrmSwitches ? 6 : 12
 }
 
 // Strm 规则的数值参数（存 rules.option_values_json）。
@@ -1529,7 +1539,7 @@ function buildRuleUpdatePayload(rule: RuleItem, overrides: Partial<UpdateRulePay
     watch_debounce_ms: rule.watch_debounce_ms,
     cron_expression: scheduleEnabled ? rule.cron_expression : '',
     run_on_start: rule.run_on_start,
-    options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json), parseStrmOverwrite(rule.options_json)) : {}),
+    options: purifyOptions ?? (linkMode === 'strm' ? buildStrmOptions(parseStrmSyncMode(rule.options_json), parseStrmOverwrite(rule.options_json), parseStrmCascadeDelete(rule.options_json)) : {}),
     // 原样带回库里已有的数值参数：PUT 是整体覆盖，缺这个字段会把清理保留天数等一起清空。
     option_values: parseStoredOptionValues(rule.option_values_json),
     package_options: ruleType === 'archive' && rule.archive_mode === 'package'
@@ -1750,6 +1760,7 @@ const createLinkForm = reactive({
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
   strm_overwrite: false,
+  strm_cascade_delete: false,
   strm_api_interval_seconds: createDefaultStrmAPIIntervalSeconds(),
   strm_min_video_mb: createDefaultStrmMinVideoMB(),
   strm_download_threads: createDefaultStrmDownloadThreads(),
@@ -1771,6 +1782,7 @@ const editLinkForm = reactive({
   link_mode: 'soft' as LinkMode,
   strm_sync_mode: 'incremental' as StrmSyncMode,
   strm_overwrite: false,
+  strm_cascade_delete: false,
   strm_api_interval_seconds: createDefaultStrmAPIIntervalSeconds(),
   strm_min_video_mb: createDefaultStrmMinVideoMB(),
   strm_download_threads: createDefaultStrmDownloadThreads(),
@@ -1953,6 +1965,7 @@ function resetCreateLinkForm() {
   createLinkForm.link_mode = 'soft'
   createLinkForm.strm_sync_mode = 'incremental'
   createLinkForm.strm_overwrite = false
+  createLinkForm.strm_cascade_delete = false
   createLinkForm.strm_api_interval_seconds = createDefaultStrmAPIIntervalSeconds()
   createLinkForm.strm_min_video_mb = createDefaultStrmMinVideoMB()
   createLinkForm.strm_download_threads = createDefaultStrmDownloadThreads()
@@ -1976,6 +1989,7 @@ function resetEditLinkForm() {
   editLinkForm.link_mode = 'soft'
   editLinkForm.strm_sync_mode = 'incremental'
   editLinkForm.strm_overwrite = false
+  editLinkForm.strm_cascade_delete = false
   editLinkForm.strm_api_interval_seconds = createDefaultStrmAPIIntervalSeconds()
   editLinkForm.strm_min_video_mb = createDefaultStrmMinVideoMB()
   editLinkForm.strm_download_threads = createDefaultStrmDownloadThreads()
@@ -2205,6 +2219,7 @@ async function openEditLinkDialog(id: number) {
     editLinkForm.link_mode = normalizeLinkMode(rule.link_mode)
     editLinkForm.strm_sync_mode = parseStrmSyncMode(rule.options_json)
     editLinkForm.strm_overwrite = parseStrmOverwrite(rule.options_json)
+    editLinkForm.strm_cascade_delete = parseStrmCascadeDelete(rule.options_json)
     editLinkForm.strm_api_interval_seconds = parseStrmAPIIntervalSeconds(rule.option_values_json)
     editLinkForm.strm_min_video_mb = parseStrmMinVideoMB(rule.option_values_json)
     editLinkForm.strm_download_threads = parseStrmDownloadThreads(rule.option_values_json)
@@ -3134,7 +3149,7 @@ async function submitCreateLinkRule() {
       watch_debounce_ms: createLinkForm.watch_debounce_ms,
       cron_expression: createLinkForm.schedule_enabled ? createLinkForm.cron_expression : '',
       run_on_start: createLinkForm.run_on_start,
-      options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode, createLinkForm.strm_overwrite) : {},
+      options: createLinkForm.link_mode === 'strm' ? buildStrmOptions(createLinkForm.strm_sync_mode, createLinkForm.strm_overwrite, createLinkForm.strm_cascade_delete) : {},
       option_values: createLinkForm.link_mode === 'strm' ? buildStrmOptionValues(createLinkForm) : {},
       package_options: {},
       collect_options: {},
@@ -3241,7 +3256,7 @@ async function submitUpdateLinkRule() {
       watch_debounce_ms: editLinkForm.watch_debounce_ms,
       cron_expression: editLinkForm.schedule_enabled ? editLinkForm.cron_expression : '',
       run_on_start: editLinkForm.run_on_start,
-      options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode, editLinkForm.strm_overwrite) : {},
+      options: editLinkForm.link_mode === 'strm' ? buildStrmOptions(editLinkForm.strm_sync_mode, editLinkForm.strm_overwrite, editLinkForm.strm_cascade_delete) : {},
       option_values: editLinkForm.link_mode === 'strm' ? buildStrmOptionValues(editLinkForm) : {},
       package_options: {},
       collect_options: {},

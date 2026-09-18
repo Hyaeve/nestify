@@ -303,7 +303,8 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 
 		if req.RuleID > 0 && s.store != nil {
 			// 规则卡片的「上次执行结果」仍按实际处理的文件数落库（停止不是失败）。
-			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+			// 级联删除也算「这次干了活」：一次只做了清理的执行不该被显示成「跳过」。
+			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount, stats.cascadeDeletedTotal()), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
 		}
 		if stats.HistoryEvents == 0 {
 			s.persistRunHistory(runID, stats.Summary, &stats)
@@ -481,7 +482,7 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 	failureCount := run.FailureCount
 	var sizeBytes int64
 	if stats != nil {
-		status = mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount)
+		status = mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount, stats.cascadeDeletedTotal())
 		processedFiles = stats.ProcessedFiles
 		successCount = stats.SuccessCount
 		skipCount = stats.SkipCount
@@ -537,14 +538,18 @@ func mapRunStatus(run *model.RunInstance) string {
 	return "skip"
 }
 
-func mapRunStatusByCounts(successCount, skipCount, failureCount int) string {
+// mapRunStatusByCounts 由计数推导这次执行的结论（规则卡片的「上次执行结果」与运行历史共用）。
+//
+// cascadeDeleted 是 strm「级联删除」从目标端移走的条目数（见 strm_cascade.go）：
+// 它同样是「这次真的干了活」，所以只清理了什么都没生成的执行不该被显示成「跳过」。
+func mapRunStatusByCounts(successCount, skipCount, failureCount, cascadeDeleted int) string {
 	if failureCount > 0 {
 		return "failed"
 	}
-	if skipCount > 0 && successCount == 0 {
+	if skipCount > 0 && successCount == 0 && cascadeDeleted == 0 {
 		return "skip"
 	}
-	if successCount > 0 {
+	if successCount > 0 || cascadeDeleted > 0 {
 		return "success"
 	}
 	return "skip"

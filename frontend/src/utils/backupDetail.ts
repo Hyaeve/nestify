@@ -154,25 +154,28 @@ export function runDetailTitle(kind?: string): string {
 // 任务详情弹窗标题下的统计项：每一项同时是下面文件明细的筛选入口
 // ---------------------------------------------------------------------------
 
-// 统计项标识。成功 / 跳过 / 错误 来自运行记录本身（run_history 的计数），
-// Strm / 元数据 来自明细载荷的动作构成。
-export type RunDetailSummaryKey = 'success' | 'skip' | 'failure' | 'strm' | 'metadata'
+// 统计项标识。成功 / 跳过 / 失败 来自运行记录本身（run_history 的计数），
+// 已删除 / Strm / 元数据 来自明细载荷的动作构成（「已删除」只在真有删除时出现：
+// 备份的删源、strm 链路的级联删除都会落到这个动作上）。
+export type RunDetailSummaryKey = 'success' | 'skip' | 'failure' | 'delete' | 'strm' | 'metadata'
 
 export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
   success: '成功',
   skip: '跳过',
   failure: '失败',
+  delete: '已删除',
   strm: 'Strm',
   metadata: '元数据',
 }
 
 // 统计项 → 明细动作。点「成功」不该把失败条目带出来，点「Strm」只看真的生成了 strm 的那些。
-// 「已删除」不属于任何统计项：它是收尾动作，既不计入成功数、也没有对应的数字可点，
-// 只在「全部」视图里出现。
+// 「已删除」是独立的收尾动作：不计入成功数，单独给一个筛选口，
+// 级联删除（源端已不存在 → 目标端移除）删了哪些文件在这里看。
 const runDetailSummaryActions: Record<RunDetailSummaryKey, RunFileAction[]> = {
   success: ['upload', 'strm', 'metadata', 'pack', 'move'],
   skip: ['skip'],
   failure: ['fail'],
+  delete: ['delete'],
   strm: ['strm'],
   metadata: ['metadata'],
 }
@@ -184,7 +187,8 @@ export interface RunDetailSummarySegment {
 }
 
 // buildRunDetailSummarySegments 拼出标题下展示（且可点击筛选）的统计项。
-// 「Strm / 元数据」只有 strm 链路才区分，其它链路不占篇幅。
+// 「Strm / 元数据」只有 strm 链路才区分，其它链路不占篇幅；
+// 「已删除」只在本次执行真的删过东西时出现（没删除的历史记录一个像素都不变）。
 export function buildRunDetailSummarySegments(
   counts: { success_count?: number; skip_count?: number; failure_count?: number },
   manifest: BackupFileManifest | null,
@@ -195,6 +199,10 @@ export function buildRunDetailSummarySegments(
     { key: 'skip', label: runDetailSummaryLabels.skip, value: safe(counts.skip_count) },
     { key: 'failure', label: runDetailSummaryLabels.failure, value: safe(counts.failure_count) },
   ]
+  const deleted = safe(manifest?.counts.delete)
+  if (deleted > 0) {
+    segments.push({ key: 'delete', label: runDetailSummaryLabels.delete, value: deleted })
+  }
   if (manifest && manifest.kind.trim() === 'strm') {
     segments.push({ key: 'strm', label: runDetailSummaryLabels.strm, value: manifest.counts.strm })
     segments.push({ key: 'metadata', label: runDetailSummaryLabels.metadata, value: manifest.counts.metadata })
