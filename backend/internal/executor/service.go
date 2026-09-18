@@ -346,22 +346,48 @@ func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest
 		aggregated.CleanupRemovedDirs += stats.CleanupRemovedDirs
 		aggregated.SizeBytes += stats.SizeBytes
 		aggregated.HistoryEvents += stats.HistoryEvents
+		// 明细也跨目录合并：前端折叠组取的是「明细最完整的那一行」，
+		// 不合并就只能看到条目最多的那个目录，其余目录的删除 / 生成会凭空消失。
+		aggregated.mergeDetail(&stats)
 		if err != nil {
 			lastErr = err
 			s.appendLog(runID, "error", fmt.Sprintf("监控目录 %s 执行失败：%v", sourceDir, err))
 		}
 	}
 	aggregated.Summary = fmt.Sprintf("多监控目录执行完成：%d 个目录，成功 %d，跳过 %d，失败 %d", len(sourceDirs), aggregated.SuccessCount, aggregated.SkipCount, aggregated.FailureCount)
+	// 合并后的全量明细补一条运行记录：它是组内最长的一份，详情窗口因此能看到
+	// 所有监控目录的条目（数量与 counts 一致，折叠成一条记录后只多这一行）。
+	if aggregated.Detail != nil {
+		s.persistRunHistory(runID, aggregated.Summary, &aggregated)
+	}
 	return aggregated, lastErr
 }
 
+// normalizeExecuteSourceDirs 归一化执行请求里的源目录：去空白、去重。
+//
+// 还要展开「多监控目录」的 JSON 数组串：规则表里多目录是存进 source_dir 的
+// （`["D:/a","D:/b"]`，见 store.normalizeRuleSourceDir），而自动触发与手动执行
+// 都会把 source_dir 原样塞进请求 —— 不展开的话那个 JSON 串会被当成一个路径，
+// 于是每次执行都多出一个必然失败的「监控目录」，记录直接变成一条失败。
 func normalizeExecuteSourceDirs(sourceDir string, sourceDirs []string) []string {
 	seen := make(map[string]struct{}, len(sourceDirs)+1)
 	items := make([]string, 0, len(sourceDirs)+1)
-	appendItem := func(value string) {
+
+	var appendItem func(value string, depth int)
+	appendItem = func(value string, depth int) {
 		trimmed := strings.TrimSpace(value)
 		if trimmed == "" {
 			return
+		}
+		// 只在最外层做一次 JSON 展开（depth 兜底，避免畸形数据把递归带飞）。
+		if depth < 2 && strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			var parsed []string
+			if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil && len(parsed) > 0 {
+				for _, item := range parsed {
+					appendItem(item, depth+1)
+				}
+				return
+			}
 		}
 		if _, ok := seen[trimmed]; ok {
 			return
@@ -369,10 +395,11 @@ func normalizeExecuteSourceDirs(sourceDir string, sourceDirs []string) []string 
 		seen[trimmed] = struct{}{}
 		items = append(items, trimmed)
 	}
+
 	for _, item := range sourceDirs {
-		appendItem(item)
+		appendItem(item, 0)
 	}
-	appendItem(sourceDir)
+	appendItem(sourceDir, 0)
 	return items
 }
 

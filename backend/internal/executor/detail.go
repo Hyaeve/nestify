@@ -236,6 +236,46 @@ func (c *runDetailCollector) summarizeAggregated(action string, build func(count
 	c.files = append(c.files, entry)
 }
 
+// merge 把另一份采集器的内容并进自己（多监控目录串行执行时逐目录合并）。
+//
+// 为什么必须合并：一次执行会写出多行 run_history，前端「折叠任务」组取的是
+// **明细最完整的那一行**（排序兜底见 runHistoryDetailTieBreak）。多监控目录是
+// 一个个串行跑的、每个目录各有一份采集器，不合并的话详情窗口只能看到
+// 条目最多的那个目录 —— 其它目录删掉的文件、生成的 strm 会凭空消失。
+func (c *runDetailCollector) merge(other *runDetailCollector) {
+	if c == nil || other == nil || c == other {
+		return
+	}
+
+	// 先把对方的内容整体拷出来（自有锁，避免拿着两把锁互相等），再并进自己。
+	other.mu.Lock()
+	files := append([]model.RunFileEntry(nil), other.files...)
+	counts := make(map[string]int, len(other.counts))
+	for action, count := range other.counts {
+		counts[action] = count
+	}
+	total := other.total
+	kind := other.kind
+	sourceRoots := append([]string(nil), other.sourceRoots...)
+	targetRoots := append([]string(nil), other.targetRoots...)
+	other.mu.Unlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.kind == "" {
+		c.kind = kind
+	}
+	c.files = append(c.files, files...)
+	c.total += total
+	for action, count := range counts {
+		c.counts[action] += count
+	}
+	// 根路径取并集：多监控目录的明细要能同时裁剪出各个目录下的相对路径。
+	c.sourceRoots = normalizeDetailRoots(append(append([]string{}, c.sourceRoots...), sourceRoots...))
+	c.targetRoots = normalizeDetailRoots(append(append([]string{}, c.targetRoots...), targetRoots...))
+}
+
 // buildJSON 序列化明细载荷；没有任何明细时返回空串，
 // 前端据此隐藏明细面板（历史记录与无明细的链路同样走这条路）。
 func (c *runDetailCollector) buildJSON() string {
@@ -314,4 +354,19 @@ func (s *executionStats) buildDetailJSON() string {
 		return ""
 	}
 	return s.Detail.buildJSON()
+}
+
+// mergeDetail 把另一次执行的明细并进本次统计（多监控目录串行执行时逐目录调用）。
+//
+// 第一份直接接管（那次执行已经跑完，后续目录往里并即可，不会重复计数），
+// 之后的目录走 collector.merge 合并条目 / 计数 / 根路径。
+func (s *executionStats) mergeDetail(other *executionStats) {
+	if s == nil || other == nil || other.Detail == nil {
+		return
+	}
+	if s.Detail == nil {
+		s.Detail = other.Detail
+		return
+	}
+	s.Detail.merge(other.Detail)
 }
