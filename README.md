@@ -359,7 +359,6 @@ services:
       - ./config:/config
       - ./data:/data
       - ./log:/log
-      - ./logs:/logs
     environment:
       NESTIFY_HTTP_ADDR: ":8080"
       NESTIFY_CONFIG_PATH: "/config/config.yaml"
@@ -375,7 +374,7 @@ services:
 
 - 将配置文件放置到宿主机 [`config/config.yaml`](config/config.example.yaml)
 - 首次启动前建议修改默认管理员账号与密码
-- 持久化目录建议保留 [`./data`](data/) 与 [`./logs`](logs/)
+- 持久化目录建议保留 [`./data`](data/)（配置主库）与 [`./log`](log/)（运行日志库）
 - **运行日志单独一个文件**：`NESTIFY_LOG_DB_PATH`（默认 `/log/logs.db`）保存「运行日志 / 归巢历史」及其明细，
   `NESTIFY_DB_PATH`（默认 `/data/app.db`）只留规则、设置、账号、挂载与备份任务。
   两者分开挂载后，日志可以单独清理 / 备份，主库也不会随日志一起膨胀；

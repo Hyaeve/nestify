@@ -19,7 +19,7 @@ RUN apk add --no-cache tzdata
 COPY --from=backend-builder /out/nestify /app/nestify
 COPY --from=frontend-builder /workspace/frontend/dist /app/web
 COPY config/config.example.yaml /config/config.example.yaml
-RUN mkdir -p /data/runtime /data/staging /logs /log /config
+RUN mkdir -p /data/runtime /data/staging /log /config
 ENV TZ=Asia/Shanghai
 EXPOSE 8080
 ENV NESTIFY_WEB_DIR=/app/web
