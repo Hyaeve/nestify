@@ -31,6 +31,9 @@ Thumbs.db
 # WorkBuddy local workspace data
 .workbuddy/
 
+# 本地文件索引与变更账本（只在本机维护，不进 git）
+AGENTS.md
+
 # Temporary build/check artifacts
 .febuild.txt
 .gobuild.txt

@@ -1,8 +1,9 @@
 <template>
   <div class="run-detail">
     <!-- 文件级明细：一行一条（悬浮看完整路径与备注）。
-         备份任务改成两行——第一行源路径，第二行箭头 + 落地的目标文件夹（见 backupMode）。
-         目标那一行给的是**完整文件夹路径**（含目标根），不裁根也不吞掉文件名以外的前缀。
+         **产出型成功条目占两行**：第一行源路径，第二行箭头 + 产物落点
+         （备份 = 落地的文件夹、完整路径含目标根；strm / 打包等 = 完整目标路径）。
+         跳过 / 失败 / 删除**只有一行**——一行文件路径就够，原因在悬浮提示里。
 
          面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
          「这次确实没动文件」，无论这条记录是成功、失败还是跳过。
@@ -48,11 +49,11 @@
                   </el-icon>
                   <span class="run-detail__path">{{ scope.row.source }}</span>
                 </span>
-                <!-- 第二行只在备份任务、且有内容时出现：优先「落地的目标文件夹」，
-                     没有目标（跳过 / 未传到）就退回备注（跳过原因等）。 -->
-                <span v-if="backupMode && scope.row.secondary" class="run-detail__line">
+                <!-- 第二行只在「有产物落点」时出现（上传 / strm / 元数据 / 打包 / 移动）；
+                     跳过、失败、删除没有落点，只显示上面那行文件路径。 -->
+                <span v-if="scope.row.secondary" class="run-detail__line">
                   <span class="run-detail__arrow" aria-hidden="true">↳</span>
-                  <span class="run-detail__target" :class="{ 'is-note': !scope.row.target }">{{ scope.row.secondary }}</span>
+                  <span class="run-detail__target">{{ scope.row.secondary }}</span>
                 </span>
               </span>
             </el-tooltip>
@@ -90,9 +91,10 @@ import { Document, Folder } from '@element-plus/icons-vue'
 import {
   backupFileActionClass,
   backupFileActionLabel,
-  detailTargetFolder,
+  detailTargetDisplay,
   filterRunDetailFiles,
   runDetailSummaryLabels,
+  runFileActionHasTarget,
   stripDetailRoot,
   type BackupFileEntry,
   type BackupFileManifest,
@@ -109,9 +111,8 @@ const props = defineProps<{
 
 const settingsStore = useSettingsStore()
 
-// 备份任务的明细是「备份操作」：第一行源路径，第二行箭头 + 目标端落地的文件夹。
-// 其它链路仍是「源路径 + 结果」，目标路径只在悬浮提示里给（它们的产物是 .strm / 压缩包，
-// 没有「备份到哪个文件夹」这层语义）。
+// 列名：备份任务的明细是「备份操作」（第一行源路径，第二行箭头 + 目标端落地的文件夹），
+// 其它链路仍是「源路径」——它们的第二行（strm / 打包等）同样挂在同一列下。
 const backupMode = computed(() => (props.manifest?.kind || '').trim() === 'backup')
 const sourceColumnLabel = computed(() => (backupMode.value ? '备份操作' : '源路径'))
 
@@ -126,26 +127,30 @@ interface RunDetailRow {
   action: RunFileAction
   // 源路径裁掉源根后的显示值（备份链路记的本来就是相对路径，裁剪不命中即原样）。
   source: string
-  // 目标端「落地的文件夹」的**完整路径**（含目标根），没有目标（跳过 / 未传到）时为空。
+  // 产物落点：备份链路是「落地的文件夹」（完整路径、含目标根），其它链路是完整目标路径；
+  // 非产出型动作（跳过 / 失败 / 删除）恒为空 → 那一行只有一条路径。
   target: string
-  // 第二行真正显示的内容：优先目标文件夹（完整路径），没有就退回备注。
+  // 第二行真正显示的内容，当前与 target 一致（没有产物就不显示第二行）。
   secondary: string
 }
 
 // 当前筛选下的**全部**条目（未分页）——总数与翻页都基于它。
 const rows = computed<RunDetailRow[]>(() => {
   const manifest = props.manifest
+  const kind = manifest?.kind
   const sourceRoots = manifest?.sourceRoots ?? []
 
   // kind 传下去：净化链路的「成功」要把删除条目一并筛出来（见 filterRunDetailFiles）。
-  return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null, manifest?.kind).map((entry) => {
-    const target = entry.target ? detailTargetFolder(entry.target, entry.dir === true) : ''
+  return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null, kind).map((entry) => {
+    // 第二行只给「成功产出型」动作：跳过 / 失败 / 删除一律单行，只显示文件路径，
+    // 原因留给悬浮提示（用户口径：两行只留给真的产出了东西的那条）。
+    const target = runFileActionHasTarget(entry.action) ? detailTargetDisplay(kind, entry) : ''
     return {
       entry,
       action: entry.action,
       source: stripDetailRoot(entry.path, sourceRoots),
       target,
-      secondary: target || entry.note || '',
+      secondary: target,
     }
   })
 })
@@ -272,7 +277,7 @@ function actionClass(action: RunFileAction) {
   text-align: center;
 }
 
-/* 目标端落地的文件夹（完整路径，含目标根）：备份语义色 + 比源路径小一档。 */
+/* 目标端落地的文件夹 / 产物路径：备份语义色 + 比源路径小一档。 */
 .run-detail__target {
   min-width: 0;
   overflow: hidden;
@@ -281,12 +286,6 @@ function actionClass(action: RunFileAction) {
   color: #5f7fa8;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* 没有目标路径时第二行退回备注（跳过原因 / 失败原因），用更弱的中性色区分。 */
-.run-detail__target.is-note {
-  font-weight: 500;
-  color: var(--el-text-color-secondary);
 }
 
 /* 筛选后没有条目时的说明文案（el-table 的 empty 插槽）。 */

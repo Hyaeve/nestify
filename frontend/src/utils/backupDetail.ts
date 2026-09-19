@@ -134,6 +134,37 @@ export function detailTargetFolder(path: string, isDir = false): string {
   return trimmed.slice(0, slash) || '/'
 }
 
+// ---------------------------------------------------------------------------
+// 明细要不要占两行：只有「真的产出了东西」的成功条目才值得给第二行
+// ---------------------------------------------------------------------------
+
+// 产出型动作：备份上传、strm 生成、元数据同步、打包、移动（归档 / 收集 / 转换 / 命名）。
+// 跳过 / 失败 / 删除都是**结论性**动作 —— 一行文件路径就够，原因留在悬浮提示里。
+// 这也是用户定的口径：两行只留给「备份 / strm / 打包 / 收集 / 转换 / 软链硬链 / 命名」
+// 这些模式里**成功**的那一条。
+const runDetailTargetActions: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move']
+
+export function runFileActionHasTarget(action: RunFileAction): boolean {
+  return runDetailTargetActions.includes(action)
+}
+
+// detailTargetDisplay 给出第二行要展示的产物落点。
+//
+// 备份链路展示它落地的**文件夹**（完整路径，含目标根）：文件名与第一行的源文件名一模一样，
+// 再写一遍是噪音（见 detailTargetFolder）。
+// 其它链路展示**完整目标路径**：产物名本身就是信息 ——
+// /media/strm/剧集/A/A1.strm（strm）、/media/backup/剧集/剧集-01.cbz（打包）。
+export function detailTargetDisplay(kind: string | undefined, entry: BackupFileEntry): string {
+  const raw = (entry.target || '').replace(/\\/g, '/').trim()
+  if (!raw) {
+    return ''
+  }
+  if ((kind || '').trim() === 'backup') {
+    return detailTargetFolder(raw, entry.dir === true)
+  }
+  return raw
+}
+
 // normalizeDetailRoots 把载荷里的根路径整理成前端可用的形式：去尾部斜杠、去重复、丢空值。
 function normalizeDetailRoots(value: unknown): string[] {
   if (!Array.isArray(value)) {
