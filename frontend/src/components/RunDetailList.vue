@@ -2,6 +2,7 @@
   <div class="run-detail">
     <!-- 文件级明细：一行一条（悬浮看完整路径与备注）。
          备份任务改成两行——第一行源路径，第二行箭头 + 落地的目标文件夹（见 backupMode）。
+         目标那一行给的是**完整文件夹路径**（含目标根），不裁根也不吞掉文件名以外的前缀。
 
          面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
          「这次确实没动文件」，无论这条记录是成功、失败还是跳过。
@@ -125,9 +126,9 @@ interface RunDetailRow {
   action: RunFileAction
   // 源路径裁掉源根后的显示值（备份链路记的本来就是相对路径，裁剪不命中即原样）。
   source: string
-  // 目标端「落地的文件夹」，已裁掉目标根；没有目标（跳过 / 未传到）时为空。
+  // 目标端「落地的文件夹」的**完整路径**（含目标根），没有目标（跳过 / 未传到）时为空。
   target: string
-  // 第二行真正显示的内容：优先目标文件夹，没有就退回备注。
+  // 第二行真正显示的内容：优先目标文件夹（完整路径），没有就退回备注。
   secondary: string
 }
 
@@ -135,11 +136,10 @@ interface RunDetailRow {
 const rows = computed<RunDetailRow[]>(() => {
   const manifest = props.manifest
   const sourceRoots = manifest?.sourceRoots ?? []
-  const targetRoots = manifest?.targetRoots ?? []
 
   // kind 传下去：净化链路的「成功」要把删除条目一并筛出来（见 filterRunDetailFiles）。
   return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null, manifest?.kind).map((entry) => {
-    const target = entry.target ? detailTargetFolder(entry.target, targetRoots, entry.dir === true) : ''
+    const target = entry.target ? detailTargetFolder(entry.target, entry.dir === true) : ''
     return {
       entry,
       action: entry.action,
@@ -272,7 +272,7 @@ function actionClass(action: RunFileAction) {
   text-align: center;
 }
 
-/* 目标端落地的文件夹（已裁掉目标根）：备份语义色 + 比源路径小一档。 */
+/* 目标端落地的文件夹（完整路径，含目标根）：备份语义色 + 比源路径小一档。 */
 .run-detail__target {
   min-width: 0;
   overflow: hidden;

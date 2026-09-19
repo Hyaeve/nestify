@@ -59,8 +59,9 @@ export interface BackupFileManifest {
   counts: Record<RunFileAction, number>
   total: number
   truncated: boolean
-  // 本次执行的源 / 目标根路径（规则里配置的路径），用来把明细里的绝对路径裁成
-  // 「根路径下一级」显示；旧记录没有这两个字段，退化成整条路径。
+  // 本次执行的源 / 目标根路径（规则里配置的路径）。sourceRoots 用来把明细里的源路径裁成
+  // 「根路径下一级」显示；targetRoots 现在**不再参与裁剪**（备份目标改为展示完整路径，
+  // 见 detailTargetFolder），仅随载荷保留，旧记录没有这两个字段时源路径退化成整条路径。
   sourceRoots: string[]
   targetRoots: string[]
 }
@@ -103,29 +104,34 @@ export function stripDetailRoot(path: string, roots: string[]): string {
   return rest || normalized
 }
 
-// detailTargetFolder 把明细里的目标路径裁成「目标根路径之下的文件夹路径」。
+// detailTargetFolder 取明细里目标路径所在的**完整文件夹路径**（含目标根）。
 //
-// 备份任务的明细里 Target 是落地文件的完整路径，第二行只展示它所在的**文件夹**：
-// 先裁掉目标根（用户配置的目标路径就是根），再切掉最后一段文件名
-// （/media/backup/剧集/A/A1.mkv → 剧集/A）；多源备份多出来的「源目录名」前缀会一并保留。
-// 目录条目（dir）本身就是文件夹，不再切最后一段；文件直接躺在目标根下时没有子文件夹，
-// 返回空串，调用方据此退回备注或只显示一行。
-export function detailTargetFolder(path: string, roots: string[], isDir = false): string {
-  const relative = stripDetailRoot(path, roots)
-    .replace(/\\/g, '/')
-    .replace(/^\/+|\/+$/g, '')
-  if (!relative) {
+// 备份任务的明细里 Target 是落地文件的完整路径，第二行展示它所在的文件夹：
+// 只切掉最后一段文件名，其余**原样保留** —— 目标根也一并显示
+// （/media/backup/剧集/A/A1.mkv → /media/backup/剧集/A），一眼能看出文件备份到了哪儿。
+// 曾经这里会把目标根裁掉（只留「剧集/A」），但用户要看的是完整路径。
+// 目录条目（dir）本身就是文件夹，不再切最后一段；
+// 文件直接躺在目标根下时返回目标根本身（/media/backup/A2.mkv → /media/backup）。
+// 没有目标（跳过 / 未传到 / 删源）时明细里根本没有 Target，调用方据此退回备注。
+export function detailTargetFolder(path: string, isDir = false): string {
+  const normalized = (path || '').replace(/\\/g, '/').trim()
+  if (!normalized) {
     return ''
   }
 
-  const parts = relative.split('/').filter(Boolean)
+  // 目录条目本身就是文件夹：去掉尾部斜杠即可。
   if (isDir) {
-    return parts.join('/')
+    return normalized.replace(/\/+$/, '') || normalized
   }
-  if (parts.length <= 1) {
-    return ''
+
+  const trimmed = normalized.replace(/\/+$/, '')
+  const slash = trimmed.lastIndexOf('/')
+  if (slash < 0) {
+    // 只有文件名、没有分隔符（异常数据）：原样显示，总比空着强。
+    return trimmed
   }
-  return parts.slice(0, -1).join('/')
+  // 分隔符在开头（文件就在根下）时返回根本身：/media/backup/A2.mkv → /media/backup。
+  return trimmed.slice(0, slash) || '/'
 }
 
 // normalizeDetailRoots 把载荷里的根路径整理成前端可用的形式：去尾部斜杠、去重复、丢空值。
