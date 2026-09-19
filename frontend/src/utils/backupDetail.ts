@@ -136,6 +136,38 @@ export function detailTargetFolder(path: string, isDir = false): string {
 }
 
 // ---------------------------------------------------------------------------
+// 原地改名链路（转换 / 命名）：明细行只给名字，不给路径
+// ---------------------------------------------------------------------------
+
+// 转换与命名都是**原地改名** —— 源路径与目标路径只差最后一段，两条完整路径铺出来
+// 除了最后几个字其余全是重复的噪音。用户对这两条链路的口径是
+// 「只展示改动的文件名或者文件夹名」：第一行原名字、第二行新名，两行都**不带路径**
+// （文件夹条目同理，显示的就是文件夹名）。完整路径仍然留在悬浮提示里，
+// 「到底是哪个目录下的」并没有丢。
+//
+// 注意这是**按链路（kind）** 判定的，不是按动作：转换 / 命名落的都是「移动」（move），
+// 而归档 / 收集也落 move —— 那两条链路的产物路径本身就是信息，不能被一起裁掉。
+const runDetailNameOnlyKinds = ['transform', 'naming']
+
+export function runDetailShowsNameOnly(kind?: string): boolean {
+  return runDetailNameOnlyKinds.includes((kind || '').trim())
+}
+
+// detailBaseName 取路径的最后一段，也就是文件名 / 文件夹名。
+//
+// 同时认 `/` 与 `\`：载荷里的路径由执行端给出，兼容模式下可能带反斜杠；
+// 目录条目可能带尾部斜杠，先削掉再取。取不出最后一段（异常数据）时原样返回 ——
+// 显示得难看一点，总好过整格空白。
+export function detailBaseName(path: string): string {
+  const trimmed = (path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!trimmed) {
+    return ''
+  }
+  const slash = trimmed.lastIndexOf('/')
+  return slash < 0 ? trimmed : trimmed.slice(slash + 1)
+}
+
+// ---------------------------------------------------------------------------
 // 明细要不要占两行：只有「真的产出了东西」的成功条目才值得给第二行
 // ---------------------------------------------------------------------------
 
@@ -156,15 +188,19 @@ export function runFileActionHasTarget(action: RunFileAction): boolean {
 // 再写一遍是噪音（见 detailTargetFolder）。
 // 其它链路展示**完整目标路径**：产物名本身就是信息 ——
 // /media/strm/剧集/A/A1.strm（strm 生成）、/media/links/剧集/A1.mkv（软链硬链建出的链接）、
-// /media/backup/剧集/剧集-01.cbz（打包）。
-// 转换与命名是原地改名，它们的「目标」就是改完之后的完整新路径。
+// /media/backup/剧集/剧集-01.cbz（打包）。软链硬链与 strm、备份保持同一种样式。
+// 转换 / 命名是原地改名，第二行只给**改完后的新名字**（见 runDetailShowsNameOnly）。
 export function detailTargetDisplay(kind: string | undefined, entry: BackupFileEntry): string {
   const raw = (entry.target || '').replace(/\\/g, '/').trim()
   if (!raw) {
     return ''
   }
-  if ((kind || '').trim() === 'backup') {
+  const normalizedKind = (kind || '').trim()
+  if (normalizedKind === 'backup') {
     return detailTargetFolder(raw, entry.dir === true)
+  }
+  if (runDetailShowsNameOnly(normalizedKind)) {
+    return detailBaseName(raw)
   }
   return raw
 }

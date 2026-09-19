@@ -2,8 +2,12 @@
   <div class="run-detail">
     <!-- 文件级明细：一行一条（悬浮看完整路径与备注）。
          **产出型成功条目占两行**：第一行源路径，第二行箭头 + 产物落点
-         （备份 = 落地的文件夹、完整路径含目标根；strm / 打包等 = 完整目标路径）。
+         （备份 = 落地的文件夹、完整路径含目标根；strm / 软链硬链 / 打包 = 完整目标路径）。
          跳过 / 失败 / 删除**只有一行**——一行文件路径就够，原因在悬浮提示里。
+
+         **转换 / 命名例外**：这两条链路是原地改名，源与目标只差最后一段，整条路径铺出来
+         全是重复的噪音，所以两行都只给名字（第一行原名字、第二行新名，文件夹条目同理），
+         列名也跟着叫「名称」；完整路径仍然留在悬浮提示里。
 
          面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
          「这次确实没动文件」，无论这条记录是成功、失败还是跳过。
@@ -91,9 +95,11 @@ import { Document, Folder } from '@element-plus/icons-vue'
 import {
   backupFileActionClass,
   backupFileActionLabel,
+  detailBaseName,
   detailTargetDisplay,
   filterRunDetailFiles,
   runDetailSummaryLabels,
+  runDetailShowsNameOnly,
   runFileActionHasTarget,
   stripDetailRoot,
   type BackupFileEntry,
@@ -113,8 +119,16 @@ const settingsStore = useSettingsStore()
 
 // 列名：备份任务的明细是「备份操作」（第一行源路径，第二行箭头 + 目标端落地的文件夹），
 // 其它链路仍是「源路径」——它们的第二行（strm / 打包等）同样挂在同一列下。
+// 转换 / 命名是例外：这两条链路两行都只给「名字」（第一行原名字、第二行新名），
+// 列里根本没有路径，列名跟着叫「名称」，免得看着像路径被裁没了。
 const backupMode = computed(() => (props.manifest?.kind || '').trim() === 'backup')
-const sourceColumnLabel = computed(() => (backupMode.value ? '备份操作' : '源路径'))
+const nameOnlyMode = computed(() => runDetailShowsNameOnly(props.manifest?.kind))
+const sourceColumnLabel = computed(() => {
+  if (backupMode.value) {
+    return '备份操作'
+  }
+  return nameOnlyMode.value ? '名称' : '源路径'
+})
 
 // 一页条数跟随系统设置（基础设置窗口的「每页文件数」）；未加载出设置时按默认值兜底。
 const pageSize = computed(() => {
@@ -125,10 +139,11 @@ const pageSize = computed(() => {
 interface RunDetailRow {
   entry: BackupFileEntry
   action: RunFileAction
-  // 源路径裁掉源根后的显示值（备份链路记的本来就是相对路径，裁剪不命中即原样）。
+  // 第一行：默认是源路径裁掉源根后的显示值（备份链路记的本来就是相对路径，裁剪不命中即原样）；
+  // 转换 / 命名只给名字（文件名 / 文件夹名，见 runDetailShowsNameOnly）。
   source: string
-  // 产物落点：备份链路是「落地的文件夹」（完整路径、含目标根），其它链路是完整目标路径；
-  // 非产出型动作（跳过 / 失败 / 删除）恒为空 → 那一行只有一条路径。
+  // 产物落点：备份链路是「落地的文件夹」（完整路径、含目标根），strm / 软链硬链 / 打包是完整目标路径，
+  // 转换 / 命名只给改完后的新名字；非产出型动作（跳过 / 失败 / 删除）恒为空 → 那一行只有一条路径。
   target: string
   // 第二行真正显示的内容，当前与 target 一致（没有产物就不显示第二行）。
   secondary: string
@@ -139,6 +154,7 @@ const rows = computed<RunDetailRow[]>(() => {
   const manifest = props.manifest
   const kind = manifest?.kind
   const sourceRoots = manifest?.sourceRoots ?? []
+  const nameOnly = nameOnlyMode.value
 
   // kind 传下去：净化链路的「成功」要把删除条目一并筛出来（见 filterRunDetailFiles）。
   return filterRunDetailFiles(manifest?.files ?? [], props.filterKey ?? null, kind).map((entry) => {
@@ -148,7 +164,7 @@ const rows = computed<RunDetailRow[]>(() => {
     return {
       entry,
       action: entry.action,
-      source: stripDetailRoot(entry.path, sourceRoots),
+      source: nameOnly ? detailBaseName(entry.path) : stripDetailRoot(entry.path, sourceRoots),
       target,
       secondary: target,
     }
