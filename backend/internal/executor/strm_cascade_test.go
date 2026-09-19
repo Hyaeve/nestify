@@ -86,9 +86,10 @@ func TestCascadeDeleteRemovesStrmForDeletedSourceFile(t *testing.T) {
 	}
 }
 
-// TestCascadeDeleteRemovesWholeTargetDirWhenSourceDirGone 覆盖用户提出的第二个场景：
-// 整个 A 文件夹在源端没了，目标端对应的 A 文件夹要整目录删掉 ——
-// 无论里面还剩不剩 strm，jpg / nfo 等元数据、甚至本规则没生成过的文件都一并删。
+// TestCascadeDeleteRemovesWholeTargetDirWhenSourceDirGone 覆盖用户提出的第二个场景，
+// 也是用户明确确认过的口径（轮 102）：整个 A 文件夹在源端没了，目标端对应的 A 文件夹要
+// **整目录删掉** —— 无论里面还剩不剩 strm，jpg / nfo 等元数据、甚至本规则没生成过的文件
+// 都一并删（这是目录级的唯一例外，文件级只删 .strm，见 TestCascadeDeleteKeepsNonStrmFiles）。
 func TestCascadeDeleteRemovesWholeTargetDirWhenSourceDirGone(t *testing.T) {
 	sourceDir := t.TempDir()
 	targetDir := t.TempDir()
@@ -137,37 +138,71 @@ func TestCascadeDeleteRemovesWholeTargetDirWhenSourceDirGone(t *testing.T) {
 	}
 }
 
-// TestCascadeDeleteRemovesMetadataWhenSourceGone 元数据（封面 / 字幕 / nfo）在源端被删掉后，
-// 目标端那一份也要跟着删 —— 否则目标端会留下一堆没有对应剧集的封面。
-func TestCascadeDeleteRemovesMetadataWhenSourceGone(t *testing.T) {
+// TestCascadeDeleteKeepsNonStrmFiles 用户口径（轮 102）：**文件级级联删除只删 .strm**。
+//
+// 源端目录还在、只是少了几个文件时，目标端同一个文件夹里的非 strm 文件一律留着 ——
+// 本规则复制过去的元数据（nfo）、媒体服务器自己刮削的封面（jpg）、用户手动放进去的文件，
+// 三者从文件名上根本分不出来，删错一次就是不可逆的数据丢失。
+// （这就是用户报的 bug：这些文件因为「源端同名文件不存在」被级联删掉。）
+func TestCascadeDeleteKeepsNonStrmFiles(t *testing.T) {
 	sourceDir := t.TempDir()
 	targetDir := t.TempDir()
 	writeStrmFixture(t, filepath.Join(sourceDir, "A", "A1.mkv"), "a1")
 	writeStrmFixture(t, filepath.Join(sourceDir, "A", "A1.nfo"), "nfo")
+	// A2 留在源端：既验证「同目录里源端还在的那条 strm 不动」，也保证 A 目录本身不为空
+	// （本轮验的正是「源端目录还在、只是少了文件」这条边界）。
+	writeStrmFixture(t, filepath.Join(sourceDir, "A", "A2.mkv"), "a2")
 
 	service := NewService(nil)
 	request := cascadeRequest([]string{"mkv"}, []string{"nfo"})
-	cascadeRun(t, service, "run-cascade-meta-first", request, sourceDir, targetDir)
+	cascadeRun(t, service, "run-cascade-keep-first", request, sourceDir, targetDir)
 
-	metaPath := filepath.Join(targetDir, "A", "A1.nfo")
-	if _, err := os.Stat(metaPath); err != nil {
-		t.Fatalf("首次执行应同步元数据 %s: %v", metaPath, err)
+	// 目标端除了规则生成/复制的产物，再放两类「不是本规则生成的」文件。
+	planted := []string{
+		filepath.Join(targetDir, "A", "A1.nfo"),     // 本规则按元数据后缀复制过去的
+		filepath.Join(targetDir, "A", "poster.jpg"), // 媒体服务器刮削出来的封面
+		filepath.Join(targetDir, "A", "readme.txt"), // 用户手动放进去的
+	}
+	for _, path := range planted[1:] {
+		writeStrmFixture(t, path, "planted")
+	}
+	for _, path := range planted {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("前置条件：%s 应当存在: %v", path, err)
+		}
 	}
 
+	// 源端把 A1 的媒体文件与元数据都删掉：目标端 A1.strm 成了失效投影，但非 strm 文件不该动。
+	if err := os.Remove(filepath.Join(sourceDir, "A", "A1.mkv")); err != nil {
+		t.Fatalf("删除源文件失败: %v", err)
+	}
 	if err := os.Remove(filepath.Join(sourceDir, "A", "A1.nfo")); err != nil {
 		t.Fatalf("删除源元数据失败: %v", err)
 	}
 
-	stats := cascadeRun(t, service, "run-cascade-meta-second", request, sourceDir, targetDir)
+	stats := cascadeRun(t, service, "run-cascade-keep-second", request, sourceDir, targetDir)
 
-	if _, err := os.Stat(metaPath); !os.IsNotExist(err) {
-		t.Fatalf("源端元数据已删除，目标端 %s 应当被级联删除（err=%v）", metaPath, err)
+	if _, err := os.Stat(filepath.Join(targetDir, "A", "A1.strm")); !os.IsNotExist(err) {
+		t.Fatalf("源文件已删除，目标端 A1.strm 应当被级联删除（err=%v）", err)
 	}
-	if _, err := os.Stat(filepath.Join(targetDir, "A", "A1.strm")); err != nil {
-		t.Fatalf("源端媒体文件还在，A1.strm 不该被删: %v", err)
+	for _, path := range planted {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("非 strm 文件不该被级联删除：%s（%v）", path, err)
+		}
 	}
-	if stats.CascadeDeletedFiles != 1 {
-		t.Fatalf("级联删除文件数 = %d, want 1", stats.CascadeDeletedFiles)
+	if _, err := os.Stat(filepath.Join(targetDir, "A", "A2.strm")); err != nil {
+		t.Fatalf("源端仍在的 A2.strm 不该被删: %v", err)
+	}
+	if stats.CascadeDeletedFiles != 1 || stats.CascadeDeletedDirs != 0 {
+		t.Fatalf("级联删除计数 = %d 文件 / %d 目录, want 1 / 0（只该删掉 A1.strm）",
+			stats.CascadeDeletedFiles, stats.CascadeDeletedDirs)
+	}
+
+	// 删了什么要能在任务详情里看见，且只该有一条 A1.strm。
+	detail := decodeRunDetail(t, &stats)
+	deletes := detailEntriesByAction(detail, model.BackupFileActionDelete)
+	if len(deletes) != 1 || deletes[0].Path != "A/A1.strm" {
+		t.Fatalf("删除明细 = %+v, want 仅 A/A1.strm", deletes)
 	}
 }
 

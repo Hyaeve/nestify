@@ -17,9 +17,15 @@ import (
 // 每次执行都会顺带把目标端对齐到源端：
 //
 //   - 目标端某个 .strm 对应的源文件已经不在了 → 删掉这个 .strm；
-//   - 目标端某份元数据（封面 / 字幕 / nfo）在源端已经不在了 → 删掉这个文件；
 //   - 目标端整个文件夹对应的源目录已经不在了 → 整个文件夹递归删掉
-//     （无论里面还剩不剩 strm，jpg / nfo 等元数据一并删）。
+//     （无论里面还剩不剩 strm，文件夹里的其它东西也一并走）。
+//
+// **文件级只删 .strm，其它文件一律不碰** —— 包括本规则按「元数据后缀」复制过去的
+// jpg / nfo / 字幕、媒体服务器自己刮削出来的封面、以及用户手动放进目标目录的文件。
+// 理由：目标端一份 poster.jpg 到底来自「规则复制」还是「媒体服务器刮削」，从文件名和扩展名上
+// 根本分不出来（这正是曾经的 bug：源端没有的同名文件会被删掉），删错一次不可逆。
+// 用户口径：文件级「非 strm 文件不要删」；只有**整个源端目录消失**时才连目录里的东西一起清理
+// （上一条，用户明确要的）。源端目录还在、只是少了个别文件时，目标端那份非 strm 文件留在原地。
 //
 // 判定依据是「源端现在还剩什么」的快照（strmSourceSnapshot），而不是「这次扫描生成了什么」：
 // 后缀名单被改小、视频体积阈值调高、元数据没命中本次名单……这些都不该导致目标端被删 ——
@@ -137,7 +143,8 @@ func (c *strmSourceSnapshot) markIncomplete() {
 // hasFile 判断目标端文件 rel 对应的源端文件是否还在。
 //
 // strm 为 true 时目标端是「源文件名去掉扩展名 + .strm」，源端扩展名已经无从得知，
-// 只能按主干比对（后缀名单以后再改也不影响判定）；元数据文件与源端同名同路径，直接比对。
+// 只能按主干比对（后缀名单以后再改也不影响判定）；false 时按同名同路径直接比对。
+// 级联删除的文件级只走 strm 这一路（只删 .strm），false 这条路留给快照的通用查询与测试。
 func (c *strmSourceSnapshot) hasFile(rel string, strm bool) bool {
 	if c == nil {
 		return true
@@ -246,20 +253,21 @@ func cascadeRelativeDir(root, current string) string {
 	return rel
 }
 
-// isCascadeManagedFile 判断目标端的这个文件是不是本规则管的东西：
-// 自己生成的 .strm，或按配置同步过来的元数据文件。其它文件一律不碰
-// （只有整个目录被判定为「源端已不存在」时才会跟着目录一起删）。
-func isCascadeManagedFile(name string, metadataExtensions map[string]struct{}) bool {
-	if strings.EqualFold(filepath.Ext(name), strmTargetSuffix) {
-		return true
-	}
-	return matchesStrmExtension(name, metadataExtensions)
+// isCascadeStrmFile 判断目标端的这个文件是不是本规则生成的 .strm。
+//
+// 只有 .strm 才算「本规则管的东西」：其它文件（元数据、媒体服务器刮削出来的封面、
+// 用户手放进去的文件）一律不参与**文件级**级联删除 —— 它们只有在这个文件所在的
+// 整个源端目录都不存在时，才会跟着目录一起走（见 removeCascadeSubtree）。
+func isCascadeStrmFile(name string) bool {
+	return strings.EqualFold(filepath.Ext(name), strmTargetSuffix)
 }
 
 // cascadeDeleteStrmTarget 把目标目录对齐到源端快照。
 //
 // 只做删除，不做生成：调用点必须先跑完本次生成，删的才是「源端真的没有了」的那些。
-func (s *Service) cascadeDeleteStrmTarget(runID, targetRoot string, metadataExtensions map[string]struct{}, stats *executionStats) error {
+// 删的范围也只有两样：**目标端的 .strm**，以及**源端整个目录都消失了的那些目标目录**
+// （后者连目录里的内容一起走）。其余文件一个都不动。
+func (s *Service) cascadeDeleteStrmTarget(runID, targetRoot string, stats *executionStats) error {
 	snapshot := stats.SourceSnapshot
 	if snapshot == nil {
 		return nil
@@ -270,7 +278,7 @@ func (s *Service) cascadeDeleteStrmTarget(runID, targetRoot string, metadataExte
 	}
 
 	beforeFiles, beforeDirs := stats.CascadeDeletedFiles, stats.CascadeDeletedDirs
-	if err := s.cascadeDeleteStrmDir(runID, targetRoot, "", metadataExtensions, snapshot, stats); err != nil {
+	if err := s.cascadeDeleteStrmDir(runID, targetRoot, "", snapshot, stats); err != nil {
 		return err
 	}
 	// 逐条删除不刷日志（与「跳过」同理，一次全量清理动辄上千条），只留一行汇总；
@@ -283,7 +291,11 @@ func (s *Service) cascadeDeleteStrmTarget(runID, targetRoot string, metadataExte
 }
 
 // cascadeDeleteStrmDir 递归对齐目标端目录。
-func (s *Service) cascadeDeleteStrmDir(runID, currentDir, relDir string, metadataExtensions map[string]struct{}, snapshot *strmSourceSnapshot, stats *executionStats) error {
+//
+// 目录分支：源端对应目录还在就继续往下走；**整个不存在**了就把目标端这棵子树整个删掉。
+// 文件分支：**只处理 .strm** —— 非 strm 文件（元数据、媒体服务器刮削的封面、用户手放的文件）
+// 在这里直接跳过，永不单独删除。
+func (s *Service) cascadeDeleteStrmDir(runID, currentDir, relDir string, snapshot *strmSourceSnapshot, stats *executionStats) error {
 	entries, err := os.ReadDir(currentDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -313,16 +325,18 @@ func (s *Service) cascadeDeleteStrmDir(runID, currentDir, relDir string, metadat
 				}
 				continue
 			}
-			if err := s.cascadeDeleteStrmDir(runID, entryPath, rel, metadataExtensions, snapshot, stats); err != nil {
+			if err := s.cascadeDeleteStrmDir(runID, entryPath, rel, snapshot, stats); err != nil {
 				return err
 			}
 			continue
 		}
 
-		if !isCascadeManagedFile(entry.Name(), metadataExtensions) {
+		if !isCascadeStrmFile(entry.Name()) {
+			// 非 strm 文件不参与文件级级联删除：源端少了同名文件也照样留着它。
 			continue
 		}
-		if snapshot.hasFile(rel, strings.EqualFold(filepath.Ext(entry.Name()), strmTargetSuffix)) {
+		// 按主干反查源端：目标端的 A1.strm ←→ 源端的 A1.mkv（忽略扩展名）。
+		if snapshot.hasFile(rel, true) {
 			continue
 		}
 		s.removeCascadeEntry(runID, entryPath, rel, cascadeDeleteNoteFile, false, stats)
@@ -333,6 +347,12 @@ func (s *Service) cascadeDeleteStrmDir(runID, currentDir, relDir string, metadat
 
 // removeCascadeSubtree 递归删掉一个目标端子目录（源端整个目录已经没了），
 // 返回删除成功的文件数 / 目录数与失败数。先删子项再删目录本身，非空目录才删得掉。
+//
+// **这里是唯一会连带删掉非 strm 文件的地方**，而且是用户明确要的口径（轮 102）：
+// 源端整个 A 目录都没了，目标端的 A 就不该留着 —— 里面的 jpg / nfo / 用户手放的文件一起走。
+// 别把它改成「只删 .strm、空了再删目录」：那是同一次对话里被用户明确否掉的选项。
+// 边界由两条测试一起锁住：TestCascadeDeleteRemovesWholeTargetDirWhenSourceDirGone（目录级连内容删）
+// 与 TestCascadeDeleteKeepsNonStrmFiles（源端目录还在时，文件级一个非 strm 都不许删）。
 func (s *Service) removeCascadeSubtree(runID, dirPath, relDir string, stats *executionStats) (int, int, int) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {

@@ -1174,8 +1174,10 @@ function parseStrmOverwrite(raw?: string): boolean {
   return parseOptionJSON(raw, strmOptionDefaults).strm_overwrite
 }
 
-// 级联删除：源端已删除的文件 / 文件夹，执行时把目标端对应内容一并删掉
-// （含元数据文件；整个源目录没了就把目标端整个文件夹删掉）。
+// 级联删除：目标端的 Strm 对应的源文件已经不存在时，执行时把这个 Strm 删掉；
+// 源端**整个目录**都没了，才把目标端对应文件夹连同里面的内容一起删掉。
+// 文件级**只删 .strm** —— 非 strm 文件（元数据 / 媒体服务器刮削的封面 / 手放的文件）
+// 在源端目录还在的情况下一个都不动，避免误删（轮 102）。
 function parseStrmCascadeDelete(raw?: string): boolean {
   return parseOptionJSON(raw, strmOptionDefaults).strm_cascade_delete
 }

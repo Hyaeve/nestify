@@ -120,7 +120,7 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：从挂载下载为实体文件，不生成 Strm", describeExtensionSet(metadataExtensions)))
 	}
 	if cascadeDelete {
-		s.appendLog(runID, "info", "级联删除：已开启，本次执行会把目标端「远端已不存在」的文件与目录一并移除")
+		s.appendLog(runID, "info", "级联删除：已开启，本次执行会移除目标端「远端已不存在」的 Strm；远端整个目录消失时，目标端该目录一并移除（非 strm 文件不动）")
 	}
 
 	// OpenList 挂载优先走原生递归列举：一次 PROPFIND（Depth: infinity）取回整棵子树，
@@ -150,7 +150,7 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 
 	// 级联删除排在生成之后：先保证这次该生成的都生成了，再清理远端已经没有的东西。
 	if cascadeDelete {
-		if err := s.cascadeDeleteStrmTarget(runID, targetDir, metadataExtensions, stats); err != nil {
+		if err := s.cascadeDeleteStrmTarget(runID, targetDir, stats); err != nil {
 			return *stats, err
 		}
 	}

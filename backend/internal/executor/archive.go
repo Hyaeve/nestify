@@ -505,7 +505,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 		s.appendLog(runID, "info", fmt.Sprintf("元数据后缀 %s：按实体文件复制到目标目录，不生成 Strm", describeExtensionSet(metadataExtensions)))
 	}
 	if cascadeDelete {
-		s.appendLog(runID, "info", "级联删除：已开启，本次执行会把目标端「源端已不存在」的文件与目录一并移除")
+		s.appendLog(runID, "info", "级联删除：已开启，本次执行会移除目标端「源端已不存在」的 Strm；源端整个目录消失时，目标端该目录一并移除（非 strm 文件不动）")
 	}
 
 	if err := s.syncStrmDirectory(runID, sourceDir, sourceDir, targetDir, req.CompatibilityMode, strmExtensions, metadataExtensions, matchers, overwrite, minVideoBytes, stats); err != nil {
@@ -517,7 +517,7 @@ func (s *Service) executeStrmRule(runID string, req ExecuteRuleRequest, sourceDi
 
 	// 级联删除排在生成之后：先保证这次该生成的都生成了，再清理源端已经没有了的东西。
 	if cascadeDelete {
-		if err := s.cascadeDeleteStrmTarget(runID, targetDir, metadataExtensions, stats); err != nil {
+		if err := s.cascadeDeleteStrmTarget(runID, targetDir, stats); err != nil {
 			return *stats, err
 		}
 	}
