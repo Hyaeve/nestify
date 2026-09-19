@@ -10,6 +10,7 @@ services:
     volumes:
       - ./config:/config
       - ./data:/data
+      - ./log:/log
       - ./logs:/logs
     environment:
       TZ: "Asia/Shanghai"
@@ -17,6 +18,7 @@ services:
       NESTIFY_CONFIG_PATH: "/config/config.yaml"
       NESTIFY_WEB_DIR: "/app/web"
       NESTIFY_DB_PATH: "/data/app.db"
+      NESTIFY_LOG_DB_PATH: "/log/logs.db"
       NESTIFY_ADMIN_INITIAL_USERNAME: "admin"
       NESTIFY_ADMIN_INITIAL_PASSWORD: "nestify123"
     restart: unless-stopped

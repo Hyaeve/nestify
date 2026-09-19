@@ -10,6 +10,11 @@ import (
 	"nestify/backend/internal/model"
 )
 
+// 运行日志（run_history）的全部读写。
+//
+// 注意：这张表**不在主库 app.db 里**，它在独立的日志库文件上（s.logDB），
+// 文件位置由 NESTIFY_LOG_DB_PATH 决定 —— 建表 / 迁移见 run_history_store.go。
+// 只有保留策略要读的 settings 还在主库（s.GetSettings 走 s.db），这是唯一跨库的地方。
 func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 	var ruleID any
 	if item.RuleID != nil {
@@ -21,7 +26,7 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		finishedAt = item.FinishedAt.UTC().Format(time.RFC3339)
 	}
 
-	_, err := s.db.Exec(`
+	_, err := s.logDB.Exec(`
 		INSERT INTO run_history (
 			id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 			processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
@@ -87,13 +92,13 @@ func (s *Store) applyRunHistoryRetentionPolicy() error {
 
 	if settings.LogRetentionDays > 0 {
 		cutoff := time.Now().UTC().AddDate(0, 0, -settings.LogRetentionDays).Format(time.RFC3339)
-		if _, err := s.db.Exec(`DELETE FROM run_history WHERE started_at < ?`, cutoff); err != nil {
+		if _, err := s.logDB.Exec(`DELETE FROM run_history WHERE started_at < ?`, cutoff); err != nil {
 			return fmt.Errorf("delete expired run history: %w", err)
 		}
 	}
 
 	if settings.LogRetentionMaxRecords > 0 {
-		if _, err := s.db.Exec(`
+		if _, err := s.logDB.Exec(`
 			DELETE FROM run_history
 			WHERE id NOT IN (
 				SELECT id FROM run_history
@@ -119,7 +124,7 @@ func (s *Store) GetRunHistoryByID(id string) (model.RunHistoryItem, error) {
 		return model.RunHistoryItem{}, fmt.Errorf("run history id is required")
 	}
 
-	row := s.db.QueryRow(`
+	row := s.logDB.QueryRow(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, detail_json, started_at, updated_at, finished_at
@@ -139,7 +144,7 @@ func (s *Store) GetRunHistoryByID(id string) (model.RunHistoryItem, error) {
 }
 
 func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
-	rows, err := s.db.Query(`
+	rows, err := s.logDB.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, detail_json, started_at, updated_at, finished_at
@@ -190,13 +195,13 @@ func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveM
 
 	countQuery := `SELECT COUNT(*) FROM run_history` + whereClause
 	var total int
-	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := s.logDB.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count run history: %w", err)
 	}
 
 	orderClause := buildRunHistoryOrderClause(sortBy, sortOrder)
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
-	rows, err := s.db.Query(`
+	rows, err := s.logDB.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, detail_json, started_at, updated_at, finished_at
@@ -229,7 +234,7 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 	groupExpr := buildRunHistoryGroupExpression()
 	countQuery := `SELECT COUNT(*) FROM (SELECT ` + groupExpr + ` AS group_key FROM run_history` + whereClause + ` GROUP BY group_key)`
 	var total int
-	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+	if err := s.logDB.QueryRow(countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count grouped run history: %w", err)
 	}
 	if total == 0 {
@@ -238,7 +243,7 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 
 	orderClause := buildRunHistoryGroupOrderClause(sortBy, sortOrder)
 	groupArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
-	groupRows, err := s.db.Query(`
+	groupRows, err := s.logDB.Query(`
 		SELECT `+groupExpr+` AS group_key
 		FROM run_history`+whereClause+`
 		GROUP BY group_key
@@ -272,7 +277,7 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 		queryArgs = append(queryArgs, key)
 	}
 
-	rows, err := s.db.Query(`
+	rows, err := s.logDB.Query(`
 		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
 		       summary, detail_json, started_at, updated_at, finished_at
@@ -350,7 +355,7 @@ func buildRunHistoryOrderClause(sortBy, sortOrder string) string {
 
 func (s *Store) GetRunHistorySummary() (model.RunHistorySummary, error) {
 	var summary model.RunHistorySummary
-	err := s.db.QueryRow(`
+	err := s.logDB.QueryRow(`
 		SELECT
 			COUNT(*),
 			COALESCE(SUM(CASE WHEN date(started_at, 'localtime') = date('now', 'localtime') THEN 1 ELSE 0 END), 0),
@@ -367,7 +372,7 @@ func (s *Store) GetRunHistorySummary() (model.RunHistorySummary, error) {
 }
 
 func (s *Store) DeleteRunHistoryByID(id string) error {
-	if _, err := s.db.Exec(`DELETE FROM run_history WHERE id = ?`, strings.TrimSpace(id)); err != nil {
+	if _, err := s.logDB.Exec(`DELETE FROM run_history WHERE id = ?`, strings.TrimSpace(id)); err != nil {
 		return fmt.Errorf("delete run history by id: %w", err)
 	}
 
@@ -375,7 +380,7 @@ func (s *Store) DeleteRunHistoryByID(id string) error {
 }
 
 func (s *Store) DeleteRunHistoryByStatus(status string) error {
-	if _, err := s.db.Exec(`DELETE FROM run_history WHERE status = ?`, strings.TrimSpace(status)); err != nil {
+	if _, err := s.logDB.Exec(`DELETE FROM run_history WHERE status = ?`, strings.TrimSpace(status)); err != nil {
 		return fmt.Errorf("delete run history by status: %w", err)
 	}
 
@@ -383,7 +388,7 @@ func (s *Store) DeleteRunHistoryByStatus(status string) error {
 }
 
 func (s *Store) ClearRunHistory() error {
-	if _, err := s.db.Exec(`DELETE FROM run_history`); err != nil {
+	if _, err := s.logDB.Exec(`DELETE FROM run_history`); err != nil {
 		return fmt.Errorf("clear run history: %w", err)
 	}
 

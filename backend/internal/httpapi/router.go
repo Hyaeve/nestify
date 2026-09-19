@@ -83,7 +83,9 @@ func NewRouter(deps Dependencies) http.Handler {
 			Data: map[string]any{
 				"app_name": "Nestify",
 				"db_path":  deps.Env.DBPath,
-				"stage":    "rule-storage-connected",
+				// 运行日志（运行日志页 / 归巢历史）单独一个库文件，方便排查「日志去哪了」。
+				"log_db_path": deps.Store.LogDBPath(),
+				"stage":       "rule-storage-connected",
 			},
 		})
 	})

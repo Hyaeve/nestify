@@ -15,6 +15,14 @@ import (
 
 type Store struct {
 	db *sql.DB
+	// logDB 是运行日志（run_history）的独立数据库连接。
+	// 日志的写入频率远高于规则 / 设置这类配置数据，单独一个文件后：
+	// 主库不会因为明细 JSON 膨胀，运维上也能只备份配置而不备份日志。
+	logDB *sql.DB
+	// logPath 与 dbPath 是各自的文件路径 —— 首次启动时要把主库里遗留的
+	// run_history 记录搬到日志库里（见 run_history_store.go）。
+	logPath string
+	dbPath  string
 }
 
 func Open(env config.Env) (*Store, error) {
@@ -44,7 +52,7 @@ func Open(env config.Env) (*Store, error) {
 	}
 	log.Printf("sqlite: performance pragmas configured")
 
-	store := &Store{db: db}
+	store := &Store{db: db, dbPath: path}
 	log.Printf("sqlite: starting migration")
 	if err := store.migrate(); err != nil {
 		log.Printf("sqlite: migration failed: %v", err)
@@ -53,9 +61,31 @@ func Open(env config.Env) (*Store, error) {
 	}
 	log.Printf("sqlite: migration complete")
 
+	// 运行日志库：与主库分开的第二个 sqlite 文件。
+	logPath := resolveRunHistoryLogPath(env.LogDBPath, path)
+	log.Printf("sqlite: opening run history log store path=%s", logPath)
+	logDB, err := openRunHistoryLogStore(logPath)
+	if err != nil {
+		log.Printf("sqlite: open run history log store failed: %v", err)
+		_ = db.Close()
+		return nil, err
+	}
+	store.logDB = logDB
+	store.logPath = logPath
+
+	log.Printf("sqlite: migrating run history log store")
+	if err := store.migrateRunHistoryStore(); err != nil {
+		log.Printf("sqlite: run history log store migration failed: %v", err)
+		_ = logDB.Close()
+		_ = db.Close()
+		return nil, err
+	}
+	log.Printf("sqlite: run history log store ready")
+
 	log.Printf("sqlite: ensuring default admin")
 	if err := store.ensureDefaultAdmin(env.AdminInitialUsername, env.AdminInitialPassword); err != nil {
 		log.Printf("sqlite: ensure default admin failed: %v", err)
+		_ = logDB.Close()
 		_ = db.Close()
 		return nil, err
 	}
@@ -69,5 +99,12 @@ func hashPassword(password string) (string, error) {
 }
 
 func (s *Store) Close() error {
-	return s.db.Close()
+	var logErr error
+	if s.logDB != nil {
+		logErr = s.logDB.Close()
+	}
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	return logErr
 }

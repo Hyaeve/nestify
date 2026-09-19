@@ -112,23 +112,6 @@ func (s *Store) migrate() error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		);`,
-		`CREATE TABLE IF NOT EXISTS run_history (
-			id TEXT PRIMARY KEY,
-			rule_id INTEGER,
-			rule_name TEXT NOT NULL DEFAULT '',
-			trigger_mode TEXT NOT NULL,
-			archive_mode TEXT NOT NULL DEFAULT '',
-			link_mode TEXT NOT NULL DEFAULT '',
-			status TEXT NOT NULL,
-			processed_files INTEGER NOT NULL DEFAULT 0,
-			success_count INTEGER NOT NULL DEFAULT 0,
-			skip_count INTEGER NOT NULL DEFAULT 0,
-			failure_count INTEGER NOT NULL DEFAULT 0,
-			summary TEXT NOT NULL DEFAULT '',
-			started_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			finished_at TEXT NOT NULL DEFAULT ''
-		);`,
 	}
 
 	for index, statement := range statements {
@@ -212,30 +195,8 @@ func (s *Store) migrate() error {
 		return err
 	}
 
-	log.Printf("sqlite:migrate: ensure run_history size_bytes column")
-	if err := s.ensureRunHistorySizeBytesColumn(); err != nil {
-		log.Printf("sqlite:migrate: ensure run_history size_bytes column failed: %v", err)
-		return err
-	}
-
-	log.Printf("sqlite:migrate: ensure run_history link_mode column")
-	if err := s.ensureRunHistoryLinkModeColumn(); err != nil {
-		log.Printf("sqlite:migrate: ensure run_history link_mode column failed: %v", err)
-		return err
-	}
-
-	log.Printf("sqlite:migrate: ensure run_history deleted_count column")
-	if err := s.ensureRunHistoryDeletedCountColumn(); err != nil {
-		log.Printf("sqlite:migrate: ensure run_history deleted_count column failed: %v", err)
-		return err
-	}
-
-	log.Printf("sqlite:migrate: ensure run_history detail_json column")
-	if err := s.ensureRunHistoryDetailJSONColumn(); err != nil {
-		log.Printf("sqlite:migrate: ensure run_history detail_json column failed: %v", err)
-		return err
-	}
-
+	// 运行日志表（run_history）不在这里建 —— 它已经搬到独立的日志库，
+	// 见 run_history_store.go 的 migrateRunHistoryStore。
 	log.Printf("sqlite:migrate: ensure settings history_view_mode column")
 	if err := s.ensureSettingsHistoryViewModeColumn(); err != nil {
 		log.Printf("sqlite:migrate: ensure settings history_view_mode column failed: %v", err)
@@ -522,12 +483,10 @@ func normalizeStrmFilterExtension(value string) string {
 }
 
 func (s *Store) ensurePerformanceIndexes() error {
+	// run_history 的三组索引不在这里 —— 表在独立的日志库里（见 run_history_store.go）。
 	statements := []string{
 		`CREATE INDEX IF NOT EXISTS idx_rules_sort_order ON rules(sort_order, id);`,
 		`CREATE INDEX IF NOT EXISTS idx_rules_type_order ON rules(rule_type, sort_order, id);`,
-		`CREATE INDEX IF NOT EXISTS idx_run_history_started ON run_history(started_at DESC, id DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_run_history_status ON run_history(status);`,
-		`CREATE INDEX IF NOT EXISTS idx_run_history_archive_mode ON run_history(archive_mode);`,
 	}
 
 	for _, statement := range statements {
@@ -642,126 +601,6 @@ func (s *Store) ensureBackupSortOrderColumn() error {
 		WHERE sort_order = 0;
 	`); err != nil {
 		return fmt.Errorf("backfill backup_tasks sort_order column: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Store) ensureRunHistorySizeBytesColumn() error {
-	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
-	if err != nil {
-		return fmt.Errorf("query run_history schema: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var dataType string
-		var notNull int
-		var defaultValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return fmt.Errorf("scan run_history schema: %w", err)
-		}
-		if strings.EqualFold(name, "size_bytes") {
-			return nil
-		}
-	}
-
-	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0;`); err != nil {
-		return fmt.Errorf("add run_history size_bytes column: %w", err)
-	}
-
-	return nil
-}
-
-func (s *Store) ensureRunHistoryLinkModeColumn() error {
-	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
-	if err != nil {
-		return fmt.Errorf("query run_history schema: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var dataType string
-		var notNull int
-		var defaultValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return fmt.Errorf("scan run_history schema: %w", err)
-		}
-		if strings.EqualFold(name, "link_mode") {
-			return nil
-		}
-	}
-
-	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`); err != nil {
-		return fmt.Errorf("add run_history link_mode column: %w", err)
-	}
-
-	return nil
-}
-
-// ensureRunHistoryDeletedCountColumn 记录一次执行后实际删除的文件/文件夹数量
-// （备份任务的「完成后删除源件」「同步删除目标」等都会计入）。
-func (s *Store) ensureRunHistoryDeletedCountColumn() error {
-	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
-	if err != nil {
-		return fmt.Errorf("query run_history schema: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var dataType string
-		var notNull int
-		var defaultValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return fmt.Errorf("scan run_history schema: %w", err)
-		}
-		if strings.EqualFold(name, "deleted_count") {
-			return nil
-		}
-	}
-
-	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN deleted_count INTEGER NOT NULL DEFAULT 0;`); err != nil {
-		return fmt.Errorf("add run_history deleted_count column: %w", err)
-	}
-
-	return nil
-}
-
-// ensureRunHistoryDetailJSONColumn 保存一次执行的明细载荷（JSON 文本）。
-// 备份任务用它记录本次上传/跳过/失败/删除的具体文件清单。
-func (s *Store) ensureRunHistoryDetailJSONColumn() error {
-	rows, err := s.db.Query(`PRAGMA table_info(run_history);`)
-	if err != nil {
-		return fmt.Errorf("query run_history schema: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var dataType string
-		var notNull int
-		var defaultValue any
-		var pk int
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
-			return fmt.Errorf("scan run_history schema: %w", err)
-		}
-		if strings.EqualFold(name, "detail_json") {
-			return nil
-		}
-	}
-
-	if _, err := s.db.Exec(`ALTER TABLE run_history ADD COLUMN detail_json TEXT NOT NULL DEFAULT '';`); err != nil {
-		return fmt.Errorf("add run_history detail_json column: %w", err)
 	}
 
 	return nil

@@ -299,7 +299,8 @@ npm run build
 
 - `NESTIFY_HTTP_ADDR`
 - `NESTIFY_WEB_DIR`
-- `NESTIFY_DB_PATH`
+- `NESTIFY_DB_PATH`（主库：规则 / 设置 / 账号 / 挂载 / 备份任务）
+- `NESTIFY_LOG_DB_PATH`（运行日志：运行日志页与归巢历史，含明细；默认 `/log/logs.db`）
 - `NESTIFY_ADMIN_INITIAL_USERNAME`
 - `NESTIFY_ADMIN_INITIAL_PASSWORD`
 - `NESTIFY_BROWSE_ROOTS`
@@ -357,12 +358,14 @@ services:
     volumes:
       - ./config:/config
       - ./data:/data
+      - ./log:/log
       - ./logs:/logs
     environment:
       NESTIFY_HTTP_ADDR: ":8080"
       NESTIFY_CONFIG_PATH: "/config/config.yaml"
       NESTIFY_WEB_DIR: "/app/web"
       NESTIFY_DB_PATH: "/data/app.db"
+      NESTIFY_LOG_DB_PATH: "/log/logs.db"
       NESTIFY_ADMIN_INITIAL_USERNAME: "admin"
       NESTIFY_ADMIN_INITIAL_PASSWORD: "password"
     restart: always
@@ -373,6 +376,10 @@ services:
 - 将配置文件放置到宿主机 [`config/config.yaml`](config/config.example.yaml)
 - 首次启动前建议修改默认管理员账号与密码
 - 持久化目录建议保留 [`./data`](data/) 与 [`./logs`](logs/)
+- **运行日志单独一个文件**：`NESTIFY_LOG_DB_PATH`（默认 `/log/logs.db`）保存「运行日志 / 归巢历史」及其明细，
+  `NESTIFY_DB_PATH`（默认 `/data/app.db`）只留规则、设置、账号、挂载与备份任务。
+  两者分开挂载后，日志可以单独清理 / 备份，主库也不会随日志一起膨胀；
+  升级后第一次启动会把主库里已有的运行日志自动搬到 `/log/logs.db`（搬齐校验通过才删除旧表）
 
 ## GitHub 自动构建镜像
 
