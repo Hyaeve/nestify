@@ -17,7 +17,7 @@ export function backupTriggerLabel(mode?: string): string {
 // ---------------------------------------------------------------------------
 
 // 明细动作：备份链路用 upload/skip/fail/delete，strm 链路用 strm/metadata，
-// 打包与归档用 pack/move；失败与跳过是各链路共用的结论性动作。
+// 打包与归档用 pack/move，软链硬链用 link；失败与跳过是各链路共用的结论性动作。
 export type RunFileAction =
   | 'upload'
   | 'skip'
@@ -27,11 +27,12 @@ export type RunFileAction =
   | 'metadata'
   | 'pack'
   | 'move'
+  | 'link'
 
 // 兼容旧名：明细面板早期只服务备份链路。
 export type BackupFileAction = RunFileAction
 
-const runFileActions: RunFileAction[] = ['upload', 'skip', 'fail', 'delete', 'strm', 'metadata', 'pack', 'move']
+const runFileActions: RunFileAction[] = ['upload', 'skip', 'fail', 'delete', 'strm', 'metadata', 'pack', 'move', 'link']
 
 function isRunFileAction(value: unknown): value is RunFileAction {
   return typeof value === 'string' && (runFileActions as string[]).includes(value)
@@ -39,7 +40,7 @@ function isRunFileAction(value: unknown): value is RunFileAction {
 
 // 会被列出的动作顺序。这个数组参与「共 N 项」的求和，必须覆盖所有会落明细的动作，
 // 顺序本身沿用「先列这次产出了什么，再列失败与删除，最后是跳过」。
-export const runFileActionOrder: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move', 'fail', 'delete', 'skip']
+export const runFileActionOrder: RunFileAction[] = ['upload', 'strm', 'link', 'metadata', 'pack', 'move', 'fail', 'delete', 'skip']
 
 // 明细面板只列「真的动了文件」的结果。
 export type BackupFileFilter = 'all' | RunFileAction
@@ -138,11 +139,12 @@ export function detailTargetFolder(path: string, isDir = false): string {
 // 明细要不要占两行：只有「真的产出了东西」的成功条目才值得给第二行
 // ---------------------------------------------------------------------------
 
-// 产出型动作：备份上传、strm 生成、元数据同步、打包、移动（归档 / 收集 / 转换 / 命名）。
+// 产出型动作：备份上传、strm 生成、软链硬链建链、元数据同步、打包、
+// 移动（归档 / 收集 / 转换重命名 / 命名重命名）。
 // 跳过 / 失败 / 删除都是**结论性**动作 —— 一行文件路径就够，原因留在悬浮提示里。
 // 这也是用户定的口径：两行只留给「备份 / strm / 打包 / 收集 / 转换 / 软链硬链 / 命名」
 // 这些模式里**成功**的那一条。
-const runDetailTargetActions: RunFileAction[] = ['upload', 'strm', 'metadata', 'pack', 'move']
+const runDetailTargetActions: RunFileAction[] = ['upload', 'strm', 'link', 'metadata', 'pack', 'move']
 
 export function runFileActionHasTarget(action: RunFileAction): boolean {
   return runDetailTargetActions.includes(action)
@@ -153,7 +155,9 @@ export function runFileActionHasTarget(action: RunFileAction): boolean {
 // 备份链路展示它落地的**文件夹**（完整路径，含目标根）：文件名与第一行的源文件名一模一样，
 // 再写一遍是噪音（见 detailTargetFolder）。
 // 其它链路展示**完整目标路径**：产物名本身就是信息 ——
-// /media/strm/剧集/A/A1.strm（strm）、/media/backup/剧集/剧集-01.cbz（打包）。
+// /media/strm/剧集/A/A1.strm（strm 生成）、/media/links/剧集/A1.mkv（软链硬链建出的链接）、
+// /media/backup/剧集/剧集-01.cbz（打包）。
+// 转换与命名是原地改名，它们的「目标」就是改完之后的完整新路径。
 export function detailTargetDisplay(kind: string | undefined, entry: BackupFileEntry): string {
   const raw = (entry.target || '').replace(/\\/g, '/').trim()
   if (!raw) {
@@ -193,6 +197,7 @@ const emptyActionCounts = (): Record<RunFileAction, number> => ({
   metadata: 0,
   pack: 0,
   move: 0,
+  link: 0,
 })
 
 function normalizeAction(value: unknown): RunFileAction {
@@ -207,6 +212,9 @@ const runDetailTitles: Record<string, string> = {
   collect: '收集明细',
   archive: '归档明细',
   cleanup: '清理明细',
+  transform: '转换明细',
+  naming: '命名明细',
+  link: '链路明细',
 }
 
 export function runDetailTitle(kind?: string): string {
@@ -236,7 +244,7 @@ export const runDetailSummaryLabels: Record<RunDetailSummaryKey, string> = {
 // 统计项 → 明细动作。点「成功」不该把失败条目带出来，点「Strm」只看真的生成了 strm 的那些。
 // 「删除」是独立动作：单独给一个筛选口，删了哪些文件点它就能看到。
 const runDetailSummaryActions: Record<RunDetailSummaryKey, RunFileAction[]> = {
-  success: ['upload', 'strm', 'metadata', 'pack', 'move'],
+  success: ['upload', 'strm', 'link', 'metadata', 'pack', 'move'],
   skip: ['skip'],
   failure: ['fail'],
   delete: ['delete'],
@@ -400,6 +408,8 @@ export function backupFileActionLabel(action: RunFileAction): string {
       return '删除'
     case 'strm':
       return '生成 Strm'
+    case 'link':
+      return '创建链路'
     case 'metadata':
       return '同步元数据'
     case 'pack':
@@ -421,6 +431,8 @@ export function backupFileActionClass(action: RunFileAction): string {
       return 'is-delete'
     case 'strm':
       return 'is-strm'
+    case 'link':
+      return 'is-link'
     case 'metadata':
       return 'is-metadata'
     case 'pack':

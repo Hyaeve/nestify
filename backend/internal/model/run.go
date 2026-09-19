@@ -91,6 +91,9 @@ const (
 	RunFileActionMetadata = "metadata"
 	RunFileActionPack     = "pack"
 	RunFileActionMove     = "move"
+	// RunFileActionLink 软链 / 硬链链路：在目标端为源文件建立了一个链接。
+	// 与 strm 分开取值 —— 前端要给它「创建链路」的中文标签，混进 strm 会显示成「生成 Strm」。
+	RunFileActionLink = "link"
 )
 
 // 明细载荷的类型标识（detail_json.kind），前端据此决定面板标题与筛选页签。
@@ -104,6 +107,12 @@ const (
 	// 删除动作（delete）不只在备份删源与 strm 级联删除上出现，净化链路同样会落这类明细，
 	// 前端「删除」统计项因此对净化规则也成立。
 	RunDetailKindCleanup = "cleanup"
+	// RunDetailKindTransform 转换规则：原地改了哪些名字（重命名 / 同名目录合并）。
+	RunDetailKindTransform = "transform"
+	// RunDetailKindNaming 命名规则：按命名规则改了哪些名字。
+	RunDetailKindNaming = "naming"
+	// RunDetailKindLink 软链 / 硬链规则：目标端为哪些源文件建了链接。
+	RunDetailKindLink = "link"
 )
 
 // RunFileEntry 记录一次执行中单个文件（或文件夹）的处理结果。

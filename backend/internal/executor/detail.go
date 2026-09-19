@@ -27,6 +27,12 @@ const (
 	skipReasonNestedPackage   = "「处理嵌套文件夹」未开启，未进入该子目录"
 	skipReasonNestedCollect   = "「递归收集」未开启，未进入该子目录"
 	skipReasonFullSyncRemove  = "全量同步：删除了目标端旧的 Strm"
+	// 命名规则：规则跑完名字没变（没命中 / 改完等于原名），或改出来的新名字已经被占用。
+	skipReasonNamingUnchanged = "命名规则未产生变化"
+	skipReasonNamingConflict  = "命名后目标已存在，跳过"
+	// 软链 / 硬链：命中过滤名单的文件与目录不建链，与净化 / strm 的「已移入回收站」区分开。
+	skipReasonLinkFiltered = "命中过滤名单，未建立链路"
+	skipReasonLinkExisting = "目标已有同名文件或链接，跳过"
 )
 
 // 删除原因的统一样板：删除动作（delete）在备份删源、strm 级联删除、净化规则上都出现，

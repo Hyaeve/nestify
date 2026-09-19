@@ -320,6 +320,11 @@ func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executi
 		return s.executeStrmRule(runID, req, sourceDir, targetDir, &stats)
 	}
 
+	// 软链 / 硬链链路的明细：这次在目标端为哪些源文件建了链接（kind = link）。
+	// 必须在进入 linkDirectory 之前初始化 —— 递归 + 并发路径下两处各自创建会丢掉先建那份的明细。
+	stats.detail(model.RunDetailKindLink)
+	stats.Detail.setRoots([]string{sourceDir}, []string{targetDir})
+
 	matchers := buildFileNameMatchers(req.Filters)
 	if err := s.linkDirectory(runID, sourceDir, sourceDir, targetDir, req.LinkMode, req.CompatibilityMode, matchers, &stats); err != nil {
 		return stats, err
@@ -346,6 +351,12 @@ func (s *Service) executeLinkRule(runID string, req ExecuteRuleRequest) (executi
 func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMode, compatibilityMode string, matchers []fileNameMatcher, stats *executionStats) error {
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
+		stats.Detail.record(model.RunFileEntry{
+			Path:   currentPath,
+			Action: model.BackupFileActionFail,
+			Dir:    true,
+			Note:   fmt.Sprintf("读取目录失败：%v", err),
+		})
 		return fmt.Errorf("read link directory %s: %w", currentPath, err)
 	}
 	entries = limitEntriesForMode(compatibilityMode, entries)
@@ -359,6 +370,12 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 		relPath, relErr := filepath.Rel(rootPath, sourcePath)
 		if relErr != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourcePath,
+				Action: model.BackupFileActionFail,
+				Dir:    entry.IsDir(),
+				Note:   fmt.Sprintf("解析相对路径失败：%v", relErr),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("resolve relative path for %s failed: %v", sourcePath, relErr))
 			return nil
 		}
@@ -370,11 +387,18 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 		if entry.IsDir() {
 			if matchesFileName(entry.Name(), true, matchers) {
 				stats.SkipCount++
+				stats.Detail.recordSkip(sourcePath, skipReasonLinkFiltered, true)
 				s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted directory %s", sourcePath))
 				return nil
 			}
 			if err := os.MkdirAll(targetPath, 0o755); err != nil {
 				stats.FailureCount++
+				stats.Detail.record(model.RunFileEntry{
+					Path:   targetPath,
+					Action: model.BackupFileActionFail,
+					Dir:    true,
+					Note:   fmt.Sprintf("创建目标目录失败：%v", err),
+				})
 				s.appendLog(runID, "error", fmt.Sprintf("create link target directory %s failed: %v", targetPath, err))
 				return nil
 			}
@@ -386,34 +410,60 @@ func (s *Service) linkDirectory(runID, rootPath, currentPath, targetRoot, linkMo
 
 		if matchesFileName(entry.Name(), entry.IsDir(), matchers) {
 			stats.SkipCount++
+			stats.Detail.recordSkip(sourcePath, skipReasonLinkFiltered, false)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped blacklisted file %s", sourcePath))
 			return nil
 		}
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   filepath.Dir(targetPath),
+				Action: model.BackupFileActionFail,
+				Dir:    true,
+				Note:   fmt.Sprintf("创建目标父目录失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("create link parent directory %s failed: %v", filepath.Dir(targetPath), err))
 			return nil
 		}
 
 		if _, err := os.Lstat(targetPath); err == nil {
 			stats.SkipCount++
+			stats.Detail.recordSkip(sourcePath, skipReasonLinkExisting, false)
 			s.appendLog(runID, "info", fmt.Sprintf("skipped existing link target %s", targetPath))
 			return nil
 		} else if !os.IsNotExist(err) {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   targetPath,
+				Action: model.BackupFileActionFail,
+				Note:   fmt.Sprintf("检查目标失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("inspect link target %s failed: %v", targetPath, err))
 			return nil
 		}
 
 		if err := createFileLink(sourcePath, targetPath, linkMode); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   sourcePath,
+				Action: model.BackupFileActionFail,
+				Target: targetPath,
+				Note:   fmt.Sprintf("创建链路失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("create link %s -> %s failed: %v", targetPath, sourcePath, err))
 			return nil
 		}
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		// 成功条目落「链路」动作 + 目标链接路径：前端只在成功条目上给第二行，
+		// 第二行显示链接落在哪儿（见 backupDetail.ts 的 runFileActionHasTarget）。
+		stats.Detail.record(model.RunFileEntry{
+			Path:   sourcePath,
+			Action: model.RunFileActionLink,
+			Target: targetPath,
+		})
 		s.appendLog(runID, "info", fmt.Sprintf("created link %s -> %s", targetPath, sourcePath))
 		return nil
 	})

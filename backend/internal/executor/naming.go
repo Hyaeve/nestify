@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"nestify/backend/internal/model"
 )
 
 type namingRuleConfig struct {
@@ -39,6 +41,12 @@ func (s *Service) executeNamingRule(runID string, req ExecuteRuleRequest) (execu
 		return stats, fmt.Errorf("read naming source dir: %w", err)
 	}
 	sort.Slice(entries, func(i, j int) bool { return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name()) })
+	// 命名链路的明细：改完名字的落「移动」动作（新名字作为目标，前端据此在成功条目上给第二行），
+	// 没改名 / 新名字被占用的落「跳过」，重命名报错的落「失败」。
+	// 命名是原地改名，没有独立的目标根，根路径取监控目录。
+	stats.detail(model.RunDetailKindNaming)
+	stats.Detail.setRoots([]string{sourceDir}, nil)
+
 	// An unset scope intentionally matches nothing; both options are opt-in.
 	rules := parseNamingRules(req.TransformRules)
 	order := 0
@@ -54,22 +62,38 @@ func (s *Service) executeNamingRule(runID string, req ExecuteRuleRequest) (execu
 		stats.ProcessedFiles++
 		oldName := entry.Name()
 		newName := applyNamingRules(oldName, entry.IsDir(), order, rules)
+		oldPath := filepath.Join(sourceDir, oldName)
 		if newName == oldName || strings.TrimSpace(newName) == "" {
 			stats.SkipCount++
+			stats.Detail.recordSkip(oldPath, skipReasonNamingUnchanged, entry.IsDir())
 			continue
 		}
-		oldPath, newPath := filepath.Join(sourceDir, oldName), filepath.Join(sourceDir, newName)
+		newPath := filepath.Join(sourceDir, newName)
 		if _, statErr := os.Stat(newPath); statErr == nil {
 			stats.SkipCount++
+			stats.Detail.recordSkip(oldPath, skipReasonNamingConflict, entry.IsDir())
 			s.appendLog(runID, "warning", fmt.Sprintf("命名跳过，目标已存在：%s", newPath))
 			continue
 		}
 		if err := os.Rename(oldPath, newPath); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   oldPath,
+				Action: model.BackupFileActionFail,
+				Dir:    entry.IsDir(),
+				Note:   fmt.Sprintf("重命名失败：%v", err),
+			})
 			s.appendLog(runID, "error", fmt.Sprintf("重命名失败：%s -> %s：%v", oldName, newName, err))
 			continue
 		}
 		stats.SuccessCount++
+		stats.Detail.record(model.RunFileEntry{
+			Path:   oldPath,
+			Action: model.RunFileActionMove,
+			Target: newPath,
+			Dir:    entry.IsDir(),
+			Note:   "按命名规则重命名",
+		})
 		s.appendLog(runID, "info", fmt.Sprintf("已命名：%s -> %s", oldName, newName))
 	}
 	stats.Summary = fmt.Sprintf("命名完成：成功 %d，跳过 %d，失败 %d", stats.SuccessCount, stats.SkipCount, stats.FailureCount)

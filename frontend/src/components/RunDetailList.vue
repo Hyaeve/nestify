@@ -320,6 +320,12 @@ function actionClass(action: RunFileAction) {
   background: rgba(47, 143, 157, 0.13);
 }
 
+/* 软链 / 硬链建出的链接：靛蓝（与 strm 的青区分开，都是「落地了产物」的语义）。 */
+.run-detail__action.is-link {
+  color: #5061c2;
+  background: rgba(80, 97, 194, 0.13);
+}
+
 .run-detail__action.is-metadata {
   color: #b07d18;
   background: rgba(176, 125, 24, 0.13);

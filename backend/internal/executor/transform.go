@@ -10,6 +10,8 @@ import (
 	"sync"
 
 	"github.com/liuzl/gocc"
+
+	"nestify/backend/internal/model"
 )
 
 var (
@@ -76,6 +78,11 @@ func (s *Service) executeTransformRule(runID string, req ExecuteRuleRequest) (ex
 		return stats, nil
 	}
 
+	// 转换链路的明细：这次改了哪些名字（重命名按「移动」动作落，与归档 / 收集的移动同款），
+	// 失败与跳过逐条列出。转换是原地改名，源端即目标端，根路径都取监控目录。
+	stats.detail(model.RunDetailKindTransform)
+	stats.Detail.setRoots([]string{sourceDir}, []string{sourceDir})
+
 	s.transformDirectory(runID, sourceDir, req.CompatibilityMode, convertTraditional, convertCustom, filterCustom, mergeSameNameDirs, rules, transformFilters, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
@@ -100,6 +107,13 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
+		// 明细先于 persistRunHistory 落：每条运行记录带的是「写它那一刻」的明细快照。
+		stats.Detail.record(model.RunFileEntry{
+			Path:   currentPath,
+			Action: model.BackupFileActionFail,
+			Dir:    true,
+			Note:   fmt.Sprintf("读取目录失败：%v", err),
+		})
 		s.persistRunHistory(runID, fmt.Sprintf("read transform directory %s failed: %v", currentPath, err), stats)
 		s.appendLog(runID, "error", fmt.Sprintf("read transform directory %s failed: %v", currentPath, err))
 		return
@@ -136,6 +150,12 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 			if entry.IsDir() && mergeSameNameDirs {
 				if err := mergeDirectories(oldPath, newPath); err != nil {
 					stats.FailureCount++
+					stats.Detail.record(model.RunFileEntry{
+						Path:   oldPath,
+						Action: model.BackupFileActionFail,
+						Dir:    true,
+						Note:   fmt.Sprintf("合并同名目录失败：%v", err),
+					})
 					s.persistRunHistory(runID, fmt.Sprintf("merge directory %s into %s failed: %v", oldPath, newPath, err), stats)
 					s.appendLog(runID, "error", fmt.Sprintf("merge directory %s into %s failed: %v", oldPath, newPath, err))
 					return nil
@@ -143,6 +163,13 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 				stats.ProcessedFiles++
 				stats.SuccessCount++
 				stats.CleanupRemovedDirs++
+				stats.Detail.record(model.RunFileEntry{
+					Path:   oldPath,
+					Action: model.RunFileActionMove,
+					Target: newPath,
+					Dir:    true,
+					Note:   "与同名目录合并",
+				})
 				s.persistRunHistory(runID, fmt.Sprintf("merged directory %s -> %s", oldPath, newPath), stats)
 				s.appendLog(runID, "info", fmt.Sprintf("merged directory %s -> %s", oldPath, newPath))
 				return nil
@@ -151,6 +178,12 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 			fallbackPath := uniqueTransformRenameSuffixPath(currentPath, newName)
 			if fallbackPath == "" || sameCleanPath(oldPath, fallbackPath) {
 				stats.FailureCount++
+				stats.Detail.record(model.RunFileEntry{
+					Path:   oldPath,
+					Action: model.BackupFileActionFail,
+					Dir:    entry.IsDir(),
+					Note:   fmt.Sprintf("目标已存在同名条目：%s", newName),
+				})
 				s.persistRunHistory(runID, fmt.Sprintf("rename target already exists %s", newPath), stats)
 				s.appendLog(runID, "error", fmt.Sprintf("rename target already exists %s", newPath))
 				return nil
@@ -160,6 +193,12 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 
 		if err := os.Rename(oldPath, newPath); err != nil {
 			stats.FailureCount++
+			stats.Detail.record(model.RunFileEntry{
+				Path:   oldPath,
+				Action: model.BackupFileActionFail,
+				Dir:    entry.IsDir(),
+				Note:   fmt.Sprintf("重命名失败：%v", err),
+			})
 			s.persistRunHistory(runID, fmt.Sprintf("rename %s failed: %v", oldPath, err), stats)
 			s.appendLog(runID, "error", fmt.Sprintf("rename %s failed: %v", oldPath, err))
 			return nil
@@ -167,6 +206,15 @@ func (s *Service) transformDirectory(runID, currentPath, compatibilityMode strin
 
 		stats.ProcessedFiles++
 		stats.SuccessCount++
+		// 重命名成功落「移动」动作 + 新名字作为目标：前端只在成功条目上给第二行，
+		// 第二行显示改完之后的新路径（见 runFileActionHasTarget）。
+		stats.Detail.record(model.RunFileEntry{
+			Path:   oldPath,
+			Action: model.RunFileActionMove,
+			Target: newPath,
+			Dir:    entry.IsDir(),
+			Note:   "重命名",
+		})
 		if entry.IsDir() {
 			stats.CleanupRemovedDirs++
 			s.persistRunHistory(runID, fmt.Sprintf("renamed directory %s -> %s", oldPath, newPath), stats)
