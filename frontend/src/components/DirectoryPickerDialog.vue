@@ -34,7 +34,7 @@
 
       <div class="picker-input">
         <span class="picker-label">手动路径</span>
-        <el-input v-model="pathInput" placeholder="挂载目录无法枚举时，可直接输入路径">
+        <el-input v-model="pathInput" field-label="目录路径" placeholder="挂载目录无法枚举时，可直接输入路径">
           <template #append>
             <el-button @click="openTypedPath">打开</el-button>
           </template>
@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput } from './outlinedControls'
 import { computed, ref, watch } from 'vue'
 import { Cloudy, FolderOpened, Monitor } from '@element-plus/icons-vue'
 

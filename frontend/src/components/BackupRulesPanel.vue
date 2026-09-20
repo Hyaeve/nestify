@@ -245,18 +245,18 @@
 
             <div class="backup-filter-row__body">
               <template v-if="rule.type === 'size'">
-                <el-input-number v-model="rule.min_size" :min="0" placeholder="最小" />
-                <el-select v-model="rule.size_unit" style="width: 100px">
+                <el-input-number v-model="rule.min_size" field-label="最小体积" :min="0" placeholder="最小" />
+                <el-select v-model="rule.size_unit" field-label="单位" style="width: 100px">
                   <el-option label="Bytes" value="Bytes" />
                   <el-option label="KB" value="KB" />
                   <el-option label="MB" value="MB" />
                   <el-option label="GB" value="GB" />
                 </el-select>
                 <span class="backup-filter-row__sep">—</span>
-                <el-input-number v-model="rule.max_size" :min="0" placeholder="最大（留空不限制）" />
+                <el-input-number v-model="rule.max_size" field-label="最大体积" :min="0" placeholder="最大（留空不限制）" />
               </template>
               <template v-else-if="rule.type === 'regex'">
-                <el-input v-model="rule.value" style="width: 100%" :placeholder="filterValuePlaceholder(rule.type)" />
+                <el-input v-model="rule.value" field-label="正则表达式" style="width: 100%" :placeholder="filterValuePlaceholder(rule.type)" />
               </template>
               <template v-else>
                 <div class="backup-filter-tags">
@@ -268,6 +268,7 @@
                   </div>
                   <el-input
                     v-model="rule.draftValue"
+                    :field-label="filterTypeLabel(rule.type)"
                     class="backup-filter-tag-input"
                     :placeholder="filterValuePlaceholder(rule.type)"
                     @keyup.enter="commitTag(rule)"
@@ -409,6 +410,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from './outlinedControls'
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'

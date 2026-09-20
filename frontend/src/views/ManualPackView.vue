@@ -150,6 +150,7 @@
           <div class="toolbar-row__search">
             <el-input
               v-model="searchKeyword"
+              field-label="搜索文件"
               clearable
               class="toolbar-row__search-input"
               placeholder="搜索当前层级文件或文件夹"
@@ -212,13 +213,12 @@
           <span>已选择 {{ selectedCount }} 项</span>
           <span>{{ filteredEntries.length }} 个项目</span>
           <span class="summary-row__sort">
-            文件排序：
-            <el-select v-model="sortBy" size="small" class="summary-row__sort-select">
+            <el-select v-model="sortBy" field-label="文件排序" size="small" class="summary-row__sort-select">
               <el-option label="修改时间" value="modified_at" />
               <el-option label="文件名称" value="name" />
               <el-option label="文件类型" value="type" />
             </el-select>
-            <el-select v-model="sortOrder" size="small" class="summary-row__sort-order-select">
+            <el-select v-model="sortOrder" field-label="排序方向" size="small" class="summary-row__sort-order-select">
               <el-option label="倒序" value="desc" />
               <el-option label="正序" value="asc" />
             </el-select>
@@ -459,6 +459,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowDown, Back, Clock, Cloudy, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, Monitor, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

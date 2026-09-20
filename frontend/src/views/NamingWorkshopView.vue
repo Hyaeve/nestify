@@ -318,7 +318,7 @@
                 <div class="insert-config__box-title">插入位置：</div>
                 <div class="insert-position-line">
                   <span>从文件名{{ insertRuleDraft.fromRight ? '右侧' : '左侧' }}第</span>
-                  <el-input-number v-model="insertRuleDraft.index" :min="1" :max="999" size="small" controls-position="right" />
+                  <el-input-number v-model="insertRuleDraft.index" field-label="插入位置" :min="1" :max="999" size="small" controls-position="right" />
                   <span>个计数点位置开始插入</span>
                 </div>
               </div>
@@ -345,13 +345,13 @@
                     <el-radio value="position">
                       <span class="inline-radio-control">
                         位置：
-                        <el-input-number v-model="deleteRuleDraft.startIndex" :min="1" :max="999" size="small" controls-position="right" />
+                        <el-input-number v-model="deleteRuleDraft.startIndex" field-label="起始位置" :min="1" :max="999" size="small" controls-position="right" />
                       </span>
                     </el-radio>
                     <el-radio value="separator">
                       <span class="inline-radio-control">
                         分隔符：
-                        <el-input v-model="deleteRuleDraft.startSeparator" size="small" class="inline-text-input inline-text-input--short" />
+                        <el-input v-model="deleteRuleDraft.startSeparator" field-label="起始分隔符" size="small" class="inline-text-input inline-text-input--short" />
                       </span>
                     </el-radio>
                   </el-radio-group>
@@ -363,13 +363,13 @@
                     <el-radio value="count">
                       <span class="inline-radio-control">
                         计数：
-                        <el-input-number v-model="deleteRuleDraft.count" :min="1" :max="999" size="small" controls-position="right" />
+                        <el-input-number v-model="deleteRuleDraft.count" field-label="删除数量" :min="1" :max="999" size="small" controls-position="right" />
                       </span>
                     </el-radio>
                     <el-radio value="separator">
                       <span class="inline-radio-control">
                         分隔符：
-                        <el-input v-model="deleteRuleDraft.endSeparator" size="small" class="inline-text-input inline-text-input--short" />
+                        <el-input v-model="deleteRuleDraft.endSeparator" field-label="结束分隔符" size="small" class="inline-text-input inline-text-input--short" />
                       </span>
                     </el-radio>
                     <el-radio value="tail">直到末尾</el-radio>
@@ -396,7 +396,7 @@
                 <div class="insert-config__box-title">填充位置：</div>
                 <div class="insert-position-line">
                   <span>从文件或文件夹名称第</span>
-                  <el-input-number v-model="padRuleDraft.index" :min="1" :max="999" size="small" controls-position="right" />
+                  <el-input-number v-model="padRuleDraft.index" field-label="填充位置" :min="1" :max="999" size="small" controls-position="right" />
                   <span>位</span>
                   <el-segmented v-model="padRuleDraft.position" :options="padPositionOptions" size="small" />
                   <span>开始填充</span>
@@ -565,6 +565,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 

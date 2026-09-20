@@ -10,6 +10,7 @@ import { setSessionExpiredHandler } from './api/http'
 import { useAuthStore } from './stores/auth'
 import { applyTheme, getStoredTheme } from './utils/theme'
 import './styles/index.scss'
+import './styles/outlined-fields.scss'
 
 applyTheme(getStoredTheme())
 

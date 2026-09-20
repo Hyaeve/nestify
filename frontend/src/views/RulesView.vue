@@ -77,7 +77,7 @@
             </div>
           </div>
           <div class="history-header-controls">
-            <el-select v-model="historySortBy" size="small" class="history-summary__control" @change="handleHistorySortChange">
+            <el-select v-model="historySortBy" field-label="排序" size="small" class="history-summary__control" @change="handleHistorySortChange">
               <el-option label="修改时间" value="modified_at" />
               <el-option label="文件名称" value="name" />
             </el-select>
@@ -93,13 +93,13 @@
                 </svg>
               </el-button>
             </el-tooltip>
-            <el-select v-model="historyStatusFilter" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
+            <el-select v-model="historyStatusFilter" field-label="状态" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
               <el-option label="全部状态" value="all" />
               <el-option label="成功" value="success" />
               <el-option label="失败" value="failed" />
               <el-option label="跳过" value="skip" />
             </el-select>
-            <el-select v-model="historyRuleTypeFilter" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
+            <el-select v-model="historyRuleTypeFilter" field-label="规则类型" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
               <el-option label="全部规则" value="all" />
               <el-option label="归档规则" value="archive" />
               <el-option label="净化规则" value="cleanup" />
@@ -110,6 +110,7 @@
             <!-- 搜索框回车即搜，不再挂「搜索 / 重置」按钮：清空有自带的小叉，回车就是提交。 -->
             <el-input
               v-model="historyKeywordInput"
+              field-label="搜索记录"
               clearable
               class="history-search__input"
               placeholder="搜索规则名 / 摘要，回车"
@@ -353,7 +354,7 @@
         </el-row>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
-        <el-form-item class="mode-select-field">
+        <OutlinedGroup class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
               <span>功能模块</span>
@@ -368,7 +369,7 @@
               <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createNamingForm.options, option.key) }" @click="toggleModeOption(createNamingForm.options, option.key)">{{ option.label }}</button>
             </el-tooltip>
           </div>
-        </el-form-item>
+        </OutlinedGroup>
         <el-row :gutter="16">
           <el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createNamingForm.monitor_enabled" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createNamingForm.enabled" /></el-form-item></el-col>
@@ -403,7 +404,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item class="mode-select-field">
+        <OutlinedGroup class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
               <span>{{ getModeTitle(createForm.archive_mode) }}</span>
@@ -418,7 +419,7 @@
               <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createArchiveOptionSource, option.key) }" @click="toggleModeOption(createArchiveOptionSource, option.key)">{{ option.label }}</button>
             </el-tooltip>
           </div>
-        </el-form-item>
+        </OutlinedGroup>
         <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
@@ -427,7 +428,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            <el-input v-model="createForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <template v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting">
@@ -436,20 +437,20 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            <el-input v-model="createForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
           <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
-        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
@@ -482,7 +483,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item class="mode-select-field">
+        <OutlinedGroup class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
               <span>{{ getModeTitle(editForm.archive_mode) }}</span>
@@ -497,7 +498,7 @@
               <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(editArchiveOptionSource, option.key) }" @click="toggleModeOption(editArchiveOptionSource, option.key)">{{ option.label }}</button>
             </el-tooltip>
           </div>
-        </el-form-item>
+        </OutlinedGroup>
         <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
@@ -506,7 +507,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editForm.match_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            <el-input v-model="editForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <template v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting">
@@ -515,20 +516,20 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editForm.nest_filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            <el-input v-model="editForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
           <div><div class="mode-config-panel__title">过滤清除</div></div>
           <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
         </button>
-        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         <template v-if="false">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤清除</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
@@ -561,7 +562,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item class="mode-select-field">
+        <OutlinedGroup class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
               <span>{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</span>
@@ -576,8 +577,8 @@
               <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(createPurifyOptionSource, option.key) }" @click="toggleModeOption(createPurifyOptionSource, option.key)">{{ option.label }}</button>
             </el-tooltip>
           </div>
-        </el-form-item>
-        <el-form-item label="监控目录">
+        </OutlinedGroup>
+        <OutlinedGroup label="监控目录">
           <div class="source-dir-editor">
             <div v-if="createPurifyForm.source_dirs.length" class="source-dir-editor__list">
               <el-tag v-for="dir in createPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeCreatePurifySourceDir(dir)">{{ dir }}</el-tag>
@@ -585,14 +586,14 @@
             <p v-else class="source-dir-editor__placeholder">暂未选择监控目录</p>
             <el-button type="primary" plain @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button>
           </div>
-        </el-form-item>
+        </OutlinedGroup>
         <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配清理</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+            <el-input v-model="createPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs">
@@ -601,7 +602,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+            <el-input v-model="createPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
           </el-form-item>
         </template>
         <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_expired_files">
@@ -619,7 +620,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
+            <el-input v-model="createPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
           </el-form-item>
         </template>
         <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text">
@@ -628,7 +629,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="createPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
+            <el-input v-model="createPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col></el-row>
@@ -662,7 +663,7 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item class="mode-select-field">
+        <OutlinedGroup class="mode-select-field">
           <template #label>
             <span class="mode-select-field__head">
               <span>{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</span>
@@ -677,8 +678,8 @@
               <button type="button" class="mode-chip" :class="{ 'is-on': isModeOptionOn(editPurifyOptionSource, option.key) }" @click="toggleModeOption(editPurifyOptionSource, option.key)">{{ option.label }}</button>
             </el-tooltip>
           </div>
-        </el-form-item>
-        <el-form-item label="监控目录">
+        </OutlinedGroup>
+        <OutlinedGroup label="监控目录">
           <div class="source-dir-editor">
             <div v-if="editPurifyForm.source_dirs.length" class="source-dir-editor__list">
               <el-tag v-for="dir in editPurifyForm.source_dirs" :key="dir" class="source-dir-editor__tag" closable @close="removeEditPurifySourceDir(dir)">{{ dir }}</el-tag>
@@ -686,14 +687,14 @@
             <p v-else class="source-dir-editor__placeholder">暂未选择监控目录</p>
             <el-button type="primary" plain @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button>
           </div>
-        </el-form-item>
+        </OutlinedGroup>
         <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">匹配清理</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.filters_text" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+            <el-input v-model="editPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
           </el-form-item>
         </template>
         <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs">
@@ -702,7 +703,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.whitelist_text" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+            <el-input v-model="editPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
           </el-form-item>
         </template>
         <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_expired_files">
@@ -720,7 +721,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.transform_rules_text" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
+            <el-input v-model="editPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
           </el-form-item>
         </template>
         <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text">
@@ -729,7 +730,7 @@
             <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
           </button>
           <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="editPurifyForm.transform_filters_text" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
+            <el-input v-model="editPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
           </el-form-item>
         </template>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col></el-row>
@@ -762,30 +763,30 @@
             <div><div class="mode-config-panel__title">媒体文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
-          <div class="strm-suffix-editor">
+          <OutlinedGroup label="媒体扩展名" class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
               <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button strm-preset-button--video" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillCreateStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
               <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button strm-preset-button--audio" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillCreateStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_suffixes" :key="suffix" closable @close="removeCreateStrmSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="createLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addCreateStrmSuffix" />
+              <el-input v-model="createLinkStrmSuffixInput" field-label="视频扩展名" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addCreateStrmSuffix" />
             </div>
-          </div>
+          </OutlinedGroup>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">元数据文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="info">图片 / 数据</el-tag></div>
           </button>
-          <div class="strm-suffix-editor">
+          <OutlinedGroup label="元数据扩展名" class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
               <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button strm-preset-button--image" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillCreateStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
               <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button strm-preset-button--data" :class="{ 'is-active': strmPresetActive(createLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillCreateStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in createLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeCreateMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="createLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addCreateMetadataSuffix" />
+              <el-input v-model="createLinkMetadataSuffixInput" field-label="元数据扩展名" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addCreateMetadataSuffix" />
             </div>
-          </div>
+          </OutlinedGroup>
           <el-row :gutter="16">
             <el-col :span="8">
               <el-form-item label="API 请求间隔">
@@ -810,14 +811,14 @@
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" field-label="过滤规则" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="createLinkForm.filters_text" field-label="过滤规则" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
           <el-col :span="linkSwitchSpan(createLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="createLinkForm.enabled" /></el-form-item></el-col>
@@ -854,30 +855,30 @@
             <div><div class="mode-config-panel__title">媒体文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="primary">Strm 后缀</el-tag></div>
           </button>
-          <div class="strm-suffix-editor">
+          <OutlinedGroup label="媒体扩展名" class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
               <el-tooltip content="视频" placement="top"><el-button class="strm-preset-button strm-preset-button--video" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'video') }" circle aria-label="视频" @click="fillEditStrmPreset('video')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="4" y="5" width="16" height="14" rx="2.5" /><path d="m10 9 5 3-5 3Z" /></svg></el-button></el-tooltip>
               <el-tooltip content="音频" placement="top"><el-button class="strm-preset-button strm-preset-button--audio" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_suffixes, 'audio') }" circle aria-label="音频" @click="fillEditStrmPreset('audio')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M9 18.5a2.5 2.5 0 1 1-1.25-2.17V6.5l9-2v10" /><path d="M16.75 14.5a2.5 2.5 0 1 1-1.25-2.17" /><path d="M7.75 9.25l9-2" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_suffixes" :key="suffix" closable @close="removeEditStrmSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="editLinkStrmSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addEditStrmSuffix" />
+              <el-input v-model="editLinkStrmSuffixInput" field-label="视频扩展名" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 mp4" @keyup.enter="addEditStrmSuffix" />
             </div>
-          </div>
+          </OutlinedGroup>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">元数据文件</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="info">图片 / 数据</el-tag></div>
           </button>
-          <div class="strm-suffix-editor">
+          <OutlinedGroup label="元数据扩展名" class="strm-suffix-editor">
             <div class="strm-suffix-editor__actions">
               <el-tooltip content="图片" placement="top"><el-button class="strm-preset-button strm-preset-button--image" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'image') }" circle aria-label="图片" @click="fillEditStrmPreset('image')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><circle cx="9" cy="10" r="1.5" /><path d="m5 18 4.5-4.5 3 3 2.5-2.5 4 4" /></svg></el-button></el-tooltip>
               <el-tooltip content="数据" placement="top"><el-button class="strm-preset-button strm-preset-button--data" :class="{ 'is-active': strmPresetActive(editLinkForm.strm_metadata_suffixes, 'data') }" circle aria-label="数据" @click="fillEditStrmPreset('data')"><svg viewBox="0 0 24 24" aria-hidden="true" class="strm-preset-button__icon"><path d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z" /><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4" /></svg></el-button></el-tooltip>
             </div>
             <div class="strm-suffix-editor__tags">
               <el-tag v-for="suffix in editLinkForm.strm_metadata_suffixes" :key="suffix" closable @close="removeEditMetadataSuffix(suffix)">{{ suffix }}</el-tag>
-              <el-input v-model="editLinkMetadataSuffixInput" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addEditMetadataSuffix" />
+              <el-input v-model="editLinkMetadataSuffixInput" field-label="元数据扩展名" class="strm-suffix-editor__input" size="small" placeholder="输入扩展名回车，如 nfo" @keyup.enter="addEditMetadataSuffix" />
             </div>
-          </div>
+          </OutlinedGroup>
           <el-row :gutter="16">
             <el-col :span="8">
               <el-form-item label="API 请求间隔">
@@ -902,14 +903,14 @@
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" field-label="过滤规则" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <template v-else>
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">过滤名单</div></div>
             <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
           </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
+          <el-form-item class="transform-section-input"><el-input v-model="editLinkForm.filters_text" field-label="过滤规则" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
         </template>
         <el-row :gutter="16">
           <el-col :span="linkSwitchSpan(editLinkForm.link_mode === 'strm')"><el-form-item label="启用规则"><el-switch v-model="editLinkForm.enabled" /></el-form-item></el-col>
@@ -936,6 +937,8 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
+import OutlinedGroup from '../components/OutlinedGroup.vue'
 import { ArrowDown, Delete, Edit } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -3653,10 +3656,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 8px;
   width: 100%;
-  padding: 12px;
-  background: var(--el-fill-color-extra-light);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
+  padding: 0;
 }
 
 .mode-chip {
@@ -3767,8 +3767,10 @@ onBeforeUnmount(() => {
 .mode-config-panel__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .mode-config-panel__title { font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
 .mode-config-panel__description { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--el-text-color-secondary); }
-.transform-section-input { margin-top: -8px; margin-bottom: 12px; }
-.transform-section-input--filters { margin-top: -6px; }
+.mode-config-toggle[disabled]:has(+ .transform-section-input),
+.mode-config-toggle[disabled]:has(+ .strm-suffix-editor) { display: none; }
+.transform-section-input { margin-top: 0; margin-bottom: 18px; }
+.transform-section-input--filters { margin-top: 0; }
 .cleanup-retention-input { margin-top: -6px; }
 .cleanup-retention-input :deep(.el-input-number) { width: 100%; max-width: 320px; }
 .mode-config-toggle { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 14px 16px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-fill-color-extra-light); cursor: pointer; text-align: left; }
@@ -3776,7 +3778,7 @@ onBeforeUnmount(() => {
 .mode-config-toggle__icon { font-size: 18px; line-height: 1; color: var(--el-text-color-secondary); transition: transform 0.2s ease; }
 .mode-config-toggle__icon.is-expanded { transform: rotate(180deg); }
 .purify-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; padding: 12px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
+.source-dir-editor { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%; }
 .source-dir-editor__list { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; min-height: 32px; }
 /* 已添加的监控目录：EP 默认 tag 走主色浅档（appletv 主题下是 #73b5de），
    压在半透明玻璃底上几乎看不见。这里显式给「浅蓝底 + 深蓝字 + 可见描边」。 */

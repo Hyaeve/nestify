@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput } from '../components/outlinedControls'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

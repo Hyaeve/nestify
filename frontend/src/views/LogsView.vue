@@ -84,7 +84,8 @@
           </el-tooltip>
 
           <el-input
-            v-model="keywordInput"
+              v-model="keywordInput"
+              field-label="搜索日志"
             class="logs-toolbar__search"
             clearable
             placeholder="搜索日志内容..."
@@ -207,6 +208,7 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedSelect as ElSelect } from '../components/outlinedControls'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 

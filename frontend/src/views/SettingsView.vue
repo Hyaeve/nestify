@@ -34,37 +34,25 @@
             <el-button type="primary" class="settings-btn-lg settings-btn-solid settings-btn-solid--settings" :loading="settingsSubmitting" @click="submitSettings">保存设置</el-button>
           </div>
           <el-form label-position="top" class="settings-basic-form">
-            <div class="settings-field-card">
-              <div class="settings-field-card__main">
-                <div class="settings-field-card__label">启动页面</div>
-              </div>
-              <el-select v-model="settingsForm.defaultPage" class="settings-field-card__select">
+            <el-form-item label="启动页面">
+              <el-select v-model="settingsForm.defaultPage">
                 <el-option v-for="option in startupPageOptions" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
-            </div>
+            </el-form-item>
 
-            <div class="settings-field-card">
-              <div class="settings-field-card__main">
-                <div class="settings-field-card__label">日志保留天数</div>
-              </div>
+            <el-form-item label="日志保留天数">
               <el-input-number v-model="settingsForm.logRetentionDays" :min="1" :max="3650" />
-            </div>
+            </el-form-item>
 
-            <div class="settings-field-card">
-              <div class="settings-field-card__main">
-                <div class="settings-field-card__label">最大日志条数</div>
-              </div>
+            <el-form-item label="最大日志条数">
               <el-input-number v-model="settingsForm.logRetentionMaxRecords" :min="1" :max="1000000" />
-            </div>
+            </el-form-item>
 
-            <div class="settings-field-card">
-              <div class="settings-field-card__main">
-                <div class="settings-field-card__label">每页文件数</div>
-              </div>
-              <el-select v-model="settingsForm.pageSize" class="settings-field-card__select">
+            <el-form-item label="每页文件数">
+              <el-select v-model="settingsForm.pageSize">
                 <el-option v-for="size in pageSizeOptions" :key="size" :label="String(size)" :value="size" />
               </el-select>
-            </div>
+            </el-form-item>
 
           </el-form>
         </section>
@@ -166,7 +154,7 @@
               <div class="cache-form__hint">将缓存数据存储在数据库中，以便在应用程序重启后保持。</div>
             </el-form-item>
 
-            <el-form-item label="忽略扩展名">
+            <OutlinedGroup label="忽略扩展名">
               <div class="cache-ignore-tags">
                 <span v-for="(ext, index) in cacheForm.ignoredExtensions" :key="ext" class="cache-ignore-tag">
                   {{ ext }}
@@ -174,12 +162,13 @@
                 </span>
                 <el-input
                   v-model="cacheIgnoreDraft"
+                  field-label="添加扩展名"
                   class="cache-ignore-input"
                   placeholder="回车添加，例如 .tmp"
                   @keyup.enter="commitIgnoredExtension"
                 />
               </div>
-            </el-form-item>
+            </OutlinedGroup>
           </el-form>
         </section>
       </div>
@@ -219,6 +208,8 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
+import OutlinedGroup from '../components/OutlinedGroup.vue'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -801,34 +792,8 @@ async function handleBackupFileChange(file: UploadFile) {
   gap: 8px;
 }
 
-.settings-field-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 14px;
-  border: 1px solid #edf2f7;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-}
-
-.settings-field-card__main {
-  min-width: 0;
-}
-
-.settings-field-card__label {
-  color: #1e293b;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.settings-field-card :deep(.el-input-number) {
-  flex: 0 0 auto;
-}
-
-.settings-field-card__select {
-  flex: 0 0 auto;
-  width: 148px;
+.settings-basic-form :deep(.outlined-field--number) {
+  width: 100%;
 }
 
 .settings-submit-row {

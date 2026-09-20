@@ -21,12 +21,12 @@
       </div>
 
       <template v-if="is115">
-        <el-form-item label="登录方式">
+        <OutlinedGroup label="登录方式">
           <el-radio-group v-model="loginMode">
             <el-radio-button value="cookie">CK</el-radio-button>
             <el-radio-button value="qrcode">扫码登录</el-radio-button>
           </el-radio-group>
-        </el-form-item>
+        </OutlinedGroup>
         <div class="mount-form__row">
           <el-form-item label="CK 对应设备类型" class="mount-form__row-item">
             <el-select v-model="form.device" :loading="loadingDevices">
@@ -63,7 +63,7 @@
         </el-form-item>
       </div>
 
-      <el-form-item label="认证方式">
+      <OutlinedGroup v-if="isOpenList" label="认证方式">
         <el-radio-group v-model="form.auth_type" class="mount-form__auth">
           <el-radio-button value="password">用户名密码</el-radio-button>
           <el-radio-button value="token">令牌</el-radio-button>
@@ -71,9 +71,9 @@
         <div v-if="form.auth_type === 'token'" class="mount-form__hint">
           令牌取自 OpenList 后台「设置 → 令牌」中的永久令牌。
         </div>
-      </el-form-item>
+      </OutlinedGroup>
 
-      <div v-if="form.auth_type === 'password'" class="mount-form__row">
+      <div v-if="!isOpenList || form.auth_type === 'password'" class="mount-form__row">
         <el-form-item label="用户名" class="mount-form__row-item">
           <el-input v-model="form.username" :placeholder="usernamePlaceholder" autocomplete="off" />
         </el-form-item>
@@ -120,6 +120,8 @@
 </template>
 
 <script setup lang="ts">
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from './outlinedControls'
+import OutlinedGroup from './OutlinedGroup.vue'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -291,7 +293,7 @@ watch(
     form.name = mount?.name ?? ''
     form.provider = mount?.provider ?? 'webdav'
     if (form.provider === '115') void loadDevices()
-    form.auth_type = mount?.auth_type ?? 'password'
+    form.auth_type = form.provider === 'openlist' ? mount?.auth_type ?? 'password' : 'password'
     form.scheme = mount?.scheme ?? 'http'
     form.host = mount?.host ?? ''
     // 新建时按类型给默认端口（OpenList 5244），编辑时用已保存的值。
@@ -313,6 +315,10 @@ watch(
 function handleProviderChange(next: MountProvider | string) {
   stopQRCode()
   form.cookie = ''
+  if (next !== 'openlist') {
+    form.auth_type = 'password'
+    form.token = ''
+  }
   if (next === '115') {
     void loadDevices()
     form.base_path = ''
@@ -355,7 +361,7 @@ async function loadMountSecrets(id: number) {
       form.provider = response.data.provider
     }
     if (response.data?.auth_type) {
-      form.auth_type = response.data.auth_type
+      form.auth_type = isOpenList.value ? response.data.auth_type : 'password'
     }
   } catch {
     // 拉取失败时保持空值，用户可自行重新填写。
@@ -376,13 +382,13 @@ function buildPayload(): MountInput {
     request_interval_ms: Number(form.request_interval_ms) || 0,
     name: form.name.trim(),
     provider: form.provider,
-    auth_type: form.auth_type,
+    auth_type: isOpenList.value ? form.auth_type : 'password',
     scheme: form.scheme,
     host: form.host.trim(),
     port: Number(form.port) || 0,
     username: form.username.trim(),
     password: is115.value ? '' : form.password,
-    token: is115.value ? '' : form.token.trim(),
+    token: isOpenList.value && form.auth_type === 'token' ? form.token.trim() : '',
     base_path: form.base_path.trim(),
     enabled: form.enabled,
   }
@@ -400,7 +406,7 @@ function validateForm(): string | null {
   if (!form.host.trim()) {
     return '请填写域名或 IP'
   }
-  if (form.auth_type === 'token' && !form.token.trim()) {
+  if (isOpenList.value && form.auth_type === 'token' && !form.token.trim()) {
     return '请填写令牌'
   }
   return null
@@ -510,6 +516,10 @@ async function handleSubmit() {
 
 .mount-dialog-footer__spacer {
   flex: 1 1 auto;
+}
+
+.mount-form :deep(.outlined-field--number) {
+  width: 100%;
 }
 
 .mount-qrcode {
