@@ -70,6 +70,9 @@ func (s *Service) executeWebdavStrmRule(runID string, req ExecuteRuleRequest, so
 	if !credential.Mount.Enabled {
 		return *stats, fmt.Errorf("WebDAV 挂载「%s」已停用", credential.Mount.Name)
 	}
+	if credential.Mount.Provider == model.MountProvider115 {
+		return *stats, fmt.Errorf("115 原生挂载暂不支持生成 STRM，请使用 OpenList 提供稳定播放地址")
+	}
 
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return *stats, fmt.Errorf("create target dir: %w", err)

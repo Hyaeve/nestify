@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"nestify/backend/internal/model"
+	"nestify/backend/internal/pan115"
 )
 
 // defaultMinRequestInterval 是同一个挂载点两次请求之间的默认最小间隔，
@@ -43,6 +44,7 @@ type Entry struct {
 }
 
 type Client struct {
+	pan115     *pan115.Client
 	baseURL    string
 	basePath   string
 	provider   string
@@ -64,6 +66,14 @@ type Client struct {
 
 func NewClient(credential model.MountCredential) *Client {
 	mount := credential.Mount
+	if mount.Provider == model.MountProvider115 {
+		return &Client{
+			provider: mount.Provider,
+			pan115: &pan115.Client{Cookie: credential.Cookie, Device: mount.Device, Root: mount.BasePath,
+				Interval: time.Duration(mount.RequestIntervalMS) * time.Millisecond},
+			minInterval: time.Duration(mount.RequestIntervalMS) * time.Millisecond,
+		}
+	}
 	transport := &http.Transport{
 		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 		MaxIdleConns:        8,
@@ -131,6 +141,10 @@ func (c *Client) SetRequestInterval(interval time.Duration) {
 		interval = 0
 	}
 	c.minInterval = interval
+	if c.pan115 != nil {
+		c.pan115.Interval = max(c.pan115.Interval, interval)
+		c.minInterval = c.pan115.Interval
+	}
 }
 
 // RequestInterval 返回当前的请求最小间隔。
@@ -142,6 +156,10 @@ func (c *Client) RequestInterval() time.Duration {
 // 并发工作线程各持有一份，可让「API 请求间隔」按线程生效，而不是全局串行等待。
 // 这里显式逐字段构造，避免复制内含 sync.Mutex 的结构体。
 func (c *Client) Fork() *Client {
+	if c.pan115 != nil {
+		copy := *c.pan115
+		return &Client{provider: c.provider, pan115: &copy, minInterval: c.minInterval}
+	}
 	return &Client{
 		baseURL:        c.baseURL,
 		basePath:       c.basePath,
@@ -242,6 +260,9 @@ func (c *Client) requestURL(internalPath string) string {
 
 // PutFile 通过 PUT 上传文件内容到 WebDAV 内部路径（自动创建父目录可选项由上层处理）。
 func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Reader, size int64) error {
+	if c.pan115 != nil {
+		return errors.New("115 挂载暂不支持上传或作为备份目标")
+	}
 	if err := c.Wait(ctx); err != nil {
 		return err
 	}
@@ -280,6 +301,9 @@ func (c *Client) PutFile(ctx context.Context, internalPath string, content io.Re
 // 先写 `<target>.download` 再改名，避免半截文件被媒体服务器读到；
 // 与列目录一样遵守「API 请求间隔」并复用同一份连接池。
 func (c *Client) Download(ctx context.Context, internalPath, targetPath string) error {
+	if c.pan115 != nil {
+		return c.download115(ctx, internalPath, targetPath)
+	}
 	if err := c.Wait(ctx); err != nil {
 		return err
 	}
@@ -340,6 +364,9 @@ func (c *Client) Download(ctx context.Context, internalPath, targetPath string) 
 
 // MkdirAll 在 WebDAV 上逐级创建目录（MKCOL）。已存在则忽略。
 func (c *Client) MkdirAll(ctx context.Context, internalPath string) error {
+	if c.pan115 != nil {
+		return errors.New("115 挂载暂不支持创建目录或作为备份目标")
+	}
 	normalized := normalizeInternalPath(internalPath)
 	if normalized == "" {
 		return nil
@@ -397,6 +424,10 @@ func (c *Client) mkcol(ctx context.Context, internalPath string) error {
 
 // Exists 判断某内部路径是否存在（文件或目录）。
 func (c *Client) Exists(ctx context.Context, internalPath string) (bool, error) {
+	if c.pan115 != nil {
+		_, exists, err := c.Stat(ctx, internalPath)
+		return exists, err
+	}
 	if err := c.Wait(ctx); err != nil {
 		return false, err
 	}
@@ -446,6 +477,9 @@ func (c *Client) DeleteCollection(ctx context.Context, internalPath string) erro
 }
 
 func (c *Client) delete(ctx context.Context, internalPath string, collection bool) error {
+	if c.pan115 != nil {
+		return c.pan115.Delete(ctx, internalPath, collection)
+	}
 	if err := c.Wait(ctx); err != nil {
 		return err
 	}
@@ -522,6 +556,9 @@ const (
 
 // List 列出 internalPath 下的直接子项（PROPFIND Depth: 1）。internalPath 为空表示挂载根目录。
 func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error) {
+	if c.pan115 != nil {
+		return c.list115(ctx, internalPath)
+	}
 	entries, err := c.doPropfind(ctx, internalPath, depthOne, true, false)
 	if err != nil {
 		return nil, err
@@ -553,6 +590,9 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 // 仅对支持无限深度的服务端（OpenList / Alist / SabreDAV 等）调用；
 // 受限实现可能返回 403/400，调用方需回落到逐目录列举。
 func (c *Client) ListRecursive(ctx context.Context, internalPath string, withSize bool) ([]Entry, error) {
+	if c.pan115 != nil {
+		return nil, errors.New("115 不支持一次请求递归列举，请逐层浏览")
+	}
 	return c.doPropfind(ctx, internalPath, depthInfinity, withSize, false)
 }
 
@@ -568,6 +608,16 @@ var errRemoteNotFound = errors.New("远端路径不存在（HTTP 404）")
 // 必须先确认监控目录真的是个目录（WebDAV 没有本地那种 Stat），
 // 而 List 会把「请求目录自己」这条过滤掉，是拿不到它的。
 func (c *Client) Stat(ctx context.Context, internalPath string) (Entry, bool, error) {
+	if c.pan115 != nil {
+		file, err := c.pan115.Stat(ctx, internalPath)
+		if errors.Is(err, pan115.ErrNotFound) {
+			return Entry{}, false, nil
+		}
+		if err != nil {
+			return Entry{}, false, err
+		}
+		return Entry{Name: file.Name, Path: normalizeInternalPath(internalPath), IsDir: file.IsDirectory, Size: file.Size, ModifiedAt: file.UpdateTime}, true, nil
+	}
 	entries, err := c.doPropfind(ctx, internalPath, depthZero, true, true)
 	if err != nil {
 		if errors.Is(err, errRemoteNotFound) {

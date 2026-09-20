@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// MountPathScheme 是虚拟 WebDAV 挂载路径的协议前缀，形如 webdav://12 或 webdav://12/移动云盘/电视剧。
+// MountPathScheme 沿用虚拟挂载前缀；115 也使用它，由 Provider 决定实际远端协议。
 const MountPathScheme = "webdav://"
 
 // 挂载类型。webdav 是通用 WebDAV 服务，openlist 指向 OpenList / Alist，
@@ -14,6 +14,7 @@ const MountPathScheme = "webdav://"
 const (
 	MountProviderWebdav   = "webdav"
 	MountProviderOpenList = "openlist"
+	MountProvider115      = "115"
 )
 
 // 认证方式。password 走 HTTP Basic（用户名 + 密码），
@@ -26,10 +27,14 @@ const (
 // OpenListDefaultPort 是 OpenList 的默认监听端口，选定 OpenList 后前端会自动填入。
 const OpenListDefaultPort = 5244
 
-// WebdavMount 描述一个 OpenList / WebDAV 挂载点。
+// WebdavMount 描述远程挂载，保留类型名以兼容现有 WebDAV/OpenList 调用点。
 type WebdavMount struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	Device            string `json:"device"`
+	RequestIntervalMS int    `json:"request_interval_ms"`
+	HasCookie         bool   `json:"has_cookie"`
+	Cookie            string `json:"cookie,omitempty"`
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
 	// Provider 区分挂载类型：webdav（通用）或 openlist（OpenList / Alist）。
 	// OpenList 类型生成 Strm 时走原生递归列举，请求次数从「每个目录一次」降到一次。
 	Provider    string `json:"provider"`
@@ -54,44 +59,54 @@ type WebdavMount struct {
 }
 
 type CreateMountInput struct {
-	Name      string `json:"name"`
-	Provider  string `json:"provider"`
-	AuthType  string `json:"auth_type"`
-	Scheme    string `json:"scheme"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	Token     string `json:"token"`
-	BasePath  string `json:"base_path"`
-	Enabled   *bool  `json:"enabled"`
-	SortOrder int    `json:"sort_order"`
+	Device            string `json:"device"`
+	RequestIntervalMS int    `json:"request_interval_ms"`
+	Cookie            string `json:"cookie"`
+	Name              string `json:"name"`
+	Provider          string `json:"provider"`
+	AuthType          string `json:"auth_type"`
+	Scheme            string `json:"scheme"`
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	Token             string `json:"token"`
+	BasePath          string `json:"base_path"`
+	Enabled           *bool  `json:"enabled"`
+	SortOrder         int    `json:"sort_order"`
 }
 
 type UpdateMountInput struct {
-	Name      string `json:"name"`
-	Provider  string `json:"provider"`
-	AuthType  string `json:"auth_type"`
-	Scheme    string `json:"scheme"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	Token     string `json:"token"`
-	BasePath  string `json:"base_path"`
-	Enabled   *bool  `json:"enabled"`
-	SortOrder int    `json:"sort_order"`
+	Device            string `json:"device"`
+	RequestIntervalMS int    `json:"request_interval_ms"`
+	Cookie            string `json:"cookie"`
+	Name              string `json:"name"`
+	Provider          string `json:"provider"`
+	AuthType          string `json:"auth_type"`
+	Scheme            string `json:"scheme"`
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	Token             string `json:"token"`
+	BasePath          string `json:"base_path"`
+	Enabled           *bool  `json:"enabled"`
+	SortOrder         int    `json:"sort_order"`
 }
 
 // MountCredential 携带明文口令与令牌，仅供服务端内部建立连接使用，绝不出现在 HTTP 响应里。
 type MountCredential struct {
+	Cookie   string
 	Mount    WebdavMount
 	Password string
 	Token    string
 }
 
-// NormalizeMountProvider 把用户输入统一成 webdav / openlist，未知值回退为 webdav。
+// NormalizeMountProvider 把用户输入统一成 webdav / openlist / 115，未知值回退为 webdav。
 func NormalizeMountProvider(value string) string {
+	if strings.TrimSpace(value) == MountProvider115 {
+		return MountProvider115
+	}
 	if strings.EqualFold(strings.TrimSpace(value), MountProviderOpenList) {
 		return MountProviderOpenList
 	}
@@ -172,6 +187,9 @@ func NormalizeMountBasePath(value string) string {
 
 // BuildMountBaseURL 拼接挂载的 http 根地址，例如 http://10.0.0.31:25244。
 func BuildMountBaseURL(mount WebdavMount) string {
+	if mount.Provider == MountProvider115 {
+		return "https://115.com"
+	}
 	host := mount.Host
 	port := mount.Port
 	scheme := NormalizeMountScheme(mount.Scheme)

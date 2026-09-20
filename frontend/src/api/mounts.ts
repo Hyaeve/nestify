@@ -4,7 +4,7 @@ import type { BrowseDirectoriesPayload } from './paths'
 export { MOUNT_PATH_SCHEME, isMountPath } from './paths'
 
 /** 挂载类型：通用 WebDAV 或 OpenList（后者支持原生递归列举生成 Strm）。 */
-export type MountProvider = 'webdav' | 'openlist'
+export type MountProvider = 'webdav' | 'openlist' | '115'
 
 /** 认证方式：用户名 + 密码（Basic）或 OpenList 永久令牌（Bearer）。 */
 export type MountAuthType = 'password' | 'token'
@@ -13,6 +13,10 @@ export type MountAuthType = 'password' | 'token'
 export const OPENLIST_DEFAULT_PORT = 5244
 
 export interface WebdavMount {
+  device: string
+  request_interval_ms: number
+  has_cookie: boolean
+  cookie?: string
   id: number
   name: string
   provider: MountProvider
@@ -37,6 +41,9 @@ export interface WebdavMount {
 }
 
 export interface MountInput {
+  device: string
+  request_interval_ms: number
+  cookie: string
   name: string
   provider: MountProvider
   auth_type: MountAuthType
@@ -94,4 +101,16 @@ export function browseMountDirectory(path: string) {
 
 export function testMountConnection(payload: MountInput) {
   return postJSON<{ count: number }>('/api/v1/mounts/test', payload)
+}
+
+export function fetch115Devices() {
+  return getJSON<{ value: string; label: string }[]>('/api/v1/mounts/115/devices')
+}
+
+export function start115QRCode(device: string, request_interval_ms: number) {
+  return postJSON<{ session_id: string; image: string; expires_at: string }>('/api/v1/mounts/115/qrcode', { device, request_interval_ms })
+}
+
+export function poll115QRCode(session_id: string) {
+  return postJSON<{ status: number; cookie: string; device: string }>('/api/v1/mounts/115/qrcode/status', { session_id })
 }

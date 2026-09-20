@@ -338,6 +338,9 @@ func (s *Store) ensureMountProviderColumns() error {
 		{"provider", `provider TEXT NOT NULL DEFAULT 'webdav'`},
 		{"auth_type", `auth_type TEXT NOT NULL DEFAULT 'password'`},
 		{"token", `token TEXT NOT NULL DEFAULT ''`},
+		{"cookie", `cookie TEXT NOT NULL DEFAULT ''`},
+		{"device", `device TEXT NOT NULL DEFAULT 'web'`},
+		{"request_interval_ms", `request_interval_ms INTEGER NOT NULL DEFAULT 1000`},
 	}
 
 	for _, col := range columns {

@@ -6,16 +6,17 @@ RUN npm ci --include=dev
 COPY frontend/ ./
 RUN npm run build
 
-FROM golang:1.22-alpine AS backend-builder
+FROM golang:1.23-alpine AS backend-builder
 WORKDIR /workspace/backend
 COPY backend/go.mod ./
+COPY backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/nestify ./cmd/server
 
 FROM alpine:3.20
 WORKDIR /app
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata ca-certificates
 COPY --from=backend-builder /out/nestify /app/nestify
 COPY --from=frontend-builder /workspace/frontend/dist /app/web
 COPY config/config.example.yaml /config/config.example.yaml

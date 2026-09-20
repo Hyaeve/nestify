@@ -62,7 +62,8 @@ func (a *apiHandler) handleMounts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if message := validateMountInput(input.Name, input.Host, input.Port); message != "" {
+		input.Provider = model.NormalizeMountProvider(input.Provider)
+		if message := validateMountInputForProvider(input.Name, input.Host, input.Port, input.Provider, input.Cookie, input.Device, input.BasePath, input.RequestIntervalMS, false); message != "" {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{
 				Success: false,
 				Code:    "INVALID_MOUNT",
@@ -138,6 +139,8 @@ func (a *apiHandler) handleMountByID(w http.ResponseWriter, r *http.Request) {
 		detail := credential.Mount
 		detail.Password = credential.Password
 		detail.Token = credential.Token
+		detail.Cookie = credential.Cookie
+		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, http.StatusOK, jsonResponse{Success: true, Code: "OK", Message: "WebDAV 挂载已加载", Data: detail})
 	case http.MethodPut:
 		var input model.UpdateMountInput
@@ -146,7 +149,18 @@ func (a *apiHandler) handleMountByID(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if message := validateMountInput(input.Name, input.Host, input.Port); message != "" {
+		input.Provider = model.NormalizeMountProvider(input.Provider)
+		if input.Provider == model.MountProvider115 && strings.TrimSpace(input.Cookie) == "" {
+			existing, err := a.store.GetMountCredential(id)
+			if err != nil {
+				writeInternalError(w, err)
+				return
+			}
+			if existing != nil && existing.Mount.Provider == model.MountProvider115 {
+				input.Cookie = existing.Cookie
+			}
+		}
+		if message := validateMountInputForProvider(input.Name, input.Host, input.Port, input.Provider, input.Cookie, input.Device, input.BasePath, input.RequestIntervalMS, false); message != "" {
 			writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_MOUNT", Message: message})
 			return
 		}
@@ -259,27 +273,31 @@ func (a *apiHandler) handleMountTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if message := validateMountInput(input.Name, input.Host, input.Port); message != "" {
+	input.Provider = model.NormalizeMountProvider(input.Provider)
+	if message := validateMountInputForProvider(input.Name, input.Host, input.Port, input.Provider, input.Cookie, input.Device, input.BasePath, input.RequestIntervalMS, false); message != "" {
 		writeJSON(w, http.StatusBadRequest, jsonResponse{Success: false, Code: "INVALID_MOUNT", Message: message})
 		return
 	}
 
 	mount := model.WebdavMount{
-		Name:     strings.TrimSpace(input.Name),
-		Provider: model.NormalizeMountProvider(input.Provider),
-		AuthType: model.NormalizeMountAuthType(input.AuthType),
-		Scheme:   model.NormalizeMountScheme(input.Scheme),
-		Host:     strings.TrimSpace(input.Host),
-		Port:     input.Port,
-		Username: strings.TrimSpace(input.Username),
-		BasePath: model.NormalizeMountBasePath(input.BasePath),
-		Enabled:  true,
+		Device:            input.Device,
+		RequestIntervalMS: input.RequestIntervalMS,
+		Name:              strings.TrimSpace(input.Name),
+		Provider:          model.NormalizeMountProvider(input.Provider),
+		AuthType:          model.NormalizeMountAuthType(input.AuthType),
+		Scheme:            model.NormalizeMountScheme(input.Scheme),
+		Host:              strings.TrimSpace(input.Host),
+		Port:              input.Port,
+		Username:          strings.TrimSpace(input.Username),
+		BasePath:          model.NormalizeMountBasePath(input.BasePath),
+		Enabled:           true,
 	}
 
 	client := webdav.NewClient(model.MountCredential{
 		Mount:    mount,
 		Password: input.Password,
 		Token:    strings.TrimSpace(input.Token),
+		Cookie:   strings.TrimSpace(input.Cookie),
 	})
 	entries, err := client.List(r.Context(), "")
 	if err != nil {
@@ -310,6 +328,16 @@ func validateMountInput(name, host string, port int) string {
 		return "端口必须在 0 - 65535 之间"
 	}
 	return ""
+}
+
+func validateMountInputForProvider(name, host string, port int, provider, cookie, device, basePath string, interval int, allowEmpty bool) string {
+	if provider != model.MountProvider115 {
+		return validateMountInput(name, host, port)
+	}
+	if strings.TrimSpace(name) == "" {
+		return "挂载名称不能为空"
+	}
+	return validate115Mount(provider, cookie, device, basePath, interval, allowEmpty)
 }
 
 func (a *apiHandler) reloadPathBrowse() {

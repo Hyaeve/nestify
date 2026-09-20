@@ -1,24 +1,39 @@
 module nestify/backend
 
-go 1.22
+go 1.23.0
+
+require github.com/SheltonZhu/115driver v1.3.5
 
 require modernc.org/sqlite v1.30.1
 
-require golang.org/x/crypto v0.24.0
-
-require github.com/robfig/cron/v3 v3.0.1
+require golang.org/x/crypto v0.41.0
 
 require (
+	github.com/go-resty/resty/v2 v2.17.2
+	github.com/liuzl/gocc v0.0.0-20231231122217-0372e1059ca5
+	github.com/robfig/cron/v3 v3.0.1
+)
+
+require (
+	github.com/adamzy/cedar-go v0.0.0-20170805034717-80a9c64b256d // indirect
+	github.com/aead/ecdh v0.2.0 // indirect
+	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible // indirect
+	github.com/andreburgaud/crypt2go v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/liuzl/cedar-go v0.0.0-20170805034717-80a9c64b256d // indirect
 	github.com/liuzl/da v0.0.0-20180704015230-14771aad5b1d // indirect
-	github.com/liuzl/gocc v0.0.0-20231231122217-0372e1059ca5 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/pierrec/lz4/v4 v4.1.17 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
+	golang.org/x/net v0.43.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/time v0.12.0 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.52.1 // indirect
 	modernc.org/mathutil v1.6.0 // indirect

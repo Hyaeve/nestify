@@ -8,7 +8,7 @@ import (
 	"nestify/backend/internal/model"
 )
 
-const mountColumns = `id, name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at`
+const mountColumns = `id, name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at, cookie, device, request_interval_ms`
 
 // ListMountCredentials 返回全部挂载（含明文口令），仅限服务端内部使用。
 func (s *Store) ListMountCredentials(enabledOnly bool) ([]model.MountCredential, error) {
@@ -71,8 +71,8 @@ func (s *Store) CreateMount(input model.CreateMountInput) (*model.WebdavMount, e
 	}
 
 	result, err := s.db.Exec(`
-		INSERT INTO webdav_mounts (name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+		INSERT INTO webdav_mounts (name, provider, auth_type, scheme, host, port, username, password, token, base_path, enabled, sort_order, created_at, updated_at, cookie, device, request_interval_ms)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 	`,
 		strings.TrimSpace(input.Name),
 		model.NormalizeMountProvider(input.Provider),
@@ -88,6 +88,9 @@ func (s *Store) CreateMount(input model.CreateMountInput) (*model.WebdavMount, e
 		input.SortOrder,
 		now,
 		now,
+		strings.TrimSpace(input.Cookie),
+		input.Device,
+		input.RequestIntervalMS,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert mount: %w", err)
@@ -131,11 +134,18 @@ func (s *Store) UpdateMount(id int64, input model.UpdateMountInput) (*model.Webd
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
+	cookie := strings.TrimSpace(input.Cookie)
+	if cookie == "" && input.Provider == existing.Mount.Provider {
+		cookie = existing.Cookie
+	}
+	if input.Provider != model.MountProvider115 {
+		cookie = ""
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := s.db.Exec(`
 		UPDATE webdav_mounts
-		SET name = ?, provider = ?, auth_type = ?, scheme = ?, host = ?, port = ?, username = ?, password = ?, token = ?, base_path = ?, enabled = ?, sort_order = ?, updated_at = ?
+		SET name = ?, provider = ?, auth_type = ?, scheme = ?, host = ?, port = ?, username = ?, password = ?, token = ?, base_path = ?, enabled = ?, sort_order = ?, updated_at = ?, cookie = ?, device = ?, request_interval_ms = ?
 		WHERE id = ?;
 	`,
 		strings.TrimSpace(input.Name),
@@ -151,6 +161,9 @@ func (s *Store) UpdateMount(id int64, input model.UpdateMountInput) (*model.Webd
 		boolToInt(enabled),
 		input.SortOrder,
 		now,
+		cookie,
+		input.Device,
+		input.RequestIntervalMS,
 		id,
 	); err != nil {
 		return nil, fmt.Errorf("update mount: %w", err)
@@ -265,31 +278,37 @@ func scanMountWithPassword(scanner mountScanner) (model.MountCredential, error) 
 		sortOrder       int
 		createdAtSource string
 		updatedAtSource string
+		cookie          string
+		device          string
+		interval        int
 	)
 
-	if err := scanner.Scan(&id, &name, &provider, &authType, &scheme, &host, &port, &username, &password, &token, &basePath, &enabled, &sortOrder, &createdAtSource, &updatedAtSource); err != nil {
+	if err := scanner.Scan(&id, &name, &provider, &authType, &scheme, &host, &port, &username, &password, &token, &basePath, &enabled, &sortOrder, &createdAtSource, &updatedAtSource, &cookie, &device, &interval); err != nil {
 		return model.MountCredential{}, fmt.Errorf("scan mount: %w", err)
 	}
 
 	mount := model.WebdavMount{
-		ID:          id,
-		Name:        name,
-		Provider:    model.NormalizeMountProvider(provider),
-		AuthType:    model.NormalizeMountAuthType(authType),
-		Scheme:      model.NormalizeMountScheme(scheme),
-		Host:        host,
-		Port:        port,
-		Username:    username,
-		HasPassword: strings.TrimSpace(password) != "",
-		HasToken:    strings.TrimSpace(token) != "",
-		BasePath:    model.NormalizeMountBasePath(basePath),
-		Enabled:     intToBool(enabled),
-		SortOrder:   sortOrder,
+		Device:            device,
+		RequestIntervalMS: interval,
+		HasCookie:         cookie != "",
+		ID:                id,
+		Name:              name,
+		Provider:          model.NormalizeMountProvider(provider),
+		AuthType:          model.NormalizeMountAuthType(authType),
+		Scheme:            model.NormalizeMountScheme(scheme),
+		Host:              host,
+		Port:              port,
+		Username:          username,
+		HasPassword:       strings.TrimSpace(password) != "",
+		HasToken:          strings.TrimSpace(token) != "",
+		BasePath:          model.NormalizeMountBasePath(basePath),
+		Enabled:           intToBool(enabled),
+		SortOrder:         sortOrder,
 	}
 	mount.BaseURL = model.BuildMountBaseURL(mount)
 	mount.VirtualPath = model.BuildMountVirtualPath(id)
 	mount.CreatedAt, _ = time.Parse(time.RFC3339, createdAtSource)
 	mount.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAtSource)
 
-	return model.MountCredential{Mount: mount, Password: password, Token: token}, nil
+	return model.MountCredential{Mount: mount, Password: password, Token: token, Cookie: cookie}, nil
 }

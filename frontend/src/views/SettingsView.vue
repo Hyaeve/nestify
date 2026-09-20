@@ -94,7 +94,7 @@
           </div>
 
           <div v-if="mounts.length === 0" class="mounts-empty">
-            暂无挂载，点击右上角「添加挂载」连接 WebDAV 网盘。
+            暂无远程挂载。
           </div>
 
           <div v-else class="mounts-list">
@@ -116,7 +116,7 @@
               </div>
               <div class="mount-card__body">
                 <div class="mount-card__name">{{ mount.name }}</div>
-                <div class="mount-card__meta">{{ mount.base_url }}</div>
+                <div class="mount-card__meta">{{ mount.provider === '115' ? `115 网盘 · ${mount.device}` : mount.base_url }}</div>
                 <div class="mount-card__state">
                   <span class="mount-card__dot" :class="{ 'is-on': mount.enabled }"></span>
                   {{ mount.enabled ? '已启用' : '已停用' }}
@@ -464,6 +464,9 @@ async function handleMountCommand(command: string, mount: WebdavMount) {
     const enabled = command === 'enable'
     try {
       await updateMount(mount.id, {
+        device: mount.device,
+        request_interval_ms: mount.request_interval_ms,
+        cookie: '',
         name: mount.name,
         provider: mount.provider,
         auth_type: mount.auth_type,

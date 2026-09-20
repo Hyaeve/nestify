@@ -42,12 +42,13 @@ type Dependencies struct {
 }
 
 type apiHandler struct {
-	env        config.Env
-	store      *sqlite.Store
-	sessions   *auth.SessionManager
-	pathBrowse *pathbrowse.Service
-	executor   *executor.Service
-	backups    *backup.Service
+	env          config.Env
+	store        *sqlite.Store
+	sessions     *auth.SessionManager
+	pathBrowse   *pathbrowse.Service
+	executor     *executor.Service
+	backups      *backup.Service
+	pan115Logins pan115LoginStore
 }
 
 func NewRouter(deps Dependencies) http.Handler {
@@ -152,6 +153,9 @@ func NewRouter(deps Dependencies) http.Handler {
 	mux.HandleFunc("/api/v1/rules/", api.handleRuleByID)
 	mux.HandleFunc("/api/v1/mounts", api.handleMounts)
 	mux.HandleFunc("/api/v1/mounts/test", api.handleMountTest)
+	mux.HandleFunc("/api/v1/mounts/115/devices", api.handle115Devices)
+	mux.HandleFunc("/api/v1/mounts/115/qrcode", api.handle115QRCode)
+	mux.HandleFunc("/api/v1/mounts/115/qrcode/status", api.handle115QRCodeStatus)
 	mux.HandleFunc("/api/v1/mounts/browse", api.handleMountBrowse)
 	mux.HandleFunc("/api/v1/mounts/", api.handleMountByID)
 	mux.HandleFunc("/api/v1/backups", api.handleBackups)
