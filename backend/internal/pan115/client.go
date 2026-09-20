@@ -21,23 +21,57 @@ type Device struct {
 	Label string `json:"label"`
 }
 
+// Devices 是 115 官方客户端的设备类型清单，`Value` 即扫码登录接口里 app 段的取值
+// （`https://passportapi.115.com/app/1.0/<app>/1.0/login/qrcode`）。
+//
+// 注意 SDK 的 driver.LoginApp 常量只覆盖其中 7 项（web / android / ios / tv /
+// alipaymini / wechatmini / qandroid），而且自 v1.3.5 起已是最后一版，所以这里
+// 直接维护「设备值 → 中文名」，不再依赖 SDK 常量；app 段本来就是普通字符串。
+// 设备只影响两处：扫码时用哪个客户端换 CK，以及请求头 UA（见 deviceUserAgent）。
 var Devices = []Device{
-	{string(driver.LoginAppWeb), "网页端"},
-	{string(driver.LoginAppAndroid), "Android"},
-	{string(driver.LoginAppIOS), "iOS"},
-	{string(driver.LoginAppTV), "电视端"},
-	{string(driver.LoginAppAlipayMini), "支付宝小程序"},
-	{string(driver.LoginAppWechatMini), "微信小程序"},
-	{string(driver.LoginQAppAndroid), "115管理 Android"},
+	{"web", "115生活_网页端"},
+	{"ios", "115生活_苹果端"},
+	{"115ios", "115_苹果端"},
+	{"android", "115生活_安卓端"},
+	{"115android", "115_安卓端"},
+	{"ipad", "115生活_苹果平板端"},
+	{"115ipad", "115_苹果平板端"},
+	{"qandroid", "115管理_安卓端"},
+	{"qios", "115管理_苹果端"},
+	{"qipad", "115管理_苹果平板端"},
+	{"os_windows", "115生活_Windows端"},
+	{"os_mac", "115生活_macOS端"},
+	{"os_linux", "115生活_Linux端"},
+	{"wechatmini", "115生活_微信小程序端"},
+	{"alipaymini", "115生活_支付宝小程序端"},
+	{"harmony", "115_鸿蒙端"},
 }
 
+// legacyDevices 是历史版本已经写进挂载配置、但已不在下拉里的设备值：
+// 仍允许保存与运行，免得老配置一编辑就被「请选择有效的 115 设备类型」挡住。
+// tv 是旧版下拉里的「电视端」（SDK 有常量，115 现行设备清单里没有）。
+var legacyDevices = map[string]bool{"tv": true}
+
 func ValidDevice(value string) bool {
+	if legacyDevices[value] {
+		return true
+	}
 	for _, device := range Devices {
 		if device.Value == value {
 			return true
 		}
 	}
 	return false
+}
+
+// deviceUserAgent 按设备挑请求头 UA。115 的 CK 与客户端绑定，苹果系的 CK
+// 需要 iOS 客户端 UA 才能正常访问（SDK 只提供这一个移动端常量，os_mac 等
+// 桌面端沿用默认 UA）。SDK 没有逐设备的 UA 表，这里按设备名前缀判断。
+func deviceUserAgent(device string) string {
+	if strings.Contains(device, "ios") || strings.Contains(device, "ipad") {
+		return driver.UAIosApp
+	}
+	return driver.UADefault
 }
 
 func ParseCookie(value string) (*driver.Credential, error) {
@@ -128,10 +162,7 @@ func NewDriver(ctx context.Context, cookie, device string, interval time.Duratio
 	}
 	hash := sha256.Sum256([]byte(key))
 	transport := throttledTransport{base: http.DefaultTransport, gate: accountGates[hash[0]], interval: interval}
-	userAgent := driver.UADefault
-	if device == string(driver.LoginAppIOS) {
-		userAgent = driver.UAIosApp
-	}
+	userAgent := deviceUserAgent(device)
 	client := driver.New(driver.WithClient(&http.Client{Transport: transport, Timeout: 30 * time.Second}), driver.UA(userAgent))
 	client.Client.SetRetryCount(0)
 	client.Client.OnBeforeRequest(func(_ *resty.Client, request *resty.Request) error {

@@ -12,8 +12,12 @@
 - **指定路径**：填写网盘内路径，例如 `/影视`；留空为网盘根目录，不填写 WebDAV 的 `/dav`。
 - **测试**：读取指定路径，确认账号凭据和目录可用，不修改网盘内容。
 
-设备选项来自所接入的 115driver：网页端、Android、iOS、电视端、支付宝小程序、微信小程序、
-115管理 Android。扫码按选中的设备换取 CK；更换下拉选项不会把已有 CK 转换成另一设备的 CK。
+设备选项即 115 官方客户端清单（115生活 / 115 / 115管理，共 16 项），取值同时是扫码接口的 app 段：
+网页端 `web`、`ios`、`115ios`、`android`、`115android`、`ipad`、`115ipad`、`qandroid`、`qios`、`qipad`、
+`os_windows`、`os_mac`、`os_linux`、`wechatmini`、`alipaymini`、`harmony`。
+扫码按选中的设备换取 CK；更换下拉选项不会把已有 CK 转换成另一设备的 CK。
+苹果系设备（含 `115ios`、`ipad`、`115ipad`、`qios`、`qipad`）使用 iOS 客户端 UA，
+其余设备沿用默认 UA。旧配置里存过的 `tv`（电视端）仍可保存和运行，但已不在下拉中。
 
 ## 当前支持范围
 

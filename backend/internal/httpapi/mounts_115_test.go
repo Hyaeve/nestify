@@ -13,6 +13,7 @@ import (
 	"nestify/backend/internal/auth"
 	"nestify/backend/internal/config"
 	"nestify/backend/internal/model"
+	"nestify/backend/internal/pan115"
 	"nestify/backend/internal/store/sqlite"
 )
 
@@ -55,6 +56,27 @@ func Test115LoginAndMountHTTP(t *testing.T) {
 	}
 	if response := call(handler.handle115QRCode, "POST", "/", `{"device":"windows"}`, session.Token); response.Code != 400 {
 		t.Fatal("invalid device accepted")
+	}
+	if response := call(handler.handle115Devices, "GET", "/", "", ""); response.Code != 401 {
+		t.Fatal("device list not protected")
+	}
+	catalog := call(handler.handle115Devices, "GET", "/api/v1/mounts/115/devices", "", session.Token)
+	var catalogResponse struct {
+		Data []struct {
+			Value string `json:"value"`
+			Label string `json:"label"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(catalog.Body.Bytes(), &catalogResponse); err != nil {
+		t.Fatal(err)
+	}
+	if catalog.Code != 200 || len(catalogResponse.Data) != len(pan115.Devices) {
+		t.Fatalf("device list payload: %s", catalog.Body.String())
+	}
+	first := catalogResponse.Data[0]
+	last := catalogResponse.Data[len(catalogResponse.Data)-1]
+	if first.Value != "web" || first.Label != "115生活_网页端" || last.Value != "harmony" || last.Label != "115_鸿蒙端" {
+		t.Fatalf("device list order: %s", catalog.Body.String())
 	}
 	original := http.DefaultTransport
 	defer func() { http.DefaultTransport = original }()
@@ -146,5 +168,11 @@ func Test115LoginAndMountHTTP(t *testing.T) {
 	invalid := call(handler.handleMounts, "POST", "/", `{"name":"bad","provider":"115","device":"web","cookie":"invalid"}`, session.Token)
 	if invalid.Code != 400 {
 		t.Fatal("invalid CK accepted")
+	}
+	// 新增的设备值（非 SDK 常量）要能过校验并原样落库。
+	fresh := call(handler.handleMounts, "POST", "/api/v1/mounts",
+		`{"name":"115鸿蒙","provider":"115","cookie":"UID=42_A1;CID=cid;SEID=private-cookie","device":"harmony","request_interval_ms":1000}`, session.Token)
+	if fresh.Code != 200 || !strings.Contains(fresh.Body.String(), `"device":"harmony"`) {
+		t.Fatalf("new device rejected: %s", fresh.Body.String())
 	}
 }

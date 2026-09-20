@@ -30,7 +30,7 @@
         <div class="mount-form__row">
           <el-form-item label="CK 对应设备类型" class="mount-form__row-item">
             <el-select v-model="form.device" :loading="loadingDevices">
-              <el-option v-for="device in devices" :key="device.value" :label="device.label" :value="device.value" />
+              <el-option v-for="device in deviceOptions" :key="device.value" :label="device.label" :value="device.value" />
             </el-select>
           </el-form-item>
           <el-form-item label="API 请求间隔（毫秒）" class="mount-form__row-item">
@@ -157,6 +157,16 @@ const is115 = computed(() => form.provider === '115')
 const loginMode = ref<'cookie' | 'qrcode'>('cookie')
 const devices = ref<{ value: string; label: string }[]>([])
 const loadingDevices = ref(false)
+
+/**
+ * 老配置里可能存着下拉中已下架的设备值（例如旧版的 tv 电视端）。
+ * 照原值补一个选项，免得编辑老挂载时被「请选择设备类型」直接挡住。
+ */
+const deviceOptions = computed(() => {
+  const saved = form.device
+  if (!saved || devices.value.some(device => device.value === saved)) return devices.value
+  return [...devices.value, { value: saved, label: `${saved}（历史值）` }]
+})
 const qrImage = ref('')
 const qrStatus = ref('')
 const qrLoading = ref(false)
@@ -400,7 +410,7 @@ function validateForm(): string | null {
   }
   if (is115.value) {
     if (!form.cookie.trim()) return '请填写 CK 或完成扫码登录'
-    if (!devices.value.some(device => device.value === form.device)) return '请选择设备类型'
+    if (!deviceOptions.value.some(device => device.value === form.device)) return '请选择设备类型'
     return null
   }
   if (!form.host.trim()) {

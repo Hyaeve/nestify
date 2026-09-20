@@ -48,6 +48,62 @@ func TestCookieAndDeviceValidation(t *testing.T) {
 	}
 }
 
+// 设备下拉是写给用户看的对外清单，改动会直接影响挂载配置，所以整表锁定：
+// 顺序、中文名、取值都要和 115 官方客户端清单一致。
+func TestDeviceCatalogMatchesOfficialClients(t *testing.T) {
+	want := []Device{
+		{"web", "115生活_网页端"},
+		{"ios", "115生活_苹果端"},
+		{"115ios", "115_苹果端"},
+		{"android", "115生活_安卓端"},
+		{"115android", "115_安卓端"},
+		{"ipad", "115生活_苹果平板端"},
+		{"115ipad", "115_苹果平板端"},
+		{"qandroid", "115管理_安卓端"},
+		{"qios", "115管理_苹果端"},
+		{"qipad", "115管理_苹果平板端"},
+		{"os_windows", "115生活_Windows端"},
+		{"os_mac", "115生活_macOS端"},
+		{"os_linux", "115生活_Linux端"},
+		{"wechatmini", "115生活_微信小程序端"},
+		{"alipaymini", "115生活_支付宝小程序端"},
+		{"harmony", "115_鸿蒙端"},
+	}
+	if len(Devices) != len(want) {
+		t.Fatalf("device count=%d want=%d", len(Devices), len(want))
+	}
+	seen := map[string]bool{}
+	for index, device := range want {
+		if Devices[index] != device {
+			t.Fatalf("device[%d]=%+v want=%+v", index, Devices[index], device)
+		}
+		if !ValidDevice(device.Value) {
+			t.Fatalf("listed device %q rejected", device.Value)
+		}
+		if seen[device.Value] {
+			t.Fatalf("duplicated device %q", device.Value)
+		}
+		seen[device.Value] = true
+	}
+	if !strings.Contains(deviceUserAgent("ios"), "Darwin") ||
+		!strings.Contains(deviceUserAgent("115ipad"), "Darwin") ||
+		!strings.Contains(deviceUserAgent("qios"), "Darwin") {
+		t.Fatal("apple devices must use the iOS user agent")
+	}
+	if strings.Contains(deviceUserAgent("web"), "Darwin") || strings.Contains(deviceUserAgent("os_mac"), "Darwin") {
+		t.Fatal("non-apple devices must keep the default user agent")
+	}
+	// 历史配置里的 tv 仍可保存；SDK 里被注释掉的 linux / mac / windows 不是 115 的取值。
+	if !ValidDevice("tv") {
+		t.Fatal("legacy device rejected")
+	}
+	for _, value := range []string{"", "linux", "mac", "windows", "115IOS", "tv2"} {
+		if ValidDevice(value) {
+			t.Fatalf("unknown device %q accepted", value)
+		}
+	}
+}
+
 func TestListPaginationAndRootResolution(t *testing.T) {
 	var offsets []string
 	mockAPI(t, func(request *http.Request) any {
