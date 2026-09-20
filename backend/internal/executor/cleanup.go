@@ -28,9 +28,60 @@ const (
 	ruleMatcherGlobal
 )
 
+// cleanupPlan 是净化规则的动作开关与匹配器。
+//
+// 本地与远程（WebDAV 挂载）两条实现共用这一份解析结果：两边对「哪些算命中」、
+// 「哪些目录受白名单保护」必须是同一套口径，否则同一个规则配置在两个目录上会删出不同结果。
+type cleanupPlan struct {
+	emptyDirs     bool
+	matchingFiles bool
+	expiredFiles  bool
+	retentionDays int
+	matchers      []fileNameMatcher
+	whitelist     map[string]struct{}
+}
+
+// parseCleanupPlan 解析净化规则的动作开关；第二个返回值非空表示这一轮没什么可做的
+// （调用方按整轮跳过处理），文案与旧实现逐字一致。
+func parseCleanupPlan(req ExecuteRuleRequest) (cleanupPlan, string) {
+	plan := cleanupPlan{
+		emptyDirs:     req.Options["cleanup_empty_dirs"],
+		matchingFiles: req.Options["cleanup_matching_files"],
+		expiredFiles:  req.Options["cleanup_expired_files"],
+		retentionDays: req.OptionValues["cleanup_retention_days"],
+	}
+	if !plan.emptyDirs && !plan.matchingFiles && !plan.expiredFiles {
+		return plan, "no cleanup actions enabled"
+	}
+	if plan.expiredFiles && plan.retentionDays < 1 {
+		return plan, "cleanup_expired_files enabled but no valid retention days provided"
+	}
+
+	plan.matchers = buildCaseSensitiveFileNameMatchers(req.Filters)
+	plan.whitelist = buildDirectoryWhitelist(req.Whitelist)
+	if plan.matchingFiles && len(plan.matchers) == 0 {
+		return plan, "cleanup_matching_files enabled but no valid matchers provided"
+	}
+
+	return plan, ""
+}
+
 func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (executionStats, error) {
 	stats := executionStats{}
-	sourceDir := filepath.Clean(strings.TrimSpace(req.SourceDir))
+	rawSource := strings.TrimSpace(req.SourceDir)
+	if rawSource == "" {
+		return stats, fmt.Errorf("source dir is required")
+	}
+
+	// 远程挂载（webdav://<id>/...）上的净化必须走 WebDAV 实现：下面那条路全是 os.* 调用，
+	// 对一个虚拟路径只能得到「系统找不到指定的路径」，整轮必然失败（用户报的就是这个）。
+	// 判断要排在 filepath.Clean 之前 —— Clean 会把 webdav://3/影视 拧成 webdav:\3\影视，
+	// 之后再也认不出这是远程挂载。
+	if isWebdavSource(rawSource) {
+		return s.executeWebdavCleanupRule(runID, req, rawSource)
+	}
+
+	sourceDir := filepath.Clean(rawSource)
 	if sourceDir == "" || sourceDir == "." {
 		return stats, fmt.Errorf("source dir is required")
 	}
@@ -43,26 +94,10 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 		return stats, fmt.Errorf("source dir must be a directory")
 	}
 
-	cleanupEmptyDirs := req.Options["cleanup_empty_dirs"]
-	cleanupMatchingFiles := req.Options["cleanup_matching_files"]
-	cleanupExpiredFiles := req.Options["cleanup_expired_files"]
-	cleanupRetentionDays := req.OptionValues["cleanup_retention_days"]
-	if !cleanupEmptyDirs && !cleanupMatchingFiles && !cleanupExpiredFiles {
+	plan, skipReason := parseCleanupPlan(req)
+	if skipReason != "" {
 		stats.SkipCount = 1
-		stats.Summary = "no cleanup actions enabled"
-		return stats, nil
-	}
-	if cleanupExpiredFiles && cleanupRetentionDays < 1 {
-		stats.SkipCount = 1
-		stats.Summary = "cleanup_expired_files enabled but no valid retention days provided"
-		return stats, nil
-	}
-
-	matchers := buildCaseSensitiveFileNameMatchers(req.Filters)
-	whitelist := buildDirectoryWhitelist(req.Whitelist)
-	if cleanupMatchingFiles && len(matchers) == 0 {
-		stats.SkipCount = 1
-		stats.Summary = "cleanup_matching_files enabled but no valid matchers provided"
+		stats.Summary = skipReason
 		return stats, nil
 	}
 
@@ -72,7 +107,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	stats.detail(model.RunDetailKindCleanup)
 	stats.Detail.setRoots([]string{sourceDir}, nil)
 
-	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles, cleanupRetentionDays, matchers, whitelist, &stats)
+	s.cleanupDirectory(runID, sourceDir, sourceDir, req.CompatibilityMode, plan, &stats)
 
 	if stats.SuccessCount == 0 && stats.SkipCount == 0 && stats.FailureCount == 0 {
 		stats.SkipCount = 1
@@ -88,7 +123,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	return stats, nil
 }
 
-func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles bool, cleanupRetentionDays int, matchers []fileNameMatcher, whitelist map[string]struct{}, stats *executionStats) {
+func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, plan cleanupPlan, stats *executionStats) {
 	// 手动停止：递归到这里直接不再往下走（返回 void，取消信号由 runExecution 统一收尾）。
 	if s.runAborted(runID) {
 		return
@@ -106,7 +141,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 	_ = processEntriesForMode(compatibilityMode, entries, func(entry os.DirEntry) error {
 		entryPath := filepath.Join(currentPath, entry.Name())
 		if entry.IsDir() {
-			if cleanupMatchingFiles && matchesFileName(entry.Name(), true, matchers) {
+			if plan.matchingFiles && matchesFileName(entry.Name(), true, plan.matchers) {
 				if err := os.RemoveAll(entryPath); err != nil {
 					stats.FailureCount++
 					stats.Detail.record(model.RunFileEntry{
@@ -135,8 +170,8 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 				}
 				return nil
 			}
-			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, cleanupEmptyDirs, cleanupMatchingFiles, cleanupExpiredFiles, cleanupRetentionDays, matchers, whitelist, stats)
-			if cleanupEmptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), whitelist) {
+			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, plan, stats)
+			if plan.emptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), plan.whitelist) {
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
 				if removeErr != nil {
 					stats.FailureCount++
@@ -166,7 +201,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			return nil
 		}
 
-		if cleanupMatchingFiles && matchesFileName(entry.Name(), false, matchers) {
+		if plan.matchingFiles && matchesFileName(entry.Name(), false, plan.matchers) {
 			if err := os.Remove(entryPath); err != nil {
 				stats.FailureCount++
 				stats.Detail.record(model.RunFileEntry{
@@ -193,7 +228,7 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			return nil
 		}
 
-		if !cleanupExpiredFiles || !isExpiredFile(entryPath, cleanupRetentionDays) {
+		if !plan.expiredFiles || !isExpiredFile(entryPath, plan.retentionDays) {
 			return nil
 		}
 

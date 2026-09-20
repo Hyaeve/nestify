@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -427,13 +428,33 @@ func (c *Client) Exists(ctx context.Context, internalPath string) (bool, error) 
 	return false, fmt.Errorf("WebDAV PROPFIND 返回状态 %d", response.StatusCode)
 }
 
-// Delete 删除某个内部路径（文件或目录，目录用 DELETE 可能递归取决于服务端实现）。
-func (c *Client) Delete(ctx context.Context, internalPath string) error {
+// DeleteFile 删除单个文件（DELETE）。
+func (c *Client) DeleteFile(ctx context.Context, internalPath string) error {
+	return c.delete(ctx, internalPath, false)
+}
+
+// DeleteCollection 删除一个目录（集合）。
+//
+// **尾斜杠不能省**：OpenList / Alist 之类的实现会对没有尾斜杠的集合路径回 301，
+// 而 Go 的 http.Client 会把 301 / 302 上的 DELETE 降级成 GET —— 表面上返回 200，
+// 实际什么都没删（与 doPropfind 里那条「目录级 PROPFIND 必须带尾斜杠」同因）。
+//
+// 注意这里只删「这一个集合」，是否递归由服务端实现决定：调用方（净化链路的远程实现）
+// 自己先把内容清干净，再调它删空目录，不依赖服务端行为。
+func (c *Client) DeleteCollection(ctx context.Context, internalPath string) error {
+	return c.delete(ctx, internalPath, true)
+}
+
+func (c *Client) delete(ctx context.Context, internalPath string, collection bool) error {
 	if err := c.Wait(ctx); err != nil {
 		return err
 	}
 
-	requestURL := c.requestURL(internalPath)
+	remotePath := joinRemotePath(c.basePath, normalizeInternalPath(internalPath))
+	if collection && !strings.HasSuffix(remotePath, "/") {
+		remotePath += "/"
+	}
+	requestURL := c.baseURL + escapePath(remotePath)
 	request, err := http.NewRequestWithContext(ctx, "DELETE", requestURL, nil)
 	if err != nil {
 		return fmt.Errorf("build delete request: %w", err)
@@ -492,15 +513,16 @@ func (c *Client) Wait(ctx context.Context) error {
 	}
 }
 
-// Depth 请求头取值：1 只取直接子项，infinity 递归整棵子树。
+// Depth 请求头取值：0 只取自身，1 只取直接子项，infinity 递归整棵子树。
 const (
+	depthZero     = "0"
 	depthOne      = "1"
 	depthInfinity = "infinity"
 )
 
 // List 列出 internalPath 下的直接子项（PROPFIND Depth: 1）。internalPath 为空表示挂载根目录。
 func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error) {
-	entries, err := c.propfind(ctx, internalPath, depthOne, true)
+	entries, err := c.doPropfind(ctx, internalPath, depthOne, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -531,12 +553,44 @@ func (c *Client) List(ctx context.Context, internalPath string) ([]Entry, error)
 // 仅对支持无限深度的服务端（OpenList / Alist / SabreDAV 等）调用；
 // 受限实现可能返回 403/400，调用方需回落到逐目录列举。
 func (c *Client) ListRecursive(ctx context.Context, internalPath string, withSize bool) ([]Entry, error) {
-	return c.propfind(ctx, internalPath, depthInfinity, withSize)
+	return c.doPropfind(ctx, internalPath, depthInfinity, withSize, false)
 }
 
-// propfind 发起一次 PROPFIND 并流式解析 multistatus。
+// errRemoteNotFound 表示远端路径不存在（PROPFIND 拿到 404）。
+//
+// Stat 把它翻译成「ok = false」（路径不存在不是异常）；其它调用方照旧当错误处理 ——
+// 列目录过程中某个子目录消失，是要在运行明细里记账的。
+var errRemoteNotFound = errors.New("远端路径不存在（HTTP 404）")
+
+// Stat 返回某内部路径自身的条目，不存在时 ok 为 false。
+//
+// 与 List 的区别是 Depth: 0 且**保留请求目录自身**：远程挂载上的净化规则
+// 必须先确认监控目录真的是个目录（WebDAV 没有本地那种 Stat），
+// 而 List 会把「请求目录自己」这条过滤掉，是拿不到它的。
+func (c *Client) Stat(ctx context.Context, internalPath string) (Entry, bool, error) {
+	entries, err := c.doPropfind(ctx, internalPath, depthZero, true, true)
+	if err != nil {
+		if errors.Is(err, errRemoteNotFound) {
+			return Entry{}, false, nil
+		}
+		return Entry{}, false, err
+	}
+
+	want := normalizeInternalPath(internalPath)
+	for _, entry := range entries {
+		if entry.Path == want {
+			return entry, true, nil
+		}
+	}
+	return Entry{}, false, nil
+}
+
+// doPropfind 发起一次 PROPFIND 并流式解析 multistatus。
 // 递归响应可能非常大（整棵目录树），所以按 <d:response> 逐个解码，不把整份 XML 读进内存。
-func (c *Client) propfind(ctx context.Context, internalPath, depth string, withSize bool) ([]Entry, error) {
+//
+// keepSelf 为 true 时保留「请求目录自身」那条（Depth: 0 的 Stat 需要），
+// 为 false 时按老规矩丢掉它，只返回子项。
+func (c *Client) doPropfind(ctx context.Context, internalPath, depth string, withSize, keepSelf bool) ([]Entry, error) {
 	if err := c.Wait(ctx); err != nil {
 		return nil, err
 	}
@@ -567,6 +621,9 @@ func (c *Client) propfind(ctx context.Context, internalPath, depth string, withS
 	if response.StatusCode == http.StatusUnauthorized {
 		return nil, c.authFailedError()
 	}
+	if response.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("%w：%s", errRemoteNotFound, remotePath)
+	}
 	if response.StatusCode != http.StatusMultiStatus && response.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		return nil, fmt.Errorf("WebDAV 返回状态 %d：%s", response.StatusCode, strings.TrimSpace(string(body)))
@@ -595,7 +652,7 @@ func (c *Client) propfind(ctx context.Context, internalPath, depth string, withS
 		if err := decoder.DecodeElement(&item, &start); err != nil {
 			return nil, fmt.Errorf("解析 WebDAV 响应失败: %w", err)
 		}
-		entry, ok := decodePropfindEntry(item, basePrefix, requestDir)
+		entry, ok := decodePropfindEntry(item, basePrefix, requestDir, keepSelf)
 		if !ok {
 			continue
 		}
@@ -606,7 +663,10 @@ func (c *Client) propfind(ctx context.Context, internalPath, depth string, withS
 }
 
 // decodePropfindEntry 把一条 <d:response> 转成挂载内的相对条目（ok=false 表示该条应丢弃）。
-func decodePropfindEntry(item propfindResponse, basePrefix, requestDir string) (Entry, bool) {
+//
+// keepSelf 为 true 时把「请求目录自身」也当作有效条目返回（Depth: 0 的 Stat 用）：
+// 挂载根的 relative 为空、子目录的 relative 等于 requestDir，这两条本来都会被丢掉。
+func decodePropfindEntry(item propfindResponse, basePrefix, requestDir string, keepSelf bool) (Entry, bool) {
 	decoded, err := decodeHref(item.Href)
 	if err != nil {
 		return Entry{}, false
@@ -623,8 +683,32 @@ func decodePropfindEntry(item propfindResponse, basePrefix, requestDir string) (
 	}
 	relative = normalizeInternalPath(relative)
 
+	// 目录判定优先看 resourcetype/collection；部分实现会省略 collection，
+	// 此时回退到 href 的尾斜杠（OpenList 的 PROPFIND 会给目录 href 补 "/"）。
+	// 少了这条回退，递归结果里的目录会被整体误判成文件。
+	isDir := item.Propstat.Prop.ResourceType.Collection != nil || strings.HasSuffix(decoded, "/")
+
 	// 过滤掉请求目录自身（其 href 通常与请求路径一致）。
-	if relative == "" || relative == requestDir {
+	self := relative == requestDir
+	if self && keepSelf {
+		// 名字取自「相对挂载根的路径」而不是 href：挂载根的 relative 为空
+		// （href 就是 base_path 本身），它没有可用的名字。
+		name := ""
+		if relative != "" {
+			name = path.Base(relative)
+		}
+		entry := Entry{
+			Name:       name,
+			Path:       relative,
+			IsDir:      isDir,
+			ModifiedAt: item.Propstat.Prop.LastModified.Time,
+		}
+		if !isDir {
+			entry.Size = item.Propstat.Prop.ContentLength
+		}
+		return entry, true
+	}
+	if relative == "" || self {
 		return Entry{}, false
 	}
 
@@ -632,11 +716,6 @@ func decodePropfindEntry(item propfindResponse, basePrefix, requestDir string) (
 	if name == "" || name == "." || name == "/" {
 		return Entry{}, false
 	}
-
-	// 目录判定优先看 resourcetype/collection；部分实现会省略 collection，
-	// 此时回退到 href 的尾斜杠（OpenList 的 PROPFIND 会给目录 href 补 "/"）。
-	// 少了这条回退，递归结果里的目录会被整体误判成文件。
-	isDir := item.Propstat.Prop.ResourceType.Collection != nil || strings.HasSuffix(decoded, "/")
 
 	entry := Entry{
 		Name:       name,
