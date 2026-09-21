@@ -225,8 +225,7 @@ body {
    全给文件明细表（明细区自带分页，一页条数跟随系统设置的「每页文件数」，
    见 RunDetailList.vue；表内仍保留细浅滚动条，鼠标移入才显现）。
    teleport 到 body，所以排版必须写全局（见 MEMORY.md 的弹层约定）。 */
-.el-dialog.logs-detail-dialog,
-.el-dialog.history-detail-dialog {
+.el-dialog.logs-detail-dialog {
   display: flex;
   flex-direction: column;
   height: min(90vh, 900px);
@@ -235,14 +234,12 @@ body {
 }
 
 /* 标题与正文之间不留 EP 默认的整段 padding，让摘要卡紧贴标题，把空间让给明细。 */
-.el-dialog.logs-detail-dialog .el-dialog__header,
-.el-dialog.history-detail-dialog .el-dialog__header {
+.el-dialog.logs-detail-dialog .el-dialog__header {
   flex: 0 0 auto;
   padding-bottom: 10px;
 }
 
-.el-dialog.logs-detail-dialog .el-dialog__body,
-.el-dialog.history-detail-dialog .el-dialog__body {
+.el-dialog.logs-detail-dialog .el-dialog__body {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -253,21 +250,18 @@ body {
 
 /* 表格滚动条是 EP 自绘的 div（不吃全局 `::-webkit-scrollbar`），单独调细调浅：
    4px 宽、颜色与全局细滚动条同一支 rgba(148,163,184,.28)，悬停也只到 45%。 */
-.el-dialog.logs-detail-dialog .el-scrollbar,
-.el-dialog.history-detail-dialog .el-scrollbar {
+.el-dialog.logs-detail-dialog .el-scrollbar {
   --el-scrollbar-opacity: 1;
   --el-scrollbar-hover-opacity: 1;
   --el-scrollbar-bg-color: rgba(148, 163, 184, 0.28);
   --el-scrollbar-hover-bg-color: rgba(148, 163, 184, 0.45);
 }
 
-.el-dialog.logs-detail-dialog .el-scrollbar__bar.is-vertical,
-.el-dialog.history-detail-dialog .el-scrollbar__bar.is-vertical {
+.el-dialog.logs-detail-dialog .el-scrollbar__bar.is-vertical {
   width: 4px;
 }
 
-.el-dialog.logs-detail-dialog .el-scrollbar__bar.is-horizontal,
-.el-dialog.history-detail-dialog .el-scrollbar__bar.is-horizontal {
+.el-dialog.logs-detail-dialog .el-scrollbar__bar.is-horizontal {
   height: 4px;
 }
 

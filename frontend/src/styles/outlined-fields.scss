@@ -74,6 +74,10 @@
 
 .outlined-field__border {
   position: absolute;
+  /* 描边层压在控件之上：Chromium 原生拉伸器（textarea 右下角那块热区）自带一层不透明底，
+     压在它下面会把 12px 圆角弧线吃掉、在右下角露出一个白色缺口，看着像「框缺了个角」。
+     抬到控件上层后，圆角弧线就完整了（边框本身 ring 而已，pointer-events: none 不变）。 */
+  z-index: 1;
   inset: -4px 0 0;
   min-width: 0;
   margin: 0;

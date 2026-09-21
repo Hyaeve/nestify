@@ -6,7 +6,6 @@
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'link' }" @click="switchTab('link')">链路规则</button>
       <button type="button" class="rules-tabs__item rules-tabs__item--naming" :class="{ 'is-active': activeTab === 'naming' }" @click="switchTab('naming')">命名规则</button>
       <button type="button" class="rules-tabs__item" :class="{ 'is-active': activeTab === 'backup' }" @click="switchTab('backup')">备份规则</button>
-      <button type="button" class="rules-tabs__item rules-tabs__item--history" :class="{ 'is-active': activeTab === 'history' }" @click="switchTab('history')">归巢历史</button>
     </div>
 
     <el-alert v-if="errorMessage" :closable="false" type="error" :title="errorMessage" class="rules-error" />
@@ -47,7 +46,7 @@
 
       <el-empty v-else description="暂无归档规则，可添加打包或收集规则" />
 
-      <div v-if="archiveRulesTotal > 0" class="history-pagination">
+      <div v-if="archiveRulesTotal > 0" class="rules-pagination">
         <el-pagination
           v-model:current-page="archiveRulesCurrentPage"
           v-model:page-size="archiveRulesPageSize"
@@ -57,158 +56,6 @@
           :total="archiveRulesTotal"
           @current-change="handleArchiveRulesPageChange"
           @size-change="handleArchiveRulesPageSizeChange"
-        />
-      </div>
-    </el-card>
-
-    <el-card v-show="activeTab === 'history'" class="page-card history-card">
-      <template #header>
-        <!-- 归巢历史的工具条整体搬进卡片标题行：统计、排序、筛选、搜索、删除都和「归巢历史」
-             排在同一行，下面整块高度让给列表。窄屏靠 flex-wrap 折行，不做横向滚动。 -->
-        <div class="rules-card__header history-card__header">
-          <div class="rules-card__header-main">
-            <div class="rules-card__title">归巢历史</div>
-            <div class="history-summary">
-              <span>累计 {{ historySummary.total }}</span>
-              <span>今日 {{ historySummary.today }}</span>
-              <span>成功 {{ successCount }}</span>
-              <span>跳过 {{ skipCount }}</span>
-              <span>失败 {{ failedCount }}</span>
-            </div>
-          </div>
-          <div class="history-header-controls">
-            <el-select v-model="historySortBy" field-label="排序" size="small" class="history-summary__control" @change="handleHistorySortChange">
-              <el-option label="修改时间" value="modified_at" />
-              <el-option label="文件名称" value="name" />
-            </el-select>
-            <el-tooltip :content="historySortOrder === 'asc' ? '正序' : '倒序'" placement="top" :show-after="300">
-              <el-button class="history-sort-order-button" circle :aria-label="historySortOrder === 'asc' ? '正序' : '倒序'" @click="toggleHistorySortOrder">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="history-sort-order-button__icon">
-                  <path d="M7 5.2v13.6" />
-                  <path v-if="historySortOrder === 'asc'" d="M3.9 8.35 7 5.2l3.1 3.15" />
-                  <path v-else d="m3.9 15.65 3.1 3.15 3.1-3.15" />
-                  <path d="M13 7h7" />
-                  <path d="M13 12h5.2" />
-                  <path d="M13 17h3.4" />
-                </svg>
-              </el-button>
-            </el-tooltip>
-            <el-select v-model="historyStatusFilter" field-label="状态" size="small" class="history-summary__control" @change="handleHistoryStatusChange">
-              <el-option label="全部状态" value="all" />
-              <el-option label="成功" value="success" />
-              <el-option label="失败" value="failed" />
-              <el-option label="跳过" value="skip" />
-            </el-select>
-            <el-select v-model="historyRuleTypeFilter" field-label="规则类型" size="small" class="history-summary__control" @change="handleHistoryRuleTypeChange">
-              <el-option label="全部规则" value="all" />
-              <el-option label="归档规则" value="archive" />
-              <el-option label="净化规则" value="cleanup" />
-              <el-option label="链路规则" value="link" />
-              <el-option label="命名规则" value="naming" />
-              <el-option label="备份规则" value="backup" />
-            </el-select>
-            <!-- 搜索框回车即搜，不再挂「搜索 / 重置」按钮：清空有自带的小叉，回车就是提交。 -->
-            <el-input
-              v-model="historyKeywordInput"
-              field-label="搜索记录"
-              clearable
-              class="history-search__input"
-              placeholder="搜索规则名 / 摘要，回车"
-              @keyup.enter="handleHistorySearch"
-            />
-            <!-- 原来是「删除成功 / 删除跳过 / 删除失败」三个按钮，收成一个下拉；
-                 每一项仍会弹一次确认框（见 clearHistory）。 -->
-            <el-dropdown trigger="click" @command="handleHistoryClear">
-              <el-button type="danger" plain>
-                删除<el-icon class="history-clear__caret"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="success">删除成功记录</el-dropdown-item>
-                  <el-dropdown-item command="skip">删除跳过记录</el-dropdown-item>
-                  <el-dropdown-item command="failed">删除失败记录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </div>
-        </div>
-      </template>
-
-        <el-table v-loading="historyLoading" :data="historyTreeRows" class="rules-table history-tree-table" row-key="id" table-layout="auto" @row-click="openHistoryDetailDialog">
-          <el-table-column label="折叠任务" width="620">
-            <template #default="scope">
-              <button type="button" class="history-detail-card" @click.stop="openHistoryDetailDialog(scope.row)">
-                <span class="history-detail-card__title">{{ scope.row.title }}</span>
-                <span class="history-detail-card__desc">{{ scope.row.description }}</span>
-              </button>
-            </template>
-          </el-table-column>
-          <!-- 时间紧跟在「折叠任务」后面，只到月日与时分秒：标题行已经不重复时间，
-               列里再带上年份只是噪音。 -->
-          <el-table-column label="时间" width="150">
-            <template #default="scope">{{ formatMonthDayTime(scope.row.started_at) }}</template>
-          </el-table-column>
-          <el-table-column label="模式" width="120">
-            <template #default="scope">
-              <span class="custom-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="100">
-            <template #default="scope">
-              <span class="history-status" :class="`is-${scope.row.status}`">{{ historyStatusText(scope.row.status) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="数量" width="120">
-            <template #default="scope">{{ scope.row.processed_files }}</template>
-          </el-table-column>
-          <el-table-column label="统计" width="140">
-            <template #default="scope">{{ scope.row.success_count }}/{{ scope.row.skip_count }}/{{ scope.row.failure_count }}</template>
-          </el-table-column>
-          <!-- 收尾的弹性空列：专门吃掉表格的剩余宽度。少了它，剩余宽度会被摊回上面各列，
-               「折叠任务」又会被撑宽，后面的列就跟着往回跑。 -->
-          <el-table-column min-width="1" />
-        </el-table>
-
-        <el-dialog v-model="historyDetailDialogVisible" class="history-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
-          <template v-if="selectedHistoryGroup">
-            <div class="detail-dialog-summary">
-              <div class="detail-dialog-summary__main">
-                <div class="detail-dialog-summary__title">{{ selectedHistoryGroup.title }}</div>
-                <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。
-                     右上角不再挂「成功 / 失败」标签——一条执行里成功、跳过、失败本来就同在一行。 -->
-                <div class="detail-dialog-summary__desc">
-                  <span class="detail-summary__leading">{{ selectedHistoryGroupLeading }}</span>
-                  <span class="detail-summary__sep">·</span>
-                  <button
-                    v-for="segment in selectedHistoryGroupSegments"
-                    :key="segment.key"
-                    type="button"
-                    class="detail-summary__chip"
-                    :class="[`is-${segment.key}`, { 'is-active': detailFilterKey === segment.key }]"
-                    @click="toggleDetailFilter(segment.key)"
-                  >
-                    {{ segment.label }}<span class="detail-summary__count">{{ segment.value }}</span>
-                  </button>
-                </div>
-              </div>
-              <div class="detail-dialog-summary__tags">
-                <span class="custom-mode-tag" :class="historyModeTagClass(selectedHistoryGroup)">{{ historyModeLabel(selectedHistoryGroup) }}</span>
-              </div>
-            </div>
-            <RunDetailList :manifest="selectedRunDetailManifest" :filter-key="detailFilterKey" />
-          </template>
-        </el-dialog>
-
-      <div v-if="historyTotal > 0" class="history-pagination">
-        <el-pagination
-          v-model:current-page="historyCurrentPage"
-          v-model:page-size="historyPageSize"
-          background
-          layout="total, sizes, prev, pager, next"
-          :page-sizes="pageSizeOptions"
-          :total="historyTotal"
-          @current-change="handleHistoryPageChange"
-          @size-change="handleHistoryPageSizeChange"
         />
       </div>
     </el-card>
@@ -247,7 +94,7 @@
         />
       </div>
 
-      <div v-if="purifyRulesTotal > 0" class="history-pagination">
+      <div v-if="purifyRulesTotal > 0" class="rules-pagination">
         <el-pagination
           v-model:current-page="purifyRulesCurrentPage"
           v-model:page-size="purifyRulesPageSize"
@@ -278,8 +125,8 @@
           v-for="rule in linkRules"
           :key="rule.id"
           :rule="rule"
-          :mode-label="historyModeLabel({ archive_mode: 'link', link_mode: rule.link_mode })"
-          :mode-class="historyModeTagClass({ archive_mode: 'link', link_mode: rule.link_mode })"
+          :mode-label="ruleModeLabel({ archive_mode: 'link', link_mode: rule.link_mode })"
+          :mode-class="ruleModeTagClass({ archive_mode: 'link', link_mode: rule.link_mode })"
           :paths="linkRulePaths(rule)"
           :busy="isRuleStatusUpdating(rule.id)"
           :cron-items="getCronPreviewItems(rule.id)"
@@ -299,7 +146,7 @@
         />
       </div>
 
-      <div v-if="linkRulesTotal > 0" class="history-pagination">
+      <div v-if="linkRulesTotal > 0" class="rules-pagination">
         <el-pagination
           v-model:current-page="linkRulesCurrentPage"
           v-model:page-size="linkRulesPageSize"
@@ -346,23 +193,16 @@
 
     <BackupRulesPanel :visible="activeTab === 'backup'" />
 
-    <el-dialog v-model="createNamingDialogVisible" :title="editingNamingRuleID ? '编辑命名规则' : '新增命名规则'" width="640px">
+    <el-dialog v-model="createNamingDialogVisible" :title="editingNamingRuleID ? '编辑命名规则' : '新增命名规则'" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
-        </el-row>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="createNamingForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="createNamingForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
+        </div>
         <el-form-item label="监控路径"><el-input v-model="createNamingForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createNaming', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
         <el-form-item label="命名工坊规则或规则集"><el-select v-model="createNamingForm.rule_set_id" placeholder="请选择规则集" style="width:100%"><el-option v-for="set in availableNamingRuleSets" :key="set.id" :label="`${set.name}（${set.rules.length} 条）`" :value="set.id" /></el-select></el-form-item>
         <OutlinedGroup class="mode-select-field">
-          <template #label>
-            <span class="mode-select-field__head">
-              <span>功能模块</span>
-              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createNamingForm.options, namingScopeOptionKeys)">
-                {{ createNamingSelection.length === namingScopeOptionKeys.length ? '取消全选' : '全选' }}
-              </button>
-            </span>
-          </template>
+          <template #label><span>功能模块</span></template>
           <div class="mode-chip-box">
             <el-tooltip v-for="option in namingScopeOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
               <template #content><span class="mode-chip-tip__text">{{ option.description }}</span></template>
@@ -378,41 +218,28 @@
       <template #footer><el-button @click="createNamingDialogVisible = false">取消</el-button><el-button type="primary" :class="{ 'rule-save-button': !!editingNamingRuleID }" :loading="creating" @click="submitCreateNamingRule">{{ editingNamingRuleID ? '保存' : '创建' }}</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="createDialogVisible" title="新增规则" width="640px">
+    <el-dialog v-model="createDialogVisible" title="新增规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="归档模式">
-              <el-select v-model="createForm.archive_mode" :class="['mode-select', `mode-select--${createForm.archive_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="打包模式" value="package" />
-                <el-option label="收集模式" value="collect" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="监控模式">
-              <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="本地模式" value="local" />
-                <el-option label="兼容模式" value="compatibility" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="createForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="createForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="归档模式">
+            <el-select v-model="createForm.archive_mode" :class="['mode-select', `mode-select--${createForm.archive_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="打包模式" value="package" />
+              <el-option label="收集模式" value="collect" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="监控模式">
+            <el-select v-model="createForm.compatibility_mode" :class="['mode-select', `mode-select--${createForm.compatibility_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="本地模式" value="local" />
+              <el-option label="兼容模式" value="compatibility" />
+            </el-select>
+          </el-form-item>
+        </div>
         <OutlinedGroup class="mode-select-field">
-          <template #label>
-            <span class="mode-select-field__head">
-              <span>{{ getModeTitle(createForm.archive_mode) }}</span>
-              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createArchiveOptionSource, createArchiveOptionKeys)">
-                {{ createArchiveSelection.length === createArchiveOptionKeys.length ? '取消全选' : '全选' }}
-              </button>
-            </span>
-          </template>
+          <template #label><span>{{ getModeTitle(createForm.archive_mode) }}</span></template>
           <div class="mode-chip-box">
             <el-tooltip v-for="option in createArchiveOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
               <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
@@ -420,78 +247,65 @@
             </el-tooltip>
           </div>
         </OutlinedGroup>
-        <el-form-item label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配归档</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="createForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <template v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">单件归巢</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="createForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤清除</div></div>
-          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-        </button>
-        <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        <template v-if="false">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤清除</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input"><el-input v-model="createForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        </template>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--path" label="源路径"><el-input v-model="createForm.source_dir"><template #append><el-button @click="openDirectoryPicker('create', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+          <el-form-item class="rule-field rule-field--path" label="目标路径"><el-input v-model="createForm.target_dir"><template #append><el-button @click="openDirectoryPicker('create', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        </div>
+        <div class="rule-section-grid">
+          <div v-if="createForm.archive_mode === 'package' && createForm.package_options.match_archive" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">匹配归档</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div v-if="createForm.archive_mode === 'package' && createForm.package_options.single_file_nesting" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">单件归巢</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">过滤清除</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div></div>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateRule">创建</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="editDialogVisible" title="编辑规则" width="640px">
+    <el-dialog v-model="editDialogVisible" title="编辑规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="归档模式">
-              <el-select v-model="editForm.archive_mode" :class="['mode-select', `mode-select--${editForm.archive_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="打包模式" value="package" />
-                <el-option label="收集模式" value="collect" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="监控模式">
-              <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="本地模式" value="local" />
-                <el-option label="兼容模式" value="compatibility" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="editForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="editForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="归档模式">
+            <el-select v-model="editForm.archive_mode" :class="['mode-select', `mode-select--${editForm.archive_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="打包模式" value="package" />
+              <el-option label="收集模式" value="collect" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="监控模式">
+            <el-select v-model="editForm.compatibility_mode" :class="['mode-select', `mode-select--${editForm.compatibility_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="本地模式" value="local" />
+              <el-option label="兼容模式" value="compatibility" />
+            </el-select>
+          </el-form-item>
+        </div>
         <OutlinedGroup class="mode-select-field">
-          <template #label>
-            <span class="mode-select-field__head">
-              <span>{{ getModeTitle(editForm.archive_mode) }}</span>
-              <button type="button" class="mode-select-field__all" @click="toggleAllMode(editArchiveOptionSource, editArchiveOptionKeys)">
-                {{ editArchiveSelection.length === editArchiveOptionKeys.length ? '取消全选' : '全选' }}
-              </button>
-            </span>
-          </template>
+          <template #label><span>{{ getModeTitle(editForm.archive_mode) }}</span></template>
           <div class="mode-chip-box">
             <el-tooltip v-for="option in editArchiveOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
               <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
@@ -499,78 +313,65 @@
             </el-tooltip>
           </div>
         </OutlinedGroup>
-        <el-form-item label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <template v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配归档</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="editForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <template v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">单件归巢</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="editForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-          <div><div class="mode-config-panel__title">过滤清除</div></div>
-          <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-        </button>
-        <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        <template v-if="false">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过滤清除</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input"><el-input v-model="editForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" /></el-form-item>
-        </template>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--path" label="源路径"><el-input v-model="editForm.source_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+          <el-form-item class="rule-field rule-field--path" label="目标路径"><el-input v-model="editForm.target_dir"><template #append><el-button @click="openDirectoryPicker('edit', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        </div>
+        <div class="rule-section-grid">
+          <div v-if="editForm.archive_mode === 'package' && editForm.package_options.match_archive" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">匹配归档</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editForm.match_filters_text" field-label="匹配归档" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div v-if="editForm.archive_mode === 'package' && editForm.package_options.single_file_nesting" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">单件归巢</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editForm.nest_filters_text" field-label="单件归巢" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">过滤清除</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editForm.filters_text" field-label="过滤清除" type="textarea" :rows="6" :placeholder="archiveRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div></div>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdateRule">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="createPurifyDialogVisible" title="新增净化规则" width="640px">
+    <el-dialog v-model="createPurifyDialogVisible" title="新增净化规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="规则模式">
-              <el-select v-model="createPurifyForm.archive_mode" :class="['mode-select', `mode-select--${createPurifyForm.archive_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="清理模式" value="cleanup" />
-                <el-option label="转换模式" value="transform" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="监控模式">
-              <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="本地模式" value="local" />
-                <el-option label="兼容模式" value="compatibility" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="createPurifyForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="createPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="规则模式">
+            <el-select v-model="createPurifyForm.archive_mode" :class="['mode-select', `mode-select--${createPurifyForm.archive_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="清理模式" value="cleanup" />
+              <el-option label="转换模式" value="transform" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="监控模式">
+            <el-select v-model="createPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${createPurifyForm.compatibility_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="本地模式" value="local" />
+              <el-option label="兼容模式" value="compatibility" />
+            </el-select>
+          </el-form-item>
+        </div>
         <OutlinedGroup class="mode-select-field">
-          <template #label>
-            <span class="mode-select-field__head">
-              <span>{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</span>
-              <button type="button" class="mode-select-field__all" @click="toggleAllMode(createPurifyOptionSource, createPurifyOptionKeys)">
-                {{ createPurifySelection.length === createPurifyOptionKeys.length ? '取消全选' : '全选' }}
-              </button>
-            </span>
-          </template>
+          <template #label><span>{{ getPurifyModeTitle(createPurifyForm.archive_mode) }}</span></template>
           <div class="mode-chip-box">
             <el-tooltip v-for="option in createPurifyOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
               <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
@@ -587,91 +388,79 @@
             <el-button type="primary" plain @click="openDirectoryPicker('createPurify', 'source_dir')">选择目录</el-button>
           </div>
         </OutlinedGroup>
-        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配清理</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">白名单匹配</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
-          </el-form-item>
-        </template>
-        <template v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_expired_files">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过期清除</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
-          </button>
-          <el-form-item label="保留天数" class="cleanup-retention-input">
-            <el-input-number v-model="createPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
-          </el-form-item>
-        </template>
-        <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.convert_matching_text">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配转换</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="createPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
-          </el-form-item>
-        </template>
-        <template v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配过滤</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="createPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
-          </el-form-item>
-        </template>
+        <div class="rule-section-grid">
+          <div v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_matching_files" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">清理匹配规则</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_empty_dirs" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">空目录白名单</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+            </el-form-item>
+          </div>
+          <div v-if="createPurifyForm.archive_mode === 'cleanup' && createPurifyForm.options.cleanup_expired_files" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">过期清除</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
+            </button>
+            <el-form-item label="保留天数" class="cleanup-retention-input">
+              <el-input-number v-model="createPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
+            </el-form-item>
+          </div>
+          <div v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.convert_matching_text" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">转换规则</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="createPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
+            </el-form-item>
+          </div>
+          <div v-if="createPurifyForm.archive_mode === 'transform' && createPurifyForm.options.filter_matching_text" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">转换过滤</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input transform-section-input--filters">
+              <el-input v-model="createPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
+            </el-form-item>
+          </div></div>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="createPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="createPurifyForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="createPurifyDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreatePurifyRule">创建</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="editPurifyDialogVisible" title="编辑净化规则" width="640px">
+    <el-dialog v-model="editPurifyDialogVisible" title="编辑净化规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="规则模式">
-              <el-select v-model="editPurifyForm.archive_mode" :class="['mode-select', `mode-select--${editPurifyForm.archive_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="清理模式" value="cleanup" />
-                <el-option label="转换模式" value="transform" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="监控模式">
-              <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="本地模式" value="local" />
-                <el-option label="兼容模式" value="compatibility" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="editPurifyForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="editPurifyForm.cron_expression" placeholder="留空表示不启用计划执行，例如：0 8 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="规则模式">
+            <el-select v-model="editPurifyForm.archive_mode" :class="['mode-select', `mode-select--${editPurifyForm.archive_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="清理模式" value="cleanup" />
+              <el-option label="转换模式" value="transform" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="监控模式">
+            <el-select v-model="editPurifyForm.compatibility_mode" :class="['mode-select', `mode-select--${editPurifyForm.compatibility_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="本地模式" value="local" />
+              <el-option label="兼容模式" value="compatibility" />
+            </el-select>
+          </el-form-item>
+        </div>
         <OutlinedGroup class="mode-select-field">
-          <template #label>
-            <span class="mode-select-field__head">
-              <span>{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</span>
-              <button type="button" class="mode-select-field__all" @click="toggleAllMode(editPurifyOptionSource, editPurifyOptionKeys)">
-                {{ editPurifySelection.length === editPurifyOptionKeys.length ? '取消全选' : '全选' }}
-              </button>
-            </span>
-          </template>
+          <template #label><span>{{ getPurifyModeTitle(editPurifyForm.archive_mode) }}</span></template>
           <div class="mode-chip-box">
             <el-tooltip v-for="option in editPurifyOptionKeys" :key="option.key" placement="top" :show-after="600" popper-class="mode-chip-tip">
               <template #content><span class="mode-chip-tip__text">{{ formatModeOptionDescription(option.description) }}</span></template>
@@ -688,76 +477,75 @@
             <el-button type="primary" plain @click="openDirectoryPicker('editPurify', 'source_dir')">选择目录</el-button>
           </div>
         </OutlinedGroup>
-        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配清理</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
-          </el-form-item>
-        </template>
-        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">白名单匹配</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
-          </el-form-item>
-        </template>
-        <template v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_expired_files">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">过期清除</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
-          </button>
-          <el-form-item label="保留天数" class="cleanup-retention-input">
-            <el-input-number v-model="editPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
-          </el-form-item>
-        </template>
-        <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.convert_matching_text">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配转换</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input">
-            <el-input v-model="editPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
-          </el-form-item>
-        </template>
-        <template v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text">
-          <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
-            <div><div class="mode-config-panel__title">匹配过滤</div></div>
-            <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
-          </button>
-          <el-form-item class="transform-section-input transform-section-input--filters">
-            <el-input v-model="editPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
-          </el-form-item>
-        </template>
+        <div class="rule-section-grid">
+          <div v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_matching_files" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">清理匹配规则</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">规则模板</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editPurifyForm.filters_text" field-label="清理匹配规则" type="textarea" :rows="10" :placeholder="cleanupRuleMatcherPlaceholder" />
+            </el-form-item>
+          </div>
+          <div v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_empty_dirs" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">空目录白名单</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">匹配规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editPurifyForm.whitelist_text" field-label="空目录白名单" type="textarea" :rows="6" placeholder="一行一个文件夹全称；命中的这一层文件夹不会因空目录清理而删除，子文件夹若不在白名单内仍会继续清理。" />
+            </el-form-item>
+          </div>
+          <div v-if="editPurifyForm.archive_mode === 'cleanup' && editPurifyForm.options.cleanup_expired_files" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">过期清除</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">保留设置</el-tag></div>
+            </button>
+            <el-form-item label="保留天数" class="cleanup-retention-input">
+              <el-input-number v-model="editPurifyForm.option_values.cleanup_retention_days" :min="1" :max="36500" controls-position="right" />
+            </el-form-item>
+          </div>
+          <div v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.convert_matching_text" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">转换规则</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="primary">转换规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input">
+              <el-input v-model="editPurifyForm.transform_rules_text" field-label="转换规则" type="textarea" :rows="10" placeholder="一行一条。默认：待转换 => 转换词（匹配文件名）；文件夹名：/待转换/ => /转换词/；支持关键词部分匹配，也可用正则实现整段替换。" />
+            </el-form-item>
+          </div>
+          <div v-if="editPurifyForm.archive_mode === 'transform' && editPurifyForm.options.filter_matching_text" class="rule-section">
+            <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
+              <div><div class="mode-config-panel__title">转换过滤</div></div>
+              <div class="mode-config-toggle__meta"><el-tag type="warning">过滤规则</el-tag></div>
+            </button>
+            <el-form-item class="transform-section-input transform-section-input--filters">
+              <el-input v-model="editPurifyForm.transform_filters_text" field-label="转换过滤" type="textarea" :rows="6" placeholder="支持关键词匹配和正则匹配&#10;文件字段过滤：匹配词&#10;文件夹字段过滤：&lt;-匹配词-&gt;" />
+            </el-form-item>
+          </div></div>
         <el-row :gutter="16"><el-col :span="12"><el-form-item label="实时监控"><el-switch v-model="editPurifyForm.monitor_enabled" /></el-form-item></el-col><el-col :span="12"><el-form-item label="启用规则"><el-switch v-model="editPurifyForm.enabled" /></el-form-item></el-col></el-row>
       </el-form>
       <template #footer><el-button @click="editPurifyDialogVisible = false">取消</el-button><el-button type="primary" class="rule-save-button" :loading="editing" @click="submitUpdatePurifyRule">保存</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="createLinkDialogVisible" title="新增链路规则" width="640px">
+    <el-dialog v-model="createLinkDialogVisible" title="新增链路规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="createLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="链路模式">
-              <el-select v-model="createLinkForm.link_mode" :class="['mode-select', `mode-select--${createLinkForm.link_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="软链模式" value="soft" />
-                <el-option label="硬链模式" value="hard" />
-                <el-option label="Strm模式" value="strm" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="createLinkForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="createLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="链路模式">
+            <el-select v-model="createLinkForm.link_mode" :class="['mode-select', `mode-select--${createLinkForm.link_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="软链模式" value="soft" />
+              <el-option label="硬链模式" value="hard" />
+              <el-option label="Strm模式" value="strm" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--path" label="源路径"><el-input v-model="createLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+          <el-form-item class="rule-field rule-field--path" label="目标路径"><el-input v-model="createLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('createLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        </div>
         <template v-if="createLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">媒体文件</div></div>
@@ -830,26 +618,24 @@
       <template #footer><el-button @click="createLinkDialogVisible = false">取消</el-button><el-button type="primary" :loading="creating" @click="submitCreateLinkRule">创建</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="editLinkDialogVisible" title="编辑链路规则" width="640px">
+    <el-dialog v-model="editLinkDialogVisible" title="编辑链路规则" width="min(920px, 92vw)">
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12"><el-form-item label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="Cron 表达式"><el-input v-model="editLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item></el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="链路模式">
-              <el-select v-model="editLinkForm.link_mode" :class="['mode-select', `mode-select--${editLinkForm.link_mode}`]" style="width: 100%">
-                <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
-                <el-option label="软链模式" value="soft" />
-                <el-option label="硬链模式" value="hard" />
-                <el-option label="Strm模式" value="strm" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
-        <el-form-item label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--name" label="规则名称"><el-input v-model="editLinkForm.name" /></el-form-item>
+          <el-form-item class="rule-field rule-field--cron" label="Cron 表达式"><el-input v-model="editLinkForm.cron_expression" placeholder="留空表示不启用计划执行，例如：30 4 * * *" /></el-form-item>
+          <el-form-item class="rule-field rule-field--mode" label="链路模式">
+            <el-select v-model="editLinkForm.link_mode" :class="['mode-select', `mode-select--${editLinkForm.link_mode}`]" style="width: 100%">
+              <template #label="{ label }"><span class="mode-pill">{{ label }}</span></template>
+              <el-option label="软链模式" value="soft" />
+              <el-option label="硬链模式" value="hard" />
+              <el-option label="Strm模式" value="strm" />
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="rule-field-row">
+          <el-form-item class="rule-field rule-field--path" label="源路径"><el-input v-model="editLinkForm.source_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'source_dir')">选择目录</el-button></template></el-input></el-form-item>
+          <el-form-item class="rule-field rule-field--path" label="目标路径"><el-input v-model="editLinkForm.target_dir"><template #append><el-button @click="openDirectoryPicker('editLink', 'target_dir')">选择目录</el-button></template></el-input></el-form-item>
+        </div>
         <template v-if="editLinkForm.link_mode === 'strm'">
           <button type="button" class="mode-config-toggle mode-config-toggle--secondary" disabled>
             <div><div class="mode-config-panel__title">媒体文件</div></div>
@@ -939,7 +725,6 @@
 <script setup lang="ts">
 import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
 import OutlinedGroup from '../components/OutlinedGroup.vue'
-import { ArrowDown, Delete, Edit } from '@element-plus/icons-vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -948,25 +733,10 @@ import type { SortableEvent } from 'sortablejs'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
 import BackupRulesPanel from '../components/BackupRulesPanel.vue'
-import RunDetailList from '../components/RunDetailList.vue'
 import RuleCard from '../components/RuleCard.vue'
 import CardContextMenu, { type CardContextMenuItem } from '../components/CardContextMenu.vue'
 import { cancelRun, fetchActiveRuns, prepareRuleExecution, type RunInstance } from '../api/executions'
 import { createRule, deleteRule, fetchCronPreview, fetchRule, fetchRules, reorderRules, updateRule, type RuleItem, type UpdateRulePayload } from '../api/rules'
-import {
-  clearRunHistory,
-  emptyRunHistory,
-  fetchRunHistory,
-  fetchRunHistoryDetail,
-  type RunHistoryItem,
-  type RunHistorySummary,
-} from '../api/runHistory'
-import {
-  backupTriggerLabel,
-  buildRunDetailSummarySegments,
-  parseRunDetail,
-  type RunDetailSummaryKey,
-} from '../utils/backupDetail'
 
 type ArchiveMode = 'package' | 'collect'
 type CompatibilityMode = 'local' | 'compatibility'
@@ -978,16 +748,8 @@ type CleanupOptionKey = 'cleanup_empty_dirs' | 'cleanup_matching_files' | 'clean
 type CleanupOptionValueKey = 'cleanup_retention_days'
 type TransformOptionKey = 'convert_traditional_to_simplified' | 'convert_matching_text' | 'filter_matching_text' | 'merge_same_name_dirs'
 type PurifyArchiveMode = 'cleanup' | 'transform'
-type HistoryStatus = 'success' | 'skip' | 'failed'
-type HistoryTreeRow = RunHistoryItem & {
-  id: string
-  title: string
-  description: string
-  is_group: boolean
-  source?: RunHistoryItem
-}
 type DirectoryPickerTarget = 'create.source_dir' | 'create.target_dir' | 'edit.source_dir' | 'edit.target_dir' | 'createPurify.source_dir' | 'editPurify.source_dir' | 'createLink.source_dir' | 'createLink.target_dir' | 'editLink.source_dir' | 'editLink.target_dir' | 'createNaming.source_dir' | null
-type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'backup' | 'history'
+type TabKey = 'rules' | 'purify' | 'link' | 'naming' | 'backup'
 type RuleListType = 'archive' | 'cleanup' | 'link' | 'naming'
 type StoredNamingRuleSet = { id: number; name: string; rules: Array<Record<string, unknown>> }
 type PurifyOptions = Record<CleanupOptionKey | TransformOptionKey, boolean>
@@ -1051,16 +813,6 @@ function createDefaultTransformOptions(): Record<TransformOptionKey, boolean> {
 
 function createDefaultPurifyOptions(): PurifyOptions {
   return { ...createDefaultCleanupOptions(), ...createDefaultTransformOptions() }
-}
-
-function createDefaultHistorySummary(): RunHistorySummary {
-  return {
-    total: 0,
-    today: 0,
-    success: 0,
-    failed: 0,
-    skipped: 0,
-  }
 }
 
 function parseOptionJSON<T extends Record<string, boolean>>(raw: string | undefined, defaults: T): T {
@@ -1295,20 +1047,6 @@ function resolveRunMode(monitorEnabled: boolean, scheduleEnabled: boolean): 'wat
   return 'once'
 }
 
-// 折叠任务列表的「时间」列：只到月日与时分秒（9/17 14:05:03）。
-// 折叠条目标题里已经不放时间了，列里再带上年份只是噪音。
-function formatMonthDayTime(value?: string) {
-  if (!value) {
-    return '—'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '—'
-  }
-  const pad = (input: number) => String(input).padStart(2, '0')
-  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-}
-
 const RULES_WHEEL_SCROLLBAR_BAND = 10
 const rulesPageRef = ref<HTMLElement | null>(null)
 
@@ -1372,14 +1110,6 @@ async function handleCronPreviewShow(ruleId: number, expression: string) {
       cronPreviewLoadingRuleId.value = null
     }
   }
-}
-
-function historyStatusText(status: string) {
-  if (status === 'success') return '成功'
-  if (status === 'skip') return '跳过'
-  if (status === 'failed') return '失败'
-  if (status === 'cancelled') return '已停止'
-  return status || '未知'
 }
 
 function normalizeRuleType(rule: RuleItem): RuleListType {
@@ -1509,7 +1239,6 @@ const archiveLoading = ref(false)
 const purifyLoading = ref(false)
 const linkLoading = ref(false)
 const namingLoading = ref(false)
-const historyLoading = ref(false)
 const creating = ref(false)
 const editing = ref(false)
 const errorMessage = ref('')
@@ -1548,56 +1277,11 @@ const purifyRulesPageSize = ref(25)
 const linkRulesCurrentPage = ref(1)
 const linkRulesPageSize = ref(25)
 const linkRulesTotal = ref(0)
-const historyPageSize = ref(25)
-const historyCurrentPage = ref(1)
-const historyTotal = ref(0)
-const historyKeywordInput = ref('')
-const historyKeyword = ref('')
-const historySortBy = ref<'name' | 'modified_at'>('modified_at')
-const historySortOrder = ref<'asc' | 'desc'>('desc')
-const historyStatusFilter = ref<'all' | 'success' | 'failed' | 'skip'>('all')
-const historyRuleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'>('all')
-const historyDetailDialogVisible = ref(false)
-const selectedHistoryGroup = ref<HistoryTreeRow | null>(null)
-// 运行详情（detail_json）：各链路共用，不再只服务备份。
-const selectedRunDetail = ref<RunHistoryItem | null>(null)
-// 标题下统计项里点中的那一项：null = 不筛选，列出全部文件明细。
-const detailFilterKey = ref<RunDetailSummaryKey | null>(null)
-
 const archiveRules = ref<RuleItem[]>([])
 const purifyRules = ref<RuleItem[]>([])
 const linkRules = ref<RuleItem[]>([])
 const namingRules = ref<RuleItem[]>([])
 const availableNamingRuleSets = ref<StoredNamingRuleSet[]>([])
-const historyItems = ref<RunHistoryItem[]>(emptyRunHistory())
-const historySummary = ref<RunHistorySummary>(createDefaultHistorySummary())
-
-const successCount = computed(() => historySummary.value.success)
-const skipCount = computed(() => historySummary.value.skipped)
-const failedCount = computed(() => historySummary.value.failed)
-const historyTreeRows = computed(() => buildHistoryTreeRows(historyItems.value))
-// 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
-const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
-// 详情窗口标题下的第一段文字：只留触发方式。标题已经是「X任务 · 规则自定义名」，
-// 小字里再重复一遍规则名是纯冗余（用户点名去掉）。成功 / 跳过 / 失败不再是死文本，
-// 而是后面的可点击统计项（见 selectedHistoryGroupSegments）。
-// strm 任务再补上「Strm N · 元数据 N」：面板里已去掉动作页签，这两类数目只能在这里给。
-const selectedHistoryGroupLeading = computed(() => {
-  const group = selectedHistoryGroup.value
-  if (!group) {
-    return ''
-  }
-  return historyTriggerText(group)
-})
-// 统计项：成功 / 跳过 / 失败 + strm 链路额外的 Strm / 元数据。点击即筛选下面的文件明细。
-const selectedHistoryGroupSegments = computed(() =>
-  buildRunDetailSummarySegments(selectedHistoryGroup.value ?? {}, selectedRunDetailManifest.value),
-)
-// 点中的统计项：再点一次同一个即取消筛选。
-function toggleDetailFilter(key: RunDetailSummaryKey) {
-  detailFilterKey.value = detailFilterKey.value === key ? null : key
-}
-
 const purifyRulesTotal = ref(0)
 
 let archiveSortable: Sortable | null = null
@@ -1759,13 +1443,6 @@ function modeSelection(resolveOptions: () => ModeOptionsRecord, resolveKeys: () 
     get: () => pickModeKeys(resolveOptions(), resolveKeys()),
     set: (selected) => setModeKeys(resolveOptions(), resolveKeys(), selected),
   })
-}
-
-// 「全选」按钮：已全中则整体取消，否则补齐。直接写回 options 对象（和 v-model 同一份数据），
-// 不绕 selection 计算属性传参 —— 模板里 ref 会自动解包，传进去拿不到 .value。
-function toggleAllMode(options: ModeOptionsRecord, keys: readonly ModeOptionItem[]) {
-  const allSelected = keys.every((option) => options[option.key])
-  for (const option of keys) options[option.key] = !allSelected
 }
 
 // 单个「功能模块」胶囊的开关。key 走索引签名，所以调用方传 options 对象本身
@@ -2517,32 +2194,7 @@ async function handleRuleReorder(ruleType: RuleListType, oldIndex: number, newIn
   }
 }
 
-async function loadHistory() {
-  historyLoading.value = true
-  errorMessage.value = ''
-  try {
-    const response = await fetchRunHistory({
-      page: historyCurrentPage.value,
-      page_size: historyPageSize.value,
-      keyword: historyKeyword.value || undefined,
-      status: historyStatusFilter.value === 'all' ? undefined : historyStatusFilter.value,
-      rule_type: historyRuleTypeFilter.value === 'all' ? undefined : historyRuleTypeFilter.value,
-      sort_by: historySortBy.value,
-      sort_order: historySortOrder.value,
-      // 展示方式固定为折叠（分组）视图，平铺已取消。
-      view_mode: 'tree',
-    })
-    historyItems.value = response.data?.items ?? []
-    historyTotal.value = response.data?.total ?? 0
-    historySummary.value = response.data?.summary ?? createDefaultHistorySummary()
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '历史记录加载失败'
-  } finally {
-    historyLoading.value = false
-  }
-}
-
-const TabKeys: TabKey[] = ['rules', 'purify', 'link', 'naming', 'backup', 'history']
+const TabKeys: TabKey[] = ['rules', 'purify', 'link', 'naming', 'backup']
 
 function syncTabToUrl(tab: TabKey) {
   if (route.query.tab !== tab) {
@@ -2573,15 +2225,12 @@ async function switchTab(tab: TabKey) {
     await loadLinkRules()
     return
   }
+
   if (tab === 'naming') {
     await loadNamingRules()
     return
   }
-  if (tab === 'backup') {
-    return
-  }
-
-  await loadHistory()
+  // 备份页签由 BackupRulesPanel 自己取数，这里不需要额外加载。
 }
 
 function handleLinkRulesPageChange(page: number) {
@@ -2617,155 +2266,7 @@ function handlePurifyRulesPageSizeChange(pageSize: number) {
   void loadPurifyRules()
 }
 
-function handleHistoryPageChange(page: number) {
-  historyCurrentPage.value = page
-  void loadHistory()
-}
-
-function handleHistoryPageSizeChange(pageSize: number) {
-  historyPageSize.value = pageSize
-  historyCurrentPage.value = 1
-  void loadHistory()
-}
-
-function handleHistorySearch() {
-  historyKeyword.value = historyKeywordInput.value.trim()
-  historyCurrentPage.value = 1
-  void loadHistory()
-}
-
-function handleHistorySortChange() {
-	historyCurrentPage.value = 1
-	void loadHistory()
-}
-
-function toggleHistorySortOrder() {
-  historySortOrder.value = historySortOrder.value === 'asc' ? 'desc' : 'asc'
-  handleHistorySortChange()
-}
-
-function handleHistoryStatusChange() {
-	historyCurrentPage.value = 1
-	void loadHistory()
-}
-
-function handleHistoryRuleTypeChange() {
-	historyCurrentPage.value = 1
-	void loadHistory()
-}
-
-function buildHistoryGroupKey(item: RunHistoryItem) {
-  return [item.rule_id ?? 'manual', item.rule_name || '', item.trigger_mode || '', item.archive_mode || '', item.link_mode || '', item.started_at || ''].join('|')
-}
-
-function resolveHistoryGroupStatus(items: RunHistoryItem[]) {
-  if (items.some((item) => item.status === 'failed')) return 'failed'
-  if (items.some((item) => item.status === 'skip')) return 'skip'
-  if (items.some((item) => item.status === 'cancelled')) return 'cancelled'
-  return 'success'
-}
-
-function buildHistoryTreeRows(items: RunHistoryItem[]): HistoryTreeRow[] {
-  const groups = new Map<string, RunHistoryItem[]>()
-  for (const item of items) {
-    const key = buildHistoryGroupKey(item)
-    const current = groups.get(key)
-    if (current) {
-      current.push(item)
-    } else {
-      groups.set(key, [item])
-    }
-  }
-
-  return Array.from(groups.entries()).map(([key, groupItems]) => {
-    const first = groupItems[0]
-    const processed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.processed_files || 0)), 0) || groupItems.length
-    const success = groupItems.reduce((total, item) => total + Math.max(0, Number(item.success_count || 0)), 0)
-    const skipped = groupItems.reduce((total, item) => total + Math.max(0, Number(item.skip_count || 0)), 0)
-    const failed = groupItems.reduce((total, item) => total + Math.max(0, Number(item.failure_count || 0)), 0)
-    const sizeBytes = groupItems.reduce((total, item) => total + Math.max(0, Number(item.size_bytes || 0)), 0)
-    const updatedAt = groupItems.reduce((latest, item) => {
-      const value = item.updated_at || item.finished_at || item.started_at
-      return !latest || new Date(value).getTime() > new Date(latest).getTime() ? value : latest
-    }, first.updated_at || first.finished_at || first.started_at)
-
-    return {
-      ...first,
-      id: `group-${key}`,
-      source: first,
-      status: resolveHistoryGroupStatus(groupItems),
-      processed_files: processed,
-      success_count: success,
-      skip_count: skipped,
-      failure_count: failed,
-      size_bytes: sizeBytes,
-      updated_at: updatedAt,
-      // 标题 = 「是什么任务 + 这条规则的自定义名」（如「备份任务 · 剧集追更备份」）：
-      // 时间不放在这里，它在右侧的独立列里，两边重复没意义。
-      title: `${historyModeLabel(first)}任务 · ${first.rule_name || '未知规则'}`,
-      // 副行给「触发方式 + 操作量 + 明细条数」，折叠起来也看得出这次干了多少活。
-      description: `${historyTriggerPhrase(first)} · 操作 ${processed} 个文件或文件夹 · 共 ${groupItems.length} 条明细`,
-      is_group: true,
-    }
-  })
-}
-
-// 详情窗口 = 任务级摘要（标题 + 可点击的统计项 + 模式标签）+ 文件级执行明细。
-// 备份任务的规则卡片（源 / 目标 / 扫描配置 / 删除策略）不在这里重复一遍：
-// 那一整块就是备份卡片本身，照搬过来只会把明细挤下去。
-function openHistoryDetailDialog(row: HistoryTreeRow) {
-  if (!row.is_group) return
-  selectedHistoryGroup.value = row
-  selectedRunDetail.value = null
-  // 换一条记录就回到「不筛选」，免得把上一条的筛选态带过来。
-  detailFilterKey.value = null
-  historyDetailDialogVisible.value = true
-  void loadSelectedRunDetail(row)
-}
-
-// 执行明细单独拉取：列表接口为避免响应过大不带 detail_json。
-// 各链路（备份 / strm / 打包…）共用同一个明细载荷，有就展示、没有就自然隐藏面板。
-async function loadSelectedRunDetail(row: HistoryTreeRow) {
-  selectedRunDetail.value = null
-  const historyID = row.source?.id
-  if (!historyID) {
-    return
-  }
-  try {
-    const payload = await fetchRunHistoryDetail(historyID)
-    selectedRunDetail.value = payload.data?.item ?? null
-  } catch {
-    selectedRunDetail.value = null
-  }
-}
-
-function triggerModeText(mode?: string) {
-  if (mode === 'cron') return '定时'
-  if (mode === 'watch') return '监听'
-  return '手动'
-}
-
-// 备份任务的触发方式用「实时监控 / 计划扫描 / 手动」表述，与其它规则区分。
-function historyTriggerText(item?: { archive_mode?: string; trigger_mode?: string }) {
-  if (item?.archive_mode === 'backup') {
-    return backupTriggerLabel(item.trigger_mode)
-  }
-  return triggerModeText(item?.trigger_mode)
-}
-
-// 折叠条目副行的触发措辞：统一带上「触发」二字
-//（实时监控触发 / 计划扫描触发 / 手动执行触发），各链路一视同仁。
-function historyTriggerPhrase(item?: { trigger_mode?: string }) {
-  if (item?.trigger_mode === 'watch') {
-    return '实时监控触发'
-  }
-  if (item?.trigger_mode === 'cron') {
-    return '计划扫描触发'
-  }
-  return '手动执行触发'
-}
-
-function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
+function ruleModeLabel(item?: { archive_mode?: string; link_mode?: string }) {
 	switch (item?.archive_mode) {
 	case 'package':
 		return '打包'
@@ -2787,7 +2288,7 @@ function historyModeLabel(item?: { archive_mode?: string; link_mode?: string }) 
 	}
 }
 
-function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string }) {
+function ruleModeTagClass(item?: { archive_mode?: string; link_mode?: string }) {
 	switch (item?.archive_mode) {
 	case 'package':
 		return 'custom-mode-tag--package'
@@ -3349,27 +2850,6 @@ async function removeRule(id: number, type: RuleListType) {
   }
 }
 
-async function clearHistory(status: HistoryStatus) {
-  try {
-    await ElMessageBox.confirm(`确认删除全部${historyStatusText(status)}记录吗？`, '删除历史', { type: 'warning' })
-    await clearRunHistory(status)
-    historyCurrentPage.value = 1
-    await loadHistory()
-    ElMessage.success(`已删除${historyStatusText(status)}记录`)
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    errorMessage.value = error instanceof Error ? error.message : '删除历史记录失败'
-  }
-}
-
-// 删除下拉（成功 / 跳过 / 失败）：由 el-dropdown 的 command 传进来，
-// 三个入口共用 clearHistory 里那套二次确认。
-function handleHistoryClear(command: string | number | object) {
-  if (command === 'success' || command === 'skip' || command === 'failed') {
-    void clearHistory(command)
-  }
-}
-
 onMounted(() => {
   window.addEventListener('wheel', handleRulesTableWheel, { passive: false })
 
@@ -3406,61 +2886,11 @@ onBeforeUnmount(() => {
 .rules-tabs__item.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px; background: #098ee1; border-radius: 999px; }
 .rules-tabs__item--naming.is-active { color: #0f9f87; }
 .rules-tabs__item--naming.is-active::after { background: #0f9f87; }
-/* 归巢历史单独走暖橙，与规则类页签的青蓝区分开。
-   沿革：轮 69 #d99a00 → #e8a90c（琥珀金），轮 71 暖橙 #f07f16，轮 72 定稿 #f2a65a。
-   橙色在 L51 的**感知亮度明显低于同明度的蓝**，看着就比旁边页签"沉"——所以「提亮 + 降饱和」
-   双管齐下：明度 51% → 65%、饱和 88% → 85%，色相仍锁在 30° 暖橙区间
-   —— 直观（一眼还是橙）、不辣眼（压了饱和）、清透（提了明度）。 */
-.rules-tabs__item--history:hover { color: #f2a65a; }
-.rules-tabs__item--history.is-active { color: #f2a65a; }
-.rules-tabs__item--history.is-active::after { background: #f2a65a; }
 .rules-error { margin-bottom: 4px; }
 .rules-card__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .rules-card__title { font-size: 18px; font-weight: 700; color: var(--el-text-color-primary); }
-/* 归巢历史的标题行要装下「统计 + 排序 + 筛选 + 搜索 + 删除」，比其它页签满得多，
-   所以这一页额外允许折行；其它页签的 .rules-card__header 不动。 */
-.history-card__header { flex-wrap: wrap; row-gap: 10px; }
 .rules-card__header-main { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; min-width: 0; }
-/* 右侧控件组：排序 / 状态 / 规则 / 搜索 / 删除。margin-left:auto 保证折行后也贴右。 */
-.history-header-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
-/* 统计文字跟着标题走，比原来占一整行那版小一档，免得抢标题。 */
-.history-summary { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--el-text-color-secondary); }
-.history-summary__control { width: 118px; }
-/* 删除下拉的箭头：紧贴文字，别把按钮撑宽。 */
-.history-clear__caret { margin-left: 2px; font-size: 12px; }
-.history-sort-order-button { width: 32px; height: 32px; min-height: 32px; color: var(--el-text-color-primary); background: rgba(255, 255, 255, 0.82); border-color: var(--el-border-color); transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
-.history-sort-order-button:not(.is-disabled):hover { color: #0975b8; border-color: rgba(32, 159, 238, 0.42); background: rgba(32, 159, 238, 0.14); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.1); transform: translateY(-1px); }
-.history-sort-order-button__icon { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-/* 标题行里的搜索框：比独占一行那版窄一档，给删除下拉留位置。 */
-.history-search__input { width: 230px; }
-.history-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
-.history-tree-table :deep(.el-table__row) { cursor: pointer; }
-/* 折叠任务列：文字整体往右挪一档（表头与内容一起挪，保持对齐）。
-   为了让后面几列往左靠，任务列宽度由 min-width 改成了定宽，见模板注释。
-   注意 `.history-tree-table` 本身就是 el-table 根元素，选择器里**不能再写 `.el-table`**
-   （那要求 el-table 是它的后代，永远匹配不上）。 */
-.history-tree-table :deep(th:first-child .cell),
-.history-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
-/* 折叠任务列的任务条目（标题 + 副行）：走系统默认 UI 字体（--font-ui），与运行日志、
-   页面其它文字一致。原来是自托管的鸿蒙字体，用户反馈不好看，已去掉。
-   这里必须显式声明：这个节点是 <button>，浏览器对按钮默认用表单控件字体，不继承 body。 */
-.history-detail-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0; text-align: left; background: transparent; border: 0; cursor: pointer; font-family: var(--font-ui); }
-.history-detail-card__title { font-size: 16px; font-weight: 700; line-height: 1.55; color: var(--el-text-color-primary); }
-.history-detail-card__desc { font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); }
-/* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
-   让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
-.detail-dialog-summary { display: flex; align-items: flex-start; justify-content: space-between; flex: 0 0 auto; gap: 18px; margin-bottom: 8px; padding: 8px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 14px; background: var(--el-fill-color-extra-light); }
-.detail-dialog-summary__main { min-width: 0; flex: 1 1 auto; }
-.detail-dialog-summary__title { font-size: 15px; font-weight: 800; color: var(--el-text-color-primary); }
-/* 前缀文字与可点击的统计项排在一行，靠 gap 分隔，窄了自动换行。 */
-.detail-dialog-summary__desc { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 3px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--el-text-color-secondary); }
-.detail-dialog-summary__tags { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.history-status { display: inline-flex; align-items: center; justify-content: center; min-width: 68px; padding: 6px 10px; border-radius: 10px; border: 2px solid currentColor; font-weight: 700; transform: rotate(-8deg); }
-.history-status.is-success { color: #22c55e; }
-.history-status.is-skip { color: #f59e0b; }
-.history-status.is-failed { color: #ef4444; }
-/* 手动停止：中性灰蓝，既不亮成「成功」也不红成「失败」。 */
-.history-status.is-cancelled { color: #64748b; }
+.rules-pagination { display: flex; justify-content: flex-end; margin-top: 16px; }
 .rules-page :deep(.rules-table) {
   width: 100%;
 }
@@ -3690,34 +3120,8 @@ onBeforeUnmount(() => {
   border-color: rgba(11, 157, 248, 0.74);
 }
 
-/* 「功能模块」多选下拉：标签行右侧挂一个「全选 / 取消全选」按钮。 */
 .mode-select-field :deep(.el-form-item__label) {
   width: 100%;
-}
-
-.mode-select-field__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.mode-select-field__all {
-  padding: 2px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #0975b8;
-  background: rgba(32, 159, 238, 0.1);
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color 0.16s ease, background-color 0.16s ease;
-}
-
-.mode-select-field__all:hover {
-  color: #055a8f;
-  background: rgba(32, 159, 238, 0.2);
 }
 
 .rules-page :deep(.rules-table--sortable .el-table__row) {
@@ -3852,13 +3256,6 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color);
 }
 
-@media (max-width: 900px) {
-  /* 标题行里的控件在窄屏铺满一行：搜索框跟着吃满剩余宽度。 */
-  .history-header-controls { justify-content: flex-start; }
-  .history-summary__control { width: calc((100% - 48px) / 3); min-width: 0; }
-  .history-search__input { flex: 1 1 180px; width: auto; }
-}
-
 @media (max-width: 1440px) {
   .rules-page :deep(.rules-table .el-switch__label) {
     display: none;
@@ -3868,4 +3265,90 @@ onBeforeUnmount(() => {
     padding: 12px 0;
   }
 }
+
+/* —— 规则弹窗的字段排布（轮 108）—— */
+/* 规则名称 / Cron / 归档模式 / 监控模式挤一行：名称与 Cron 按比例吃掉剩余宽度，
+   两个模式选择器定宽（够放字体的宽度就行，不撑满）。源路径 + 目标路径同理各占一半；
+   监控目录本身是 OutlinedGroup，天然独占一行。 */
+.rule-field-row {
+  display: flex;
+  align-items: flex-start;
+  /* 窗口窄了整行折行：宽屏时四字段/两路径各占一行，窄屏时按最小宽度拆成两行，
+     不会把规则名称挤成一条缝（字段自己的 18px 底距负责折行后的行间距）。 */
+  flex-wrap: wrap;
+  column-gap: 16px;
+  row-gap: 0;
+}
+
+.rule-field-row > .rule-field {
+  min-width: 0;
+}
+
+.rule-field-row > .rule-field--name {
+  flex: 1 1 0;
+  min-width: 160px;
+}
+
+.rule-field-row > .rule-field--cron {
+  flex: 1 1 0;
+  min-width: 180px;
+}
+
+.rule-field-row > .rule-field--path {
+  flex: 1 1 0;
+  min-width: 200px;
+}
+
+.rule-field-row > .rule-field--mode {
+  flex: 0 0 148px;
+}
+
+/* 匹配归档 / 单件归巢 / 过滤清除 / 空目录白名单这类规则输入区：一行两格各占一半；
+   窗口窄了自动退回单列。只剩一格时独占整行（用户点名允许），免得右半边空着难看。 */
+.rule-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.rule-section-grid > .rule-section {
+  min-width: 0;
+}
+
+.rule-section-grid > .rule-section:only-child {
+  grid-column: 1 / -1;
+}
+
+/* 网格里的文本域自己就是区块下半段：底距交给 grid 的 gap，别再叠一层 form-item 的 18px。 */
+.rule-section > .transform-section-input {
+  margin-bottom: 0;
+}
+
+/* 文本域右下角的拉伸器：浏览器自绘的那道灰斜杠贴不到 12px 圆角上，看着像"出了框"。
+   先抹掉原生绘制，再由 .outlined-field::after 自绘两道斜线（跟随描边色，
+   悬停 / 聚焦自动跟着变深变蓝），纵向拖拽能力保留。 */
+.transform-section-input :deep(.el-textarea__inner) {
+  resize: vertical;
+}
+
+.transform-section-input :deep(.el-textarea__inner)::-webkit-resizer {
+  background: transparent;
+}
+
+.transform-section-input :deep(.outlined-field)::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 10px;
+  height: 10px;
+  background-color: var(--field-line, var(--control-line));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M2.2 9.2 9.2 2.2'/%3E%3Cpath d='M6.6 9.2 9.2 6.6'/%3E%3C/g%3E%3C/svg%3E") no-repeat center / contain;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M2.2 9.2 9.2 2.2'/%3E%3Cpath d='M6.6 9.2 9.2 6.6'/%3E%3C/g%3E%3C/svg%3E") no-repeat center / contain;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 </style>

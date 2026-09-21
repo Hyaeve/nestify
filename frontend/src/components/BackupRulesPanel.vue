@@ -85,7 +85,7 @@
     <el-dialog
       v-model="wizardVisible"
       :title="wizardEditing ? '编辑备份规则' : '添加备份规则'"
-      width="720px"
+      width="min(920px, 92vw)"
       destroy-on-close
       @closed="resetWizard"
     >
