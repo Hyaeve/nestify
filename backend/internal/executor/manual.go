@@ -69,7 +69,8 @@ func (s *Service) RecordManualCollectRun(sourcePaths []string, collectedPaths []
 		s.appendLog(run.ID, "info", fmt.Sprintf("文件已收集至：%s", path))
 	}
 
-	s.persistRunHistory(run.ID, fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)), &executionStats{
+	// 手动收集是一次性任务，这一条就是它的代表行（见 service.persistRunHistoryWithDetail）。
+	s.persistRunHistoryWithDetail(run.ID, fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)), &executionStats{
 		ProcessedFiles: len(cleanSources),
 		SuccessCount:   len(collectedPaths),
 		Summary:        fmt.Sprintf("手动收集完成：共处理 %d 个文件夹", len(collectedPaths)),
@@ -124,7 +125,7 @@ func (s *Service) RecordManualPackRun(sourcePaths []string, outputPaths []string
 	}
 
 	summary := fmt.Sprintf("手动压缩完成：%d 个文件夹，输出 %d 个压缩包", len(cleanSources), len(cleanOutputs))
-	s.persistRunHistory(run.ID, summary, &executionStats{
+	s.persistRunHistoryWithDetail(run.ID, summary, &executionStats{
 		ProcessedFiles: len(cleanSources),
 		SuccessCount:   len(cleanOutputs),
 		Summary:        summary,

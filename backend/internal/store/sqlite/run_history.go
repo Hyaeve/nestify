@@ -74,11 +74,35 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		return fmt.Errorf("upsert run history: %w", err)
 	}
 
-	if err := s.applyRunHistoryRetentionPolicy(); err != nil {
+	if err := s.maybeApplyRunHistoryRetention(); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// runHistoryRetentionInterval 是运行日志保留策略的最小执行间隔。
+//
+// 为什么必须节流：run_history 是「每处理一项写一行」，一次大执行会插上万行；
+// 而保留策略里那条 `DELETE ... WHERE id NOT IN (SELECT id ... ORDER BY started_at DESC LIMIT N)`
+// 每次都要扫一遍全表、并把最多 N 个 id 物化成临时 B 树。逐行跑的话代价是
+// O(项数 × 表行数)，单轮上万项就是上亿次行访问 + 上万次临时表构建 ——
+// 实测这会把容器的内存与 CPU 一起顶到几个 G。节流后代价恒定在「每 30 秒一次」，
+// 裁剪结果最多晚一个间隔生效，没有正确性影响。
+const runHistoryRetentionInterval = 30 * time.Second
+
+// maybeApplyRunHistoryRetention 按时间节流地执行保留策略（见上）。
+func (s *Store) maybeApplyRunHistoryRetention() error {
+	s.retentionMu.Lock()
+	now := time.Now()
+	if !s.retentionAt.IsZero() && now.Sub(s.retentionAt) < runHistoryRetentionInterval {
+		s.retentionMu.Unlock()
+		return nil
+	}
+	s.retentionAt = now
+	s.retentionMu.Unlock()
+
+	return s.applyRunHistoryRetentionPolicy()
 }
 
 func (s *Store) applyRunHistoryRetentionPolicy() error {

@@ -86,7 +86,11 @@ func TestRunHistoryDetailJSONRoundTrip(t *testing.T) {
 //
 // 一次执行会写出多行历史（每处理一个文件落一行），它们共享同一个 started_at、id 又是随机的。
 // 前端「折叠任务」组取的是**组内第一条**的 detail_json，只按 id 兜底时这条是随机的，
-// 明细就可能只显示前几个文件。明细逐步累积写出、长度单调不减，所以按长度降序稳定取到最全的一份。
+// 明细就可能取到没带明细的逐项记录。因此这里按长度降序稳定取到最全的一份。
+//
+// 注意（轮 109 起）：**逐项记录不再各自带一份累积明细**，整份明细只在执行收尾落一次
+// （见 executor.persistRunHistory 的说明）。所以生产库里「最长的那一份」就是收尾那条；
+// 本用例用合成的长 / 短明细来验证排序机制本身，与写入策略无关。
 func TestListRunHistoryGroupPrefersCompleteDetail(t *testing.T) {
 	store, err := Open(config.Env{DBPath: filepath.Join(t.TempDir(), "nestify-test.db")})
 	if err != nil {

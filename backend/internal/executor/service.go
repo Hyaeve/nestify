@@ -61,8 +61,12 @@ func (s *Service) ListHistory() []model.RunHistoryItem {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	items := make([]model.RunHistoryItem, len(s.history))
-	copy(items, s.history)
+	// s.history 内部按写入顺序存放（见 recordHistory），这里翻回「最新在最前」，
+	// 与 store 侧 ListRunHistory 的顺序保持一致。
+	items := make([]model.RunHistoryItem, 0, len(s.history))
+	for index := len(s.history) - 1; index >= 0; index-- {
+		items = append(items, s.history[index])
+	}
 	return items
 }
 
@@ -150,7 +154,9 @@ func (s *Service) RecordManualExtractRun(sourcePaths []string, outputDir string,
 		s.appendLog(run.ID, "info", fmt.Sprintf("已解压到：%s", path))
 	}
 
-	s.persistRunHistory(run.ID, fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)), &executionStats{
+	// 手动解压是一次性任务：这条就是它的代表行，用带明细的版本落（当前 stats 没有明细，
+	// 但语义上「收尾的那一条」就该走这里，免得以后加了明细被无声丢掉）。
+	s.persistRunHistoryWithDetail(run.ID, fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)), &executionStats{
 		ProcessedFiles: len(cleanSources),
 		SuccessCount:   len(extractedPaths),
 		Summary:        fmt.Sprintf("手动解压完成：%d 个压缩包，输出 %d 个目录", len(cleanSources), len(extractedPaths)),
@@ -306,9 +312,11 @@ func (s *Service) runExecution(runID string, req ExecuteRuleRequest) {
 			// 级联删除也算「这次干了活」：一次只做了清理的执行不该被显示成「跳过」。
 			_ = s.store.UpdateRuleExecutionStats(req.RuleID, mapRunStatusByCounts(stats.SuccessCount, stats.SkipCount, stats.FailureCount, stats.cascadeDeletedTotal()), stats.SuccessCount, stats.SkipCount, stats.FailureCount)
 		}
-		if stats.HistoryEvents == 0 {
-			s.persistRunHistory(runID, stats.Summary, &stats)
-		}
+		// 收尾固定补一条「带完整明细」的记录：中间那些逐项记录刻意不带明细（见
+		// persistRunHistory 的说明），前端折叠组按「组内明细最长的一份」取代表行，
+		// 取到的就是这一条 —— 明细展示口径与从前一致，写入量却从 O(n²) 降到 O(n)。
+		// 多监控目录的合并明细也走这里：stats 就是聚合后的那份（Detail 已 merge）。
+		s.persistRunHistoryWithDetail(runID, stats.Summary, &stats)
 		if execErr != nil && !cancelled {
 			return
 		}
@@ -355,11 +363,9 @@ func (s *Service) executeRuleWithSourceDirs(runID string, req ExecuteRuleRequest
 		}
 	}
 	aggregated.Summary = fmt.Sprintf("多监控目录执行完成：%d 个目录，成功 %d，跳过 %d，失败 %d", len(sourceDirs), aggregated.SuccessCount, aggregated.SkipCount, aggregated.FailureCount)
-	// 合并后的全量明细补一条运行记录：它是组内最长的一份，详情窗口因此能看到
-	// 所有监控目录的条目（数量与 counts 一致，折叠成一条记录后只多这一行）。
-	if aggregated.Detail != nil {
-		s.persistRunHistory(runID, aggregated.Summary, &aggregated)
-	}
+	// 这里不再单独补一条「合并明细」记录：调用方（runExecution）收尾时用的就是**同一个**
+	// aggregated（Detail 已经 merge 过），落的那一条已带完整明细 —— 合并后的条目一条不少，
+	// 反而少写一行。轮 109 之前需要它，是因为当时的逐项记录各自都带着全量明细。
 	return aggregated, lastErr
 }
 
@@ -472,8 +478,24 @@ func ParseTransformRulesJSON(raw string) []string {
 	return ParseStringListJSON(raw)
 }
 
+// persistRunHistory 落一条运行记录 —— **每处理一项都会调一次**，所以这里刻意不带明细。
+//
+// 明细是「本次执行的完整累积快照」（长度随处理项数单调增长，轮 96 起不再有每动作 200 条上限）。
+// 若每落一行都序列化一次全量明细、再把整份写进 sqlite，单轮上万项就是 O(n²) 的 JSON 序列化
+// 与磁盘写入 —— 用户看到的「容器内存涨到几个 G」正是这么来的。
+// 完整明细只在执行收尾时落一次，见 persistRunHistoryWithDetail；前端折叠组按
+// 「组内 detail_json 最长的一份」取代表行，取到的还是那一份，展示口径不变。
 func (s *Service) persistRunHistory(runID, summary string, stats *executionStats) {
-	item := s.recordHistory(runID, summary, stats)
+	s.persistRunHistoryItem(runID, summary, stats, false)
+}
+
+// persistRunHistoryWithDetail 收尾（以及手动解压 / 收集这类单次任务）落的那一条：带完整明细。
+func (s *Service) persistRunHistoryWithDetail(runID, summary string, stats *executionStats) {
+	s.persistRunHistoryItem(runID, summary, stats, true)
+}
+
+func (s *Service) persistRunHistoryItem(runID, summary string, stats *executionStats, withDetail bool) {
+	item := s.recordHistory(runID, summary, stats, withDetail)
 	if item == nil {
 		// 运行实例已不存在（例如已被回收）：既无法落库，也不能拿 nil 回填统计，
 		// 否则会直接空指针 panic。
@@ -493,7 +515,7 @@ func (s *Service) persistRunHistory(runID, summary string, stats *executionStats
 	_ = s.store.UpsertRunHistory(*item)
 }
 
-func (s *Service) recordHistory(runID, summary string, stats *executionStats) *model.RunHistoryItem {
+func (s *Service) recordHistory(runID, summary string, stats *executionStats, withDetail bool) *model.RunHistoryItem {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -541,11 +563,19 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats) *m
 	}
 	// 明细载荷（strm 生成了哪些文件、下载了哪些元数据、打包了哪些文件夹）：
 	// 列表接口会统一清空，详情弹窗按需走 /run-history/detail 拉取。
-	if stats != nil {
+	// 只有收尾那一条带全量明细 —— 中间的逐项记录带了也没人看（折叠组只取最长的一份），
+	// 却会让 JSON 序列化、磁盘写入、内存占用统统退化成 O(n²)。
+	if stats != nil && withDetail {
 		item.DetailJSON = stats.buildDetailJSON()
 	}
 
-	s.history = append([]model.RunHistoryItem{item}, s.history...)
+	// 内存镜像只是 store 不可用时的兜底，所以不驻留明细：一份累积明细可达 MB 级，
+	// 留在堆里会随执行项数线性累积。另外改为顺序追加 —— 原来的「往前插」
+	// （append([]T{item}, s.history...)）每写一行都要把整个切片复制一遍，是另一处 O(n²)。
+	// 读取侧（ListHistory）再翻回「最新在最前」。
+	mirror := item
+	mirror.DetailJSON = ""
+	s.history = append(s.history, mirror)
 	return &item
 }
 

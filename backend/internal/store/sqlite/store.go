@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	"nestify/backend/internal/auth"
 	"nestify/backend/internal/config"
@@ -23,6 +25,12 @@ type Store struct {
 	// run_history 记录搬到日志库里（见 run_history_store.go）。
 	logPath string
 	dbPath  string
+
+	// 运行日志保留策略的时间节流（见 maybeApplyRunHistoryRetention）：
+	// run_history 是「每处理一项写一行」，一次大执行会插上万行；如果每插一行都跑一遍
+	// 全表清理，代价就是 O(项数 × 表行数)，容器内存与 CPU 会一起爆掉。
+	retentionMu sync.Mutex
+	retentionAt time.Time
 }
 
 func Open(env config.Env) (*Store, error) {
