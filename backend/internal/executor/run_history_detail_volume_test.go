@@ -17,8 +17,9 @@ import (
 // O(n²) 的 JSON：序列化开销、sqlite 写入量、以及内存镜像（recordHistory 会顺手塞一份到
 // service.history）会一起把容器顶到几个 G —— 用户报的「内存暴增」就是这个。
 //
-// 现在：逐项记录一律不带明细，整份明细只在收尾落一次；前端折叠组按
-// 「组内 detail_json 最长的一份」取代表行，取到的仍是那一份，展示口径不变。
+// 现在：逐项记录一律不带明细，整份明细只在收尾落一次；折叠组代表行按
+// 「组内 detail_size 最大的一份」排在最前（见 store.runHistoryDetailTieBreak），
+// 明细由详情接口按 id 单条拉取 —— 展示口径不变，读取量也不再与明细体积挂钩。
 func TestRunHistoryDetailWrittenOncePerRun(t *testing.T) {
 	store := openRunHistoryTestStore(t)
 
@@ -63,9 +64,15 @@ func TestRunHistoryDetailWrittenOncePerRun(t *testing.T) {
 		t.Fatalf("逐项记录缺失：组内只有 %d 行，期望至少 %d 行", len(items), matched)
 	}
 
+	// 列表接口不回明细（见 store.runHistoryListColumns 的说明），所以「哪几条带明细」
+	// 要按 id 走单条接口读回来 —— 这也正是前端详情弹窗的取数路径。
 	bearing := make([]string, 0, 1)
 	for _, item := range items {
-		if strings.TrimSpace(item.DetailJSON) != "" {
+		loaded, err := store.GetRunHistoryByID(item.ID)
+		if err != nil {
+			t.Fatalf("读取运行日志明细失败 %s: %v", item.ID, err)
+		}
+		if strings.TrimSpace(loaded.DetailJSON) != "" {
 			bearing = append(bearing, item.ID)
 		}
 	}
@@ -77,8 +84,12 @@ func TestRunHistoryDetailWrittenOncePerRun(t *testing.T) {
 		t.Fatalf("折叠组第一条应是带明细的收尾记录：第一条=%s，带明细=%s", items[0].ID, bearing[0])
 	}
 
+	tail, err := store.GetRunHistoryByID(items[0].ID)
+	if err != nil {
+		t.Fatalf("读取收尾记录失败: %v", err)
+	}
 	var detail model.RunDetail
-	if err := json.Unmarshal([]byte(items[0].DetailJSON), &detail); err != nil {
+	if err := json.Unmarshal([]byte(tail.DetailJSON), &detail); err != nil {
 		t.Fatalf("收尾记录的明细不是合法 JSON: %v", err)
 	}
 	if got := detail.Counts[model.BackupFileActionDelete]; got != matched {

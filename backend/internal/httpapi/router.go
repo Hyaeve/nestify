@@ -1036,7 +1036,12 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		}
 
 		items := a.executor.ListHistory()
-		summary := summarizeRunHistoryItems(items)
+		// 汇总走真正的全表统计：ListHistory 已经截到最近若干条（见 runHistoryListLimit），
+		// 拿这几十上百条去数「今天执行了几次 / 失败几次」会明显偏小。
+		summary, summaryErr := a.store.GetRunHistorySummary()
+		if summaryErr != nil {
+			summary = summarizeRunHistoryItems(items)
+		}
 		writeJSON(w, http.StatusOK, jsonResponse{
 			Success: true,
 			Code:    "OK",

@@ -10,8 +10,8 @@ import (
 	"nestify/backend/internal/model"
 )
 
-// 锁住 run_history 的 detail_json 列：写入 / 列表读回 / 单条读回 / 不存在时的哨兵错误。
-// 备份任务用它保存「本次备份了哪些文件」的明细清单。
+// 锁住 run_history 的 detail_json 列：写入 / 列表读回（**不带明细**）/ 单条读回 /
+// 不存在时的哨兵错误。备份任务用它保存「本次备份了哪些文件」的明细清单。
 func TestRunHistoryDetailJSONRoundTrip(t *testing.T) {
 	store, err := Open(config.Env{DBPath: filepath.Join(t.TempDir(), "nestify-test.db")})
 	if err != nil {
@@ -53,8 +53,11 @@ func TestRunHistoryDetailJSONRoundTrip(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("unexpected items: %d", len(items))
 	}
-	if items[0].DetailJSON != detail {
-		t.Fatalf("list detail_json mismatch: %q", items[0].DetailJSON)
+	// 列表刻意不回明细：接口层拿到就清空（stripRunHistoryDetails），而真去 SELECT
+	// 会把每一行的明细都读进内存 —— 一次执行按项写行、单表上万行，仪表盘还每 5 秒
+	// 拉一次，这正是容器内存被顶起来的那条路径。明细统一走单条接口。
+	if items[0].DetailJSON != "" {
+		t.Fatalf("列表不应返回明细，实际 %q", items[0].DetailJSON)
 	}
 	if items[0].DeletedCount != 2 {
 		t.Fatalf("deleted_count mismatch: %d", items[0].DeletedCount)
@@ -82,15 +85,17 @@ func TestRunHistoryDetailJSONRoundTrip(t *testing.T) {
 	}
 }
 
-// TestListRunHistoryGroupPrefersCompleteDetail 锁定「折叠组取到的是最完整的那份明细」。
+// TestListRunHistoryGroupPrefersCompleteDetail 锁定「折叠组的第一条指向最完整的那份明细」。
 //
 // 一次执行会写出多行历史（每处理一个文件落一行），它们共享同一个 started_at、id 又是随机的。
-// 前端「折叠任务」组取的是**组内第一条**的 detail_json，只按 id 兜底时这条是随机的，
-// 明细就可能取到没带明细的逐项记录。因此这里按长度降序稳定取到最全的一份。
+// 前端「折叠任务」组取的是**组内第一条**的 id，再按需拉那条的明细；只按 id 兜底时这条是
+// 随机的，明细就可能只显示前几个文件。所以排序必须把「明细最长的一份」稳定排在最前。
 //
-// 注意（轮 109 起）：**逐项记录不再各自带一份累积明细**，整份明细只在执行收尾落一次
-// （见 executor.persistRunHistory 的说明）。所以生产库里「最长的那一份」就是收尾那条；
-// 本用例用合成的长 / 短明细来验证排序机制本身，与写入策略无关。
+// 排序键是 `detail_size` 列而不是 LENGTH(detail_json)：后者要 SQLite 把待排序的每一行的
+// 明细都读出来，一次上万行的列表查询就会把几百 MB 明细拉进内存。
+//
+// 注意（轮 109 起）：**逐项记录不再各自带一份累积明细**，整份明细只在执行收尾落一次。
+// 所以生产库里「最长的那一份」就是收尾那条；本用例用合成的长 / 短明细来验证排序机制本身。
 func TestListRunHistoryGroupPrefersCompleteDetail(t *testing.T) {
 	store, err := Open(config.Env{DBPath: filepath.Join(t.TempDir(), "nestify-test.db")})
 	if err != nil {
@@ -145,7 +150,16 @@ func TestListRunHistoryGroupPrefersCompleteDetail(t *testing.T) {
 	if len(items) != 3 {
 		t.Fatalf("组内应返回 3 行，实际 %d", len(items))
 	}
-	if items[0].DetailJSON != longDetail {
-		t.Fatalf("组内第一条应是明细最完整的那份，实际拿到 %q", items[0].DetailJSON)
+	// 列表不回明细，但**顺序**必须仍然指向最完整的那一份：前端拿组内第一条的 id
+	// 去 /run-history/detail 拉明细，排错了详情就只显示前几个文件。
+	if items[0].ID != "aaa-run-c" {
+		t.Fatalf("组内第一条应指向明细最完整的那份（aaa-run-c），实际 %s", items[0].ID)
+	}
+	got, err := store.GetRunHistoryByID(items[0].ID)
+	if err != nil {
+		t.Fatalf("get run history: %v", err)
+	}
+	if got.DetailJSON != longDetail {
+		t.Fatalf("组内第一条应是明细最完整的那份，实际拿到 %q", got.DetailJSON)
 	}
 }

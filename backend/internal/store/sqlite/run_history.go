@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -26,12 +27,16 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		finishedAt = item.FinishedAt.UTC().Format(time.RFC3339)
 	}
 
+	// detail_size = detail_json 的字节数，**在写入时算好存成一列**。
+	// 折叠组要挑「明细最完整的那一份」当代表行，原来直接 `ORDER BY LENGTH(detail_json)`：
+	// 那会让每次列表查询都把全部行的 detail_json 读出来（一次执行上万行、每行明细几十 KB
+	// 就是几百 MB，仪表盘还每 5 秒拉一次全量）。有了这一列，排序只碰一个整数。
 	_, err := s.logDB.Exec(`
 		INSERT INTO run_history (
 			id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
 			processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
-			summary, detail_json, started_at, updated_at, finished_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			summary, detail_json, detail_size, started_at, updated_at, finished_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			rule_id = excluded.rule_id,
 			rule_name = excluded.rule_name,
@@ -47,6 +52,7 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 			size_bytes = excluded.size_bytes,
 			summary = excluded.summary,
 			detail_json = excluded.detail_json,
+			detail_size = excluded.detail_size,
 			started_at = excluded.started_at,
 			updated_at = excluded.updated_at,
 			finished_at = excluded.finished_at
@@ -66,6 +72,7 @@ func (s *Store) UpsertRunHistory(item model.RunHistoryItem) error {
 		item.SizeBytes,
 		item.Summary,
 		item.DetailJSON,
+		len(item.DetailJSON),
 		item.StartedAt.UTC().Format(time.RFC3339),
 		item.UpdatedAt.UTC().Format(time.RFC3339),
 		finishedAt,
@@ -167,14 +174,31 @@ func (s *Store) GetRunHistoryByID(id string) (model.RunHistoryItem, error) {
 	return item, nil
 }
 
+// runHistoryListLimit 是「不分页」列表（GET /api/v1/run-history 不带分页参数）的硬上限。
+//
+// 这条路径是仪表盘「执行摘要」在用的：它只要最近几十条，但原来一次把**整张表**
+// 读出来（还带着每行的 detail_json）。run_history 是「每处理一项写一行」，单表
+// 上万行很正常，于是每次请求都要构造一个几 MB～几百 MB 的切片和 JSON 响应，
+// 而仪表盘每 5 秒就拉一次 —— 容器内存就是这么顶上去的。
+// 截到最近 runHistoryListLimit 条之后，这条路径的代价与库里积累了多少历史无关。
+const runHistoryListLimit = 200
+
+// runHistoryListColumns 是列表类查询的列清单。
+//
+// 刻意让 detail_json 列返回空字符串：列表从来不用明细（接口层 stripRunHistoryDetails
+// 拿到就清空，详情弹窗按需走 /run-history/detail 单条拉取），但真去 SELECT detail_json
+// 会把每行的明细全读进内存 —— 这是「打开网页内存暴涨」的主因之一。
+const runHistoryListColumns = `id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
+		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
+		       summary, '' AS detail_json, started_at, updated_at, finished_at`
+
 func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	rows, err := s.logDB.Query(`
-		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
-		       summary, detail_json, started_at, updated_at, finished_at
+		SELECT `+runHistoryListColumns+`
 		FROM run_history
 		ORDER BY started_at DESC, id DESC
-	`)
+		LIMIT ?
+	`, runHistoryListLimit)
 	if err != nil {
 		return nil, fmt.Errorf("list run history: %w", err)
 	}
@@ -226,9 +250,7 @@ func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	orderClause := buildRunHistoryOrderClause(sortBy, sortOrder)
 	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
 	rows, err := s.logDB.Query(`
-		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
-		       summary, detail_json, started_at, updated_at, finished_at
+		SELECT `+runHistoryListColumns+`
 		FROM run_history`+whereClause+`
 		ORDER BY `+orderClause+`
 		LIMIT ? OFFSET ?
@@ -302,9 +324,7 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 	}
 
 	rows, err := s.logDB.Query(`
-		SELECT id, rule_id, rule_name, trigger_mode, archive_mode, link_mode, status,
-		       processed_files, success_count, skip_count, failure_count, deleted_count, size_bytes,
-		       summary, detail_json, started_at, updated_at, finished_at
+		SELECT `+runHistoryListColumns+`
 		FROM run_history
 		WHERE `+groupExpr+` IN (`+strings.Join(placeholders, ",")+`)
 		ORDER BY `+buildRunHistoryOrderClause(sortBy, sortOrder)+`
@@ -353,13 +373,16 @@ func buildRunHistoryGroupOrderClause(sortBy, sortOrder string) string {
 //
 // 一次执行会写出**多行**历史（每处理一个文件 / 文件夹落一行），这些行共享同一个
 // started_at，而 id 是随机十六进制 —— 只按 `started_at DESC, id DESC` 排的话，
-// 组内谁排在第一条完全是随机的。前端「折叠任务」组取的正是**组内第一条**的
-// detail_json（见 runDetail 按需拉取），随机就意味着详情有时只显示前几个文件。
+// 组内谁排在第一条完全是随机的。前端「折叠任务」组取的正是**组内第一条**的 id
+// （再走 /run-history/detail 按需拉明细），随机就意味着详情有时只显示前几个文件。
 //
-// 明细是逐步累积写出的（每条运行记录带的是「写它那一刻」的快照），长度单调不减，
-// 所以按明细长度降序排就能稳定拿到**最完整的那一份**，长度相同（例如明细被
-// 200 条上限截断后不再增长）时再按 id 兜底。
-const runHistoryDetailTieBreak = "LENGTH(COALESCE(detail_json, '')) DESC, id DESC"
+// 明细最完整的那一份长度最大，所以按明细长度降序排就能稳定拿到它，长度相同时再按 id 兜底。
+//
+// 这里排的是 `detail_size` **列**，不是 `LENGTH(detail_json)`：后者要求 SQLite 把
+// 待排序的每一行的 detail_json 都读出来（字符串可能落在溢出页里），一次上万行的
+// 列表查询就会把几百 MB 明细拉进内存。detail_size 在写入时算好、跟着行首页一起读，
+// 排序代价与明细体积无关。存量行由 backfillRunHistoryDetailSize 补齐。
+const runHistoryDetailTieBreak = "detail_size DESC, id DESC"
 
 func buildRunHistoryOrderClause(sortBy, sortOrder string) string {
 	direction := "DESC"
@@ -411,9 +434,20 @@ func (s *Store) DeleteRunHistoryByStatus(status string) error {
 	return nil
 }
 
+// ClearRunHistory 清空运行日志，并回收日志库文件空间。
+//
+// 为什么要顺带 VACUUM：DELETE 只是把页还给 freelist，logs.db 文件本身不会缩小，
+// 而之后任何一次全表扫描（列表 / 汇总，仪表盘每 5 秒就有一次）都会把这个大文件
+// 读进系统的 page cache —— docker stats 把 page cache 也算进容器内存，
+// 于是「什么都没干内存也下不来」。清空是用户主动发起的低频操作，同步做一次彻底
+// 回收是值得的；回收失败只记日志，清空本身已经生效。
 func (s *Store) ClearRunHistory() error {
 	if _, err := s.logDB.Exec(`DELETE FROM run_history`); err != nil {
 		return fmt.Errorf("clear run history: %w", err)
+	}
+
+	if _, err := s.logDB.Exec(`VACUUM;`); err != nil {
+		log.Printf("sqlite:runhistory: vacuum log store after clear skipped: %v", err)
 	}
 
 	return nil

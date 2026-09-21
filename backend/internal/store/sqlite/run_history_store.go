@@ -42,6 +42,7 @@ const runHistorySchema = `CREATE TABLE IF NOT EXISTS run_history (
 	size_bytes INTEGER NOT NULL DEFAULT 0,
 	summary TEXT NOT NULL DEFAULT '',
 	detail_json TEXT NOT NULL DEFAULT '',
+	detail_size INTEGER NOT NULL DEFAULT 0,
 	started_at TEXT NOT NULL DEFAULT '',
 	updated_at TEXT NOT NULL DEFAULT '',
 	finished_at TEXT NOT NULL DEFAULT ''
@@ -78,6 +79,7 @@ var runHistoryColumns = []struct {
 	{"size_bytes", "0"},
 	{"summary", "''"},
 	{"detail_json", "''"},
+	{"detail_size", "0"},
 	{"started_at", "''"},
 	{"updated_at", "''"},
 	{"finished_at", "''"},
@@ -125,7 +127,8 @@ func (s *Store) migrateRunHistoryStore() error {
 		return fmt.Errorf("create run history table in log store: %w", err)
 	}
 
-	if err := s.ensureRunHistoryColumns(); err != nil {
+	addedDetailSize, err := s.ensureRunHistoryColumns()
+	if err != nil {
 		return err
 	}
 
@@ -146,6 +149,11 @@ func (s *Store) migrateRunHistoryStore() error {
 		s.vacuumMainStore()
 	}
 
+	// 回填排在旧表迁移之后：搬过来的行同样带着明细，也要一起算长度。
+	if addedDetailSize {
+		s.backfillRunHistoryDetailSize()
+	}
+
 	return nil
 }
 
@@ -161,7 +169,10 @@ func (s *Store) LogDBPath() string {
 
 // ensureRunHistoryColumns 兜住「日志库是更早的版本建的、还缺列」的情况。
 // 新库建表时列就齐了，这里是幂等的保险。
-func (s *Store) ensureRunHistoryColumns() error {
+//
+// 返回值表示 detail_size 是否**本次才补上**：只有这一次需要回填老数据
+// （存量行没有这个值，不回填的话折叠组会挑不到最完整的那份明细）。
+func (s *Store) ensureRunHistoryColumns() (bool, error) {
 	additions := []struct {
 		name string
 		ddl  string
@@ -170,24 +181,90 @@ func (s *Store) ensureRunHistoryColumns() error {
 		{"link_mode", `ALTER TABLE run_history ADD COLUMN link_mode TEXT NOT NULL DEFAULT '';`},
 		{"deleted_count", `ALTER TABLE run_history ADD COLUMN deleted_count INTEGER NOT NULL DEFAULT 0;`},
 		{"detail_json", `ALTER TABLE run_history ADD COLUMN detail_json TEXT NOT NULL DEFAULT '';`},
+		{"detail_size", `ALTER TABLE run_history ADD COLUMN detail_size INTEGER NOT NULL DEFAULT 0;`},
 	}
 
 	columns, err := s.logRunHistoryColumns()
 	if err != nil {
-		return err
+		return false, err
 	}
 
+	addedDetailSize := false
 	for _, addition := range additions {
 		if columns[addition.name] {
 			continue
 		}
 		log.Printf("sqlite:runhistory: add missing column %s", addition.name)
 		if _, err := s.logDB.Exec(addition.ddl); err != nil {
-			return fmt.Errorf("add run history log column %s: %w", addition.name, err)
+			return false, fmt.Errorf("add run history log column %s: %w", addition.name, err)
+		}
+		if addition.name == "detail_size" {
+			addedDetailSize = true
 		}
 	}
 
-	return nil
+	return addedDetailSize, nil
+}
+
+// backfillRunHistoryDetailSize 给存量行补上明细长度。
+//
+// 为什么要这个值：折叠组要挑出「明细最完整的那一份」当代表行，原来靠
+// `ORDER BY LENGTH(detail_json)` 排序 —— 那会让**每一次列表查询**都把所有行的
+// detail_json 读出来（一次执行上万行、每行累积明细可达几十 KB 就是几百 MB，
+// 仪表盘还每 5 秒拉一次）。改成先把长度落成一列，排序只读这个整数列。
+//
+// 按 rowid 游标分小批推进，单批只读 500 行：既不会把整个大字段表读进内存，
+// 中断了下次也只是少回填一部分（那些行的 detail_size 保持 0，排序里排在最后，
+// 折叠组仍会优先选中真正带明细的那条），不会把库写坏。
+func (s *Store) backfillRunHistoryDetailSize() {
+	const batchSize = 500
+
+	cursor := int64(0)
+	processed := 0
+	for {
+		rows, err := s.logDB.Query(`SELECT rowid FROM run_history WHERE rowid > ? AND detail_size = 0 ORDER BY rowid LIMIT ?`, cursor, batchSize)
+		if err != nil {
+			log.Printf("sqlite:runhistory: backfill detail_size aborted: %v", err)
+			return
+		}
+
+		ids := make([]int64, 0, batchSize)
+		for rows.Next() {
+			var rowID int64
+			if scanErr := rows.Scan(&rowID); scanErr != nil {
+				rows.Close()
+				log.Printf("sqlite:runhistory: backfill detail_size aborted: %v", scanErr)
+				return
+			}
+			ids = append(ids, rowID)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			log.Printf("sqlite:runhistory: backfill detail_size aborted: %v", err)
+			return
+		}
+		if len(ids) == 0 {
+			break
+		}
+
+		placeholders := make([]string, len(ids))
+		args := make([]any, 0, len(ids))
+		for index, rowID := range ids {
+			placeholders[index] = "?"
+			args = append(args, rowID)
+		}
+		if _, err := s.logDB.Exec(`UPDATE run_history SET detail_size = LENGTH(CAST(COALESCE(detail_json, '') AS BLOB)) WHERE rowid IN (`+strings.Join(placeholders, ",")+`)`, args...); err != nil {
+			log.Printf("sqlite:runhistory: backfill detail_size aborted: %v", err)
+			return
+		}
+
+		cursor = ids[len(ids)-1]
+		processed += len(ids)
+	}
+
+	if processed > 0 {
+		log.Printf("sqlite:runhistory: backfilled detail_size for %d legacy rows", processed)
+	}
 }
 
 // logRunHistoryColumns 读出日志表现有的列名（小写）。

@@ -515,6 +515,10 @@ func (s *Service) persistRunHistoryItem(runID, summary string, stats *executionS
 	_ = s.store.UpsertRunHistory(*item)
 }
 
+// runHistoryMirrorLimit 是内存镜像保留的最大条数（见 recordHistory 末尾的裁剪）。
+// 镜像只在 store 不可用时兜底，不必跟库里的保留策略对齐。
+const runHistoryMirrorLimit = 2000
+
 func (s *Service) recordHistory(runID, summary string, stats *executionStats, withDetail bool) *model.RunHistoryItem {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -576,6 +580,14 @@ func (s *Service) recordHistory(runID, summary string, stats *executionStats, wi
 	mirror := item
 	mirror.DetailJSON = ""
 	s.history = append(s.history, mirror)
+	// 镜像不能无界增长：每处理一项就写一条，进程跑久了这个切片会一直变长，而
+	// GET /api/v1/run-history（仪表盘每 5 秒一次）会把它整个复制一遍再序列化。
+	// 超过上限才动手，一次丢到刚好剩最近 runHistoryMirrorLimit 条 —— 复用底层数组，
+	// 摊销下来每个元素的拷贝是常数次。
+	if len(s.history) > 2*runHistoryMirrorLimit {
+		copy(s.history, s.history[len(s.history)-runHistoryMirrorLimit:])
+		s.history = s.history[:runHistoryMirrorLimit]
+	}
 	return &item
 }
 
