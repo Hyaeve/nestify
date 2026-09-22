@@ -220,8 +220,8 @@
 </template>
 
 <script setup lang="ts">
-import { OutlinedInput as ElInput, OutlinedSelect as ElSelect } from '../components/outlinedControls'
-import { computed, onMounted, ref } from 'vue'
+import { OutlinedInput as ElInput, OutlinedSelect as ElSelect, outlinedFieldLabelPlacementKey } from '../components/outlinedControls'
+import { computed, onMounted, provide, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import RunDetailList from '../components/RunDetailList.vue'
@@ -234,6 +234,10 @@ import {
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
 import { useSettingsStore } from '../stores/settings'
+
+// 本页（含从本页打开的任务详情弹窗）的输入框 / 选择器统一「标题在框外」：
+// 标题不再内嵌到 12px 圆角描边的顶边里，改成在控件上方独占一行（轮 115）。
+provide(outlinedFieldLabelPlacementKey, 'outside')
 
 type LogTreeRow = RunHistoryItem & {
   // 分组行的 id 加了前缀，仅用于表格 row-key。
@@ -653,7 +657,8 @@ onMounted(async () => {
 .logs-view {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  /* 轮 115：hero 与列表面板之间的间距从 22 收到 14，把腾出来的高度让给列表。 */
+  gap: 14px;
   padding-bottom: 12px;
 }
 
@@ -830,7 +835,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 18px;
+  padding: 12px 16px;
   border-bottom: 1px solid #eef2f7;
   background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
 }
@@ -839,7 +844,8 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  /* 筛选与搜索字段改成「标题在框外」后比圆形按钮高一整行 → 按底对齐，按钮与输入框下沿齐平。 */
+  align-items: flex-end;
 }
 
 .logs-toolbar__select {
@@ -935,7 +941,7 @@ onMounted(async () => {
 }
 
 .logs-table__head {
-  height: 54px;
+  height: 46px;
   color: #64748b;
   background: #f8fafc;
   font-size: 13px;
@@ -954,8 +960,12 @@ onMounted(async () => {
 /* 列表区定高：滚动条就落在这一层，这是虚拟滚动的前提（否则列表会一直长高）。 */
 .logs-table__body {
   position: relative;
-  height: calc(100vh - 470px);
-  min-height: 320px;
+  /* 只扣掉「应用头 + hero + 工具栏 + 表头 + 尾部页码行」的固定高度，剩下全部给任务列表。
+     轮 115：470 → 431（同时把 hero 间距、工具栏内边距、表头各收了一点），一屏多出一行左右；
+     min-height 从 320 提到 480——窗口矮的时候宁可整页滚动，也不让列表缩成一条缝。
+     改工具栏 / hero 高度要回来复核这个数字（实测脚本 check-label-outside-r115.mjs）。 */
+  height: calc(100vh - 431px);
+  min-height: 460px;
   background: #ffffff;
 }
 

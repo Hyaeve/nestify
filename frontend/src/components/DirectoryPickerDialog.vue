@@ -1,5 +1,6 @@
 <template>
-  <el-dialog v-model="visibleProxy" :title="title" width="760px">
+  <!-- top 从 EP 默认的 15vh 收到 5vh：目录区要吃掉视口剩余高度，窗口再贴顶一点才放得下。 -->
+  <el-dialog v-model="visibleProxy" :title="title" width="760px" top="5vh">
     <el-alert
       v-if="errorMessage"
       style="margin-bottom: 16px;"
@@ -489,8 +490,10 @@ async function confirmSelection() {
 }
 
 .picker-tree {
-  min-height: 420px;
-  max-height: 520px;
+  /* 轮 115：原来钉死在 420 / 520，一屏只能看十来行目录；改成跟着视口长高（配上面 top="5vh"，
+     5vh + 窗口自身约 270px + 58vh 在 900～1500px 高的窗口里都放得下）。窗口特别矮时留 440 兜底。 */
+  min-height: 440px;
+  max-height: 58vh;
   overflow: auto;
   padding: 8px 12px;
   border: 1px solid var(--el-border-color-light);

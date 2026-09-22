@@ -593,8 +593,8 @@
 </template>
 
 <script setup lang="ts">
-import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect, outlinedFieldLabelPlacementKey } from '../components/outlinedControls'
+import { computed, onMounted, provide, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import ruleSetIcon from '../../icon/规则集.png'
@@ -609,6 +609,10 @@ type SortBy = 'name' | 'type' | 'modifiedAt'
 type SortOrder = 'asc' | 'desc'
 type ResultMode = 'preview' | 'renamed'
 type RuleCategoryKey = 'insert' | 'delete' | 'replace' | 'rewrite' | 'pad' | 'regex'
+
+// 本页（含筛选器 / 添加规则 / 规则集 / 添加挂载目录 等弹窗）的输入框与选择器统一
+// 「标题在框外」：标题不再内嵌到 12px 圆角描边的顶边里，改成在控件上方独占一行（轮 115）。
+provide(outlinedFieldLabelPlacementKey, 'outside')
 
 interface SourceItem {
   name: string

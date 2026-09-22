@@ -125,6 +125,41 @@
   color: var(--el-color-danger);
 }
 
+/* —— 轮 115：标题在框外（标签与控件分离）——
+   默认皮肤把标签做成 legend，嵌在 12px 圆角描边的顶边上（在缺口里）。文件管理 / 运行日志 /
+   命名工坊三处改成标签独占一行、落在控件上方，描边只包住控件本身。
+   谁用哪种由页面 provide 决定（见 outlinedControls.ts 的 outlinedFieldLabelPlacementKey）。 */
+.outlined-field--label-outside {
+  /* 标签行 18px + 与控件的间距 6px：描边层要跳过这一段，只套住下面的控件。 */
+  --label-row: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding-top: 0;
+
+  > .outlined-field__label {
+    display: block;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* 原来为 legend 缺口上抬了 4px，现在没有缺口了，描边贴着控件。 */
+  > .outlined-field__border {
+    inset: var(--label-row) 0 0;
+  }
+}
+
+.el-form-item.is-required .outlined-field--label-outside > .outlined-field__label::before {
+  content: '* ';
+  color: var(--el-color-danger);
+}
+
 .outlined-group {
   min-width: 0;
   margin: 0 0 18px;

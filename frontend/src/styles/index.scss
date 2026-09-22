@@ -222,13 +222,14 @@ body {
 
 /* —— 任务详情弹窗（归巢历史 / 运行日志）——
    窗口大小固定，不随记录条数跳动：正文做成竖向 flex，顶部摘要是定高块，剩下多少高度
-   全给文件明细表（明细区自带分页，一页条数跟随系统设置的「每页文件数」，
-   见 RunDetailList.vue；表内仍保留细浅滚动条，鼠标移入才显现）。
+   全给文件明细表（明细表轮 114 起改整份虚拟滚动，见 RunDetailList.vue；表内仍保留细浅
+   滚动条，鼠标移入才显现）。轮 115 把窗口从 90vh 抬到 94vh（上限 900 → 1080px）：
+   配 Dialog 的 `top="3vh"`，3vh + 94vh 仍在屏内，明细区多出一屏。
    teleport 到 body，所以排版必须写全局（见 MEMORY.md 的弹层约定）。 */
 .el-dialog.logs-detail-dialog {
   display: flex;
   flex-direction: column;
-  height: min(90vh, 900px);
+  height: min(94vh, 1080px);
   /* EP 默认 margin 是 `top auto 50px`，固定高度下这段底距会把窗口顶出屏幕。 */
   margin-bottom: 0;
 }

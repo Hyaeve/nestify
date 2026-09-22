@@ -479,8 +479,8 @@
 </template>
 
 <script setup lang="ts">
-import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect, outlinedFieldLabelPlacementKey } from '../components/outlinedControls'
+import { computed, h, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { ArrowDown, Back, Clock, Cloudy, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, Monitor, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type CheckboxValueType } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -531,6 +531,11 @@ const STARRED_FOLDERS_STORAGE_KEY = 'nestify:file-manager:starred-folders'
 const RECENT_VISITED_PATHS_STORAGE_KEY = 'nestify:file-manager:recent-visited-paths'
 /** 文件管理页的来源后缀：/manual-pack?source=local | /manual-pack?source=mount */
 const SOURCE_QUERY_KEY = 'source'
+
+// 本页的输入框 / 选择器（搜索文件、文件排序、排序方向，以及从本页打开的移动 / 复制 /
+// 打包 / 目录选择弹窗里的字段）统一「标题在框外」：标题不再内嵌到 12px 圆角描边的顶边里，
+// 改成在控件上方独占一行（轮 115）。弹窗 teleport 到 body 但组件树仍在本页内，一并生效。
+provide(outlinedFieldLabelPlacementKey, 'outside')
 
 const directoryPath = ref('')
 const directoryPickerVisible = ref(false)
@@ -1736,10 +1741,13 @@ onBeforeUnmount(() => {
 
 .toolbar-row {
   display: flex;
-  align-items: center;
+  /* 输入框改成「标题在框外」后比图标按钮高一整行（标签 18 + 间距 6）：按底对齐，
+     图标按钮才与输入框的下沿齐平，不会飘在标签那一行的中间。 */
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
+  /* 轮 115：三段头部（工具条 / 路径行 / 统计行）的下边距各收一点，把高度让给下面的列表。 */
+  margin-bottom: 10px;
 }
 
 .toolbar-row__search {
@@ -1917,7 +1925,7 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px 12px;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .path-row__breadcrumbs {
@@ -2107,9 +2115,11 @@ onBeforeUnmount(() => {
 
 .summary-row {
   display: flex;
+  /* 排序用的一对选择器带外置标题，比文字高一整行 → 按底对齐，文字与选择器框下沿齐平。 */
+  align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   color: var(--text-secondary);
   font-size: 13px;
 }
@@ -2359,7 +2369,7 @@ onBeforeUnmount(() => {
 }
 
 .entry-table__head {
-  padding: 8px 0;
+  padding: 6px 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-secondary);
@@ -2379,11 +2389,13 @@ onBeforeUnmount(() => {
 }
 
 /* 列表区本身就是虚拟滚动的滚动容器：高度必须定住（否则会一直长高，滚到窗口上就白虚拟了）。
-   高度按视口留出上方工具栏与下方统计条的位置。 */
+   高度按视口留出上方工具栏与下方统计条的位置。轮 115：402 → 370（同时收了三段头部的下边距、
+   表头内边距），列表从一屏 500px 长到 532px；min-height 从 260 提到 520——窗口矮时宁可整页
+   滚动，也不让列表缩成一条缝。改头部高度要回来复核这个数字（实测 check-label-outside-r115.mjs）。 */
 .entry-table__body {
   position: relative;
-  height: calc(100vh - 402px);
-  min-height: 260px;
+  height: calc(100vh - 370px);
+  min-height: 520px;
   border: 1px solid var(--el-border-color-lighter);
   border-top: 0;
   border-radius: 0 0 10px 10px;
