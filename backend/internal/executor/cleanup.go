@@ -113,7 +113,7 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 		stats.SkipCount = 1
 		stats.Summary = "未发现可清理项目"
 	} else {
-		stats.Summary = fmt.Sprintf("清理完成：删除 %d 个文件、%d 个文件夹，失败 %d 项", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
+		stats.Summary = cleanupSummary(&stats)
 	}
 
 	if stats.FailureCount > 0 {
@@ -121,6 +121,19 @@ func (s *Service) executeCleanupRule(runID string, req ExecuteRuleRequest) (exec
 	}
 
 	return stats, nil
+}
+
+// cleanupSummary 是净化链路的收尾摘要文案，本地与远程**共用同一份**：
+// 同一个规则配置跑在本地目录和远程挂载上，摘要读起来必须一样。
+//
+// 有跳过时把「跳过 N 项」写进去 —— 跳过不像删除那样在运行日志里留下一行行「已删除 …」，
+// 摘要再不说，用户就只看到「这次啥也没干」，不知道有几项是按规则主动放过的。
+func cleanupSummary(stats *executionStats) string {
+	removed := fmt.Sprintf("删除 %d 个文件、%d 个文件夹", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs)
+	if stats.SkipCount > 0 {
+		return fmt.Sprintf("清理完成：%s，跳过 %d 项，失败 %d 项", removed, stats.SkipCount, stats.FailureCount)
+	}
+	return fmt.Sprintf("清理完成：%s，失败 %d 项", removed, stats.FailureCount)
 }
 
 func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMode string, plan cleanupPlan, stats *executionStats) {
@@ -131,6 +144,14 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 	entries, err := readDirWithMode(compatibilityMode, currentPath)
 	if err != nil {
 		stats.FailureCount++
+		// 读取目录失败同样是「这次执行没做成的事」，要落一条失败明细：
+		// 否则运行记录里写着「失败 1 项」，任务详情窗口点「失败」却是空的。
+		stats.Detail.record(model.RunFileEntry{
+			Path:   currentPath,
+			Action: model.BackupFileActionFail,
+			Dir:    true,
+			Note:   fmt.Sprintf("读取目录失败：%v", err),
+		})
 		s.persistRunHistory(runID, fmt.Sprintf("read cleanup directory %s failed: %v", currentPath, err), stats)
 		s.appendLog(runID, "error", fmt.Sprintf("read cleanup directory %s failed: %v", currentPath, err))
 		return
@@ -171,7 +192,11 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 				return nil
 			}
 			s.cleanupDirectory(runID, rootPath, entryPath, compatibilityMode, plan, stats)
-			if plan.emptyDirs && !sameCleanPath(rootPath, entryPath) && !isWhitelistedDirectoryName(entry.Name(), plan.whitelist) {
+			if plan.emptyDirs && !sameCleanPath(rootPath, entryPath) {
+				if isWhitelistedDirectoryName(entry.Name(), plan.whitelist) {
+					s.recordWhitelistedDirSkip(runID, compatibilityMode, entryPath, stats)
+					return nil
+				}
 				removed, removeErr := removeDirIfEmptyWithMode(compatibilityMode, entryPath)
 				if removeErr != nil {
 					stats.FailureCount++
@@ -228,7 +253,20 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 			return nil
 		}
 
-		if !plan.expiredFiles || !isExpiredFile(entryPath, plan.retentionDays) {
+		if !plan.expiredFiles {
+			return nil
+		}
+		expired, known := fileExpiry(entryPath, plan.retentionDays)
+		if !known {
+			// 拿不到修改时间就没法判断过期与否：宁可留着不删，也要在明细里说清「为什么没动它」，
+			// 否则运行记录里多一次「跳过」，点开却看不见任何一条。
+			stats.SkipCount++
+			stats.Detail.recordSkip(entryPath, skipReasonCleanupUnknownAge, false)
+			s.persistRunHistory(runID, fmt.Sprintf("无法读取 %s 的修改时间，跳过过期清理", entryPath), stats)
+			s.appendLog(runID, "info", fmt.Sprintf("无法读取 %s 的修改时间，跳过过期清理", entryPath))
+			return nil
+		}
+		if !expired {
 			return nil
 		}
 
@@ -259,16 +297,23 @@ func (s *Service) cleanupDirectory(runID, rootPath, currentPath, compatibilityMo
 	})
 }
 
-func isExpiredFile(path string, retentionDays int) bool {
+// fileExpiry 判断一个文件是否超过保留天数（过期）。
+//
+// 第二个返回值 known 为 false 表示**无法判断**：stat 拿不到文件信息（权限不足、刚被别的进程删掉…）。
+// 这时一律按「不过期」处理 —— 宁可留着，也不能凭零值把文件当成过期删掉；调用方会记一条跳过明细说明原因。
+func fileExpiry(path string, retentionDays int) (expired bool, known bool) {
 	if retentionDays < 1 {
-		return false
+		return false, true
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
+	if err != nil {
+		return false, false
+	}
+	if info.IsDir() {
+		return false, true
 	}
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
-	return info.ModTime().Before(cutoff)
+	return info.ModTime().Before(cutoff), true
 }
 
 func dirSizeOrZero(path string) int64 {
@@ -283,6 +328,31 @@ func dirSizeOrZero(path string) int64 {
 		return 0
 	}
 	return total
+}
+
+// isDirEmptyWithMode 判断目录当前是否为空；读不到就返回 error，由调用方按「不知道」处理。
+func isDirEmptyWithMode(compatibilityMode, path string) (bool, error) {
+	entries, err := readDirWithMode(compatibilityMode, path)
+	if err != nil {
+		return false, err
+	}
+	return len(entries) == 0, nil
+}
+
+// recordWhitelistedDirSkip 记一条「白名单保护」的跳过明细。
+//
+// 白名单只豁免「空目录清理」这一步，所以只有目录**确实已经空了**才记：空目录本该被清掉，
+// 因为白名单没清，这是一次真实的跳过。非空目录本来就不在空目录清理的范围内（规则没让它动），
+// 记进去只会凭空多出一堆跳过条目 —— 与「跳过明细只记有明确原因的项」的口径一致。
+func (s *Service) recordWhitelistedDirSkip(runID, compatibilityMode, dirPath string, stats *executionStats) {
+	empty, err := isDirEmptyWithMode(compatibilityMode, dirPath)
+	if err != nil || !empty {
+		return
+	}
+	stats.SkipCount++
+	stats.Detail.recordSkip(dirPath, skipReasonCleanupWhitelist, true)
+	s.persistRunHistory(runID, fmt.Sprintf("目录 %s 在白名单内，跳过空目录清理", dirPath), stats)
+	s.appendLog(runID, "info", fmt.Sprintf("目录 %s 在白名单内，跳过空目录清理", dirPath))
 }
 
 func removeDirIfEmptyWithMode(compatibilityMode, path string) (bool, error) {

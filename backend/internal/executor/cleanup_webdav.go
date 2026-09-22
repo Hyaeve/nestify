@@ -96,7 +96,7 @@ func (s *Service) executeWebdavCleanupRule(runID string, req ExecuteRuleRequest,
 		stats.SkipCount = 1
 		stats.Summary = "未发现可清理项目"
 	} else {
-		stats.Summary = fmt.Sprintf("清理完成：删除 %d 个文件、%d 个文件夹，失败 %d 项", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs, stats.FailureCount)
+		stats.Summary = cleanupSummary(&stats)
 	}
 
 	if stats.FailureCount > 0 {
@@ -204,16 +204,30 @@ func (c *webdavCleanup) walk(dir string) {
 
 			// 空目录：递归回来之后再判断，其间子项可能已被本次清理删掉。
 			// 监控目录自身不删（与本地 sameCleanPath 那道判断同义）。
-			if c.plan.emptyDirs && !c.isRoot(child.Path) && !isWhitelistedDirectoryName(child.Name, c.plan.whitelist) {
-				c.removeIfEmpty(child)
+			if c.plan.emptyDirs && !c.isRoot(child.Path) {
+				if isWhitelistedDirectoryName(child.Name, c.plan.whitelist) {
+					c.skipWhitelistedDir(child)
+				} else {
+					c.removeIfEmpty(child)
+				}
 			}
 			continue
 		}
 
-		switch {
-		case c.plan.matchingFiles && matchesFileName(child.Name, false, c.plan.matchers):
+		if c.plan.matchingFiles && matchesFileName(child.Name, false, c.plan.matchers) {
 			c.removeFile(child, deleteNoteMatchedFile)
-		case c.plan.expiredFiles && isExpiredRemoteEntry(child, c.plan.retentionDays):
+			continue
+		}
+		if !c.plan.expiredFiles {
+			continue
+		}
+		if child.ModifiedAt.IsZero() {
+			// 服务端没给 getlastmodified，过期与否判不了：文件留着，并记一条跳过明细
+			// （与本地 stat 失败同款）—— 否则运行记录里多一次「跳过」，点开却什么都没有。
+			c.recordSkip(child.Path, skipReasonCleanupUnknownAge, false)
+			continue
+		}
+		if isExpiredRemoteEntry(child, c.plan.retentionDays) {
 			c.removeFile(child, deleteNoteExpiredFile)
 		}
 	}
@@ -322,19 +336,45 @@ func (c *webdavCleanup) purge(dir string) (int64, int) {
 	return total, failures
 }
 
-// removeIfEmpty 在一个目录已经空了（本次清理把它里面该删的都删了）时删掉它。
-func (c *webdavCleanup) removeIfEmpty(entry webdav.Entry) {
-	children, err := c.children(entry.Path)
+// isEmptyAfterCleanup 判断目录在本次清理之后是否已经空了。
+//
+// 只看列举快照不行：子项可能是被这次执行刚删掉的（c.removed 记着这些路径）。
+func (c *webdavCleanup) isEmptyAfterCleanup(dir string) (bool, error) {
+	children, err := c.children(dir)
 	if err != nil {
-		c.recordFailure(entry.Path, true, fmt.Sprintf("读取目录失败：%v", err))
-		return
+		return false, err
 	}
-
 	for _, child := range children {
 		if c.isRemoved(child.Path) {
 			continue
 		}
-		// 还有东西留着 —— 不是空目录，不动它。
+		// 还有东西留着 —— 不是空目录。
+		return false, nil
+	}
+	return true, nil
+}
+
+// skipWhitelistedDir 记一条「白名单保护」的跳过明细。
+//
+// 与本地 recordWhitelistedDirSkip 同一口径：只有目录**确实空了**才算一次跳过 ——
+// 空目录本该被清掉，是白名单把它留下了；非空目录本来就不在空目录清理的范围内，
+// 记进去只会凭空多出一堆跳过条目。
+func (c *webdavCleanup) skipWhitelistedDir(entry webdav.Entry) {
+	empty, err := c.isEmptyAfterCleanup(entry.Path)
+	if err != nil || !empty {
+		return
+	}
+	c.recordSkip(entry.Path, skipReasonCleanupWhitelist, true)
+}
+
+// removeIfEmpty 在一个目录已经空了（本次清理把它里面该删的都删了）时删掉它。
+func (c *webdavCleanup) removeIfEmpty(entry webdav.Entry) {
+	empty, err := c.isEmptyAfterCleanup(entry.Path)
+	if err != nil {
+		c.recordFailure(entry.Path, true, fmt.Sprintf("读取目录失败：%v", err))
+		return
+	}
+	if !empty {
 		return
 	}
 
@@ -367,6 +407,15 @@ func (c *webdavCleanup) recordFailure(path string, dir bool, note string) {
 		Note:   note,
 	})
 	c.finishEntry(fmt.Sprintf("清理远程路径 %s 失败：%s", path, note), "error")
+}
+
+// recordSkip 记一条跳过：明细 + 计数 + 运行记录 + 日志（与 recordFailure 同款，只是进 SkipCount）。
+//
+// 明细同样要先落再写运行记录 —— 每条运行记录带的是「写它那一刻」的明细快照。
+func (c *webdavCleanup) recordSkip(path string, note string, dir bool) {
+	c.stats.SkipCount++
+	c.stats.Detail.recordSkip(path, note, dir)
+	c.finishEntry(fmt.Sprintf("跳过远程路径 %s：%s", path, note), "info")
 }
 
 // finishEntry 落运行记录 + 写日志。

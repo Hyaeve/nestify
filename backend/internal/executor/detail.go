@@ -33,6 +33,10 @@ const (
 	// 软链 / 硬链：命中过滤名单的文件与目录不建链，与净化 / strm 的「已移入回收站」区分开。
 	skipReasonLinkFiltered = "命中过滤名单，未建立链路"
 	skipReasonLinkExisting = "目标已有同名文件或链接，跳过"
+	// 净化链路：这两类都是「本该动手、但按规则没动」，跳过的是具体路径，
+	// 所以要逐条落明细（净化不会把「未命中清理名单」的文件记成跳过 —— 那会产生海量条目）。
+	skipReasonCleanupWhitelist  = "目录在白名单内，未清理"
+	skipReasonCleanupUnknownAge = "无法读取修改时间，未按过期清理"
 )
 
 // 删除原因的统一样板：删除动作（delete）在备份删源、strm 级联删除、净化规则上都出现，

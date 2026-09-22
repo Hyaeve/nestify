@@ -474,8 +474,8 @@ func TestWebdavCleanupRemovesMatchedFilesAndEmptyDirs(t *testing.T) {
 	if stats.CleanupRemovedFiles != 1 || stats.CleanupRemovedDirs != 1 {
 		t.Fatalf("删除统计 = %d 文件 / %d 目录, want 1 / 1", stats.CleanupRemovedFiles, stats.CleanupRemovedDirs)
 	}
-	if stats.SuccessCount != 2 || stats.FailureCount != 0 || stats.SkipCount != 0 {
-		t.Fatalf("成功/失败/跳过 = %d/%d/%d, want 2/0/0", stats.SuccessCount, stats.FailureCount, stats.SkipCount)
+	if stats.SuccessCount != 2 || stats.FailureCount != 0 || stats.SkipCount != 1 {
+		t.Fatalf("成功/失败/跳过 = %d/%d/%d, want 2/0/1（白名单空目录要算一次跳过）", stats.SuccessCount, stats.FailureCount, stats.SkipCount)
 	}
 	if stats.SizeBytes != 12 {
 		t.Fatalf("累计大小 = %d, want 12（只有被删的广告.txt 计入）", stats.SizeBytes)
@@ -507,6 +507,19 @@ func TestWebdavCleanupRemovesMatchedFilesAndEmptyDirs(t *testing.T) {
 	dirEntry, ok := deleteEntryByPath(deletes, "/影视/空目录")
 	if !ok || !dirEntry.Dir || dirEntry.Note != deleteNoteEmptyDir {
 		t.Fatalf("空目录的删除明细不对: %+v", dirEntry)
+	}
+
+	// 白名单保护的目录：它确实是空的，本该被「清理空目录」删掉，是白名单把它留下了 ——
+	// 这要落一条跳过明细，否则运行记录里写着「跳过 1」，任务详情窗口点开什么都没有。
+	skips := detailEntriesByAction(detail, model.BackupFileActionSkip)
+	if len(skips) != 1 || skips[0].Path != "/影视/白名单空目录" || !skips[0].Dir || skips[0].Note != skipReasonCleanupWhitelist {
+		t.Fatalf("白名单目录的跳过明细不对: %+v", skips)
+	}
+	if got := detail.Counts[model.BackupFileActionSkip]; got != 1 {
+		t.Fatalf("counts.skip = %d, want 1", got)
+	}
+	if !strings.Contains(stats.Summary, "跳过 1 项") {
+		t.Fatalf("摘要要带出跳过数，实际 %q", stats.Summary)
 	}
 }
 
@@ -582,6 +595,9 @@ func TestWebdavCleanupRemovesExpiredFiles(t *testing.T) {
 
 // TestWebdavCleanupKeepsFilesWhenServerOmitsModifiedTime 服务端不返回 getlastmodified 时，
 // 「过期文件」必须一条都不删：拿零值去比会算出 1970 年，把用户的文件当过期清掉。
+//
+// 同时要留一条跳过明细（note = 无法读取修改时间）：这类文件不是「没被扫到」，而是
+// 「扫到了但判不了过期」，运行记录里的「跳过 N」得能点开看到具体是哪些、为什么没动。
 func TestWebdavCleanupKeepsFilesWhenServerOmitsModifiedTime(t *testing.T) {
 	store := openRunHistoryTestStore(t)
 	dav, mount := startFakeDavMount(t, store, model.MountProviderWebdav)
@@ -599,8 +615,20 @@ func TestWebdavCleanupKeepsFilesWhenServerOmitsModifiedTime(t *testing.T) {
 	if stats.CleanupRemovedFiles != 0 || stats.FailureCount != 0 {
 		t.Fatalf("删除 %d 个文件 / 失败 %d, want 0 / 0（时间拿不到就不该动）", stats.CleanupRemovedFiles, stats.FailureCount)
 	}
-	if stats.SkipCount != 1 || stats.Summary != "未发现可清理项目" {
-		t.Fatalf("没删到东西时应整轮跳过，实际 skip=%d / summary=%q", stats.SkipCount, stats.Summary)
+	// 这次不是「整轮跳过」，而是「扫到了、但判不了」：留一条跳过明细说明是哪个文件、为什么没动。
+	if stats.SkipCount != 1 {
+		t.Fatalf("时间拿不到时应记一次跳过，实际 skip=%d", stats.SkipCount)
+	}
+	detail := remoteCleanupDetail(t, stats)
+	skips := detailEntriesByAction(detail, model.BackupFileActionSkip)
+	if len(skips) != 1 || skips[0].Path != "/影视/老文件.mkv" || skips[0].Note != skipReasonCleanupUnknownAge {
+		t.Fatalf("「时间拿不到」的跳过明细不对: %+v", skips)
+	}
+	if got := detail.Counts[model.BackupFileActionSkip]; got != 1 {
+		t.Fatalf("counts.skip = %d, want 1", got)
+	}
+	if !strings.Contains(stats.Summary, "跳过 1 项") {
+		t.Fatalf("摘要要带出跳过数，实际 %q", stats.Summary)
 	}
 }
 
