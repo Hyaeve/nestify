@@ -1001,9 +1001,14 @@ func (a *apiHandler) handleRunHistory(w http.ResponseWriter, r *http.Request) {
 		if paged {
 			var items []model.RunHistoryItem
 			var total int
-			if viewMode == "tree" {
+			switch viewMode {
+			case "tree":
 				items, total, err = a.store.ListRunHistoryGroupPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
-			} else {
+			case "task":
+				// 一行一个任务（每组只回代表行）：仪表盘「执行摘要」用。
+				// 它每 5 秒拉一次，带上组内全部记录行的话，一次上万项的执行就是上万行。
+				items, total, err = a.store.ListRunHistoryTaskPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
+			default:
 				items, total, err = a.store.ListRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder)
 			}
 			if err != nil {

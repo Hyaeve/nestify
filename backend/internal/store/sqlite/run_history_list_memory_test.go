@@ -100,6 +100,19 @@ func TestRunHistoryListIgnoresDetailVolume(t *testing.T) {
 		}
 	})
 
+	// 任务视图：120 行记录共享同一个 started_at（同一次执行），所以只该回 1 行。
+	// 仪表盘「执行摘要」用的是它 —— 只回代表行，响应体量只跟任务数有关，
+	// 跟一次执行处理了多少项无关。
+	measure("ListRunHistoryTaskPage", func() {
+		items, total, taskErr := store.ListRunHistoryTaskPage(1, 50, "", "", "", "", "modified_at", "desc")
+		if taskErr != nil {
+			t.Fatalf("list run history tasks: %v", taskErr)
+		}
+		if total != 1 || len(items) != 1 {
+			t.Fatalf("任务视图应把 120 行记录折成 1 个任务，实际 total=%d rows=%d", total, len(items))
+		}
+	})
+
 	// 明细本身当然要还在：详情接口按 id 单条读回，仍然是完整的。
 	loaded, err := store.GetRunHistoryByID("run-000")
 	if err != nil {

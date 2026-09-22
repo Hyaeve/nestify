@@ -220,15 +220,39 @@ func (s *Store) ListRunHistory() ([]model.RunHistoryItem, error) {
 	return items, nil
 }
 
+// runHistoryListView 决定「一次执行会写出多行记录」的运行历史按什么粒度回给前端。
+//
+// 背景：run_history 是「每处理一项写一行」，所以**记录行数不等于执行次数**。
+// 三个视图的差别只在「一次执行的那几行怎么回」，查询条件与排序口径都是同一套。
+type runHistoryListView int
+
+const (
+	// runHistoryListViewFlat：原样回记录行 —— 一行就是某次执行里的一条记录。
+	runHistoryListViewFlat runHistoryListView = iota
+	// runHistoryListViewGrouped：按折叠组分组，组内**每一行**都回。运行日志页要用它数
+	// 「本次操作了几个文件 / 共几条明细」，所以必须拿全。
+	runHistoryListViewGrouped
+	// runHistoryListViewTask：每个折叠组只回**代表行**（组内明细最完整的那条），一行一个任务。
+	// 仪表盘「执行摘要」用的是它 —— 它要的是「最近执行了哪些任务」，一行一个任务就够；
+	// 若像 grouped 那样把组内每一行都带上，一次上万项执行的若干个组就是上万行，
+	// 而它是 5 秒一次的轮询。
+	runHistoryListViewTask
+)
+
 func (s *Store) ListRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
-	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, false)
+	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, runHistoryListViewFlat)
 }
 
 func (s *Store) ListRunHistoryGroupPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
-	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, true)
+	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, runHistoryListViewGrouped)
 }
 
-func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string, grouped bool) ([]model.RunHistoryItem, int, error) {
+// ListRunHistoryTaskPage 是「一行一个任务」的分页：每个折叠组只回代表行。
+func (s *Store) ListRunHistoryTaskPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+	return s.listRunHistoryPage(page, pageSize, keyword, status, archiveMode, ruleType, sortBy, sortOrder, runHistoryListViewTask)
+}
+
+func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveMode, ruleType, sortBy, sortOrder string, view runHistoryListView) ([]model.RunHistoryItem, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -237,8 +261,11 @@ func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveM
 	}
 
 	whereClause, args := buildRunHistoryWhereClause(keyword, status, archiveMode, ruleType)
-	if grouped {
+	switch view {
+	case runHistoryListViewGrouped:
 		return s.listRunHistoryGroupedPage(page, pageSize, whereClause, args, sortBy, sortOrder)
+	case runHistoryListViewTask:
+		return s.listRunHistoryTaskPage(page, pageSize, whereClause, args, sortBy, sortOrder)
 	}
 
 	countQuery := `SELECT COUNT(*) FROM run_history` + whereClause
@@ -278,10 +305,9 @@ func (s *Store) listRunHistoryPage(page, pageSize int, keyword, status, archiveM
 
 func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string, args []any, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
 	groupExpr := buildRunHistoryGroupExpression()
-	countQuery := `SELECT COUNT(*) FROM (SELECT ` + groupExpr + ` AS group_key FROM run_history` + whereClause + ` GROUP BY group_key)`
-	var total int
-	if err := s.logDB.QueryRow(countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count grouped run history: %w", err)
+	total, err := s.countRunHistoryGroups(whereClause, args)
+	if err != nil {
+		return nil, 0, err
 	}
 	if total == 0 {
 		return []model.RunHistoryItem{}, 0, nil
@@ -347,6 +373,95 @@ func (s *Store) listRunHistoryGroupedPage(page, pageSize int, whereClause string
 	}
 
 	return items, total, nil
+}
+
+// countRunHistoryGroups 数「折叠组」的个数，也就是**执行次数**。
+// run_history 是「每处理一项写一行」，直接 COUNT(*) 数出来的是记录行数，不是执行次数。
+func (s *Store) countRunHistoryGroups(whereClause string, args []any) (int, error) {
+	groupExpr := buildRunHistoryGroupExpression()
+
+	var total int
+	if err := s.logDB.QueryRow(`SELECT COUNT(*) FROM (SELECT `+groupExpr+` AS group_key FROM run_history`+whereClause+` GROUP BY group_key)`, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count grouped run history: %w", err)
+	}
+
+	return total, nil
+}
+
+// listRunHistoryTaskPage 按**代表行**分页：一行一个任务。
+//
+// 代表行 = 组内明细最完整的那条（detail_size 最大，同长取 id 大者），与运行日志页
+// 折叠组「取组内第一条」的口径一致。收尾那条带全量明细的记录因此就是任务条目本身，
+// 它的计数也正好是该次执行的最终统计。前端点开这个任务，按它的 id 走
+// /run-history/detail 就能拿到整份明细。
+//
+// 为什么不让调用方拿 grouped 的结果自己去重：grouped 会把组内**每一行**都回给前端。
+// 一次执行每处理一个文件写一行，上万项的执行就有上万行，而仪表盘每 5 秒拉一次 ——
+// 只回代表行之后，响应体量只跟「任务数」有关，跟一次执行处理了多少项无关。
+func (s *Store) listRunHistoryTaskPage(page, pageSize int, whereClause string, args []any, sortBy, sortOrder string) ([]model.RunHistoryItem, int, error) {
+	total, err := s.countRunHistoryGroups(whereClause, args)
+	if err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []model.RunHistoryItem{}, 0, nil
+	}
+
+	groupExpr := buildRunHistoryGroupExpression()
+	// ROW_NUMBER() 给组内每一行编号，编号 1 的那行就是代表行。
+	// detail_size 只在窗口内部参与编号，不在结果集里（列表刻意不读明细，也不回这一列）。
+	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := s.logDB.Query(`
+		SELECT `+runHistoryListColumns+`
+		FROM (
+			SELECT `+runHistoryListColumns+`,
+			       ROW_NUMBER() OVER (PARTITION BY `+groupExpr+` ORDER BY detail_size DESC, id DESC) AS group_rank
+			FROM run_history`+whereClause+`
+		)
+		WHERE group_rank = 1
+		ORDER BY `+buildRunHistoryTaskOrderClause(sortBy, sortOrder)+`
+		LIMIT ? OFFSET ?
+	`, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list run history tasks: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]model.RunHistoryItem, 0, pageSize)
+	for rows.Next() {
+		item, scanErr := scanRunHistory(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate run history tasks: %w", err)
+	}
+
+	return items, total, nil
+}
+
+// buildRunHistoryTaskOrderClause 是「任务视图」的外层排序。
+//
+// 结果里一行就是一个任务，而同一次执行的记录行共享同一个 started_at
+// （见 executor 的 recordHistory：用的是 run.StartedAt），所以直接按 started_at 排即可，
+// 不需要像分组查询那样再套一层 MAX(started_at)。
+func buildRunHistoryTaskOrderClause(sortBy, sortOrder string) string {
+	direction := "DESC"
+	if strings.EqualFold(strings.TrimSpace(sortOrder), "asc") {
+		direction = "ASC"
+	}
+
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "name":
+		return "LOWER(COALESCE(rule_name, '')) " + direction + ", started_at DESC, id DESC"
+	case "modified_at":
+		return "started_at " + direction + ", id DESC"
+	default:
+		return "started_at DESC, id DESC"
+	}
 }
 
 func buildRunHistoryGroupExpression() string {

@@ -50,7 +50,9 @@ export interface FetchRunHistoryParams {
   rule_type?: 'archive' | 'cleanup' | 'link' | 'naming' | 'backup'
   sort_by?: 'name' | 'modified_at'
   sort_order?: 'asc' | 'desc'
-  view_mode?: 'flat' | 'tree'
+  // flat = 原样回记录行；tree = 按折叠组分组、组内每行都回（运行日志页数条数要用）；
+  // task = 每个折叠组只回代表行，也就是**一行一个任务**（仪表盘执行摘要用）。
+  view_mode?: 'flat' | 'tree' | 'task'
 }
 
 function buildRunHistoryURL(params: FetchRunHistoryParams = {}) {

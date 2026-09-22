@@ -947,51 +947,10 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-/* 详情弹窗高度固定，摘要卡定为不伸缩的顶块：内边距与外边距都收紧，
-   让「源路径 / 目标路径」表头尽量贴近上面的标题与统计小字。 */
-.logs-detail-summary {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex: 0 0 auto;
-  gap: 18px;
-  margin-bottom: 8px;
-  padding: 8px 14px;
-  border: 1px solid #eef2f7;
-  border-radius: 14px;
-  background: #f8fafc;
-}
-
-.logs-detail-summary__title {
-  color: #0f172a;
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.logs-detail-summary__main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* 前缀文字与可点击的统计项排在一行，靠 gap 分隔，窄了自动换行。 */
-.logs-detail-summary__desc {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 3px;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.logs-detail-summary__tags {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
+/* 任务详情弹窗顶部的摘要卡（.logs-detail-summary 及其子块）与标题下的统计项
+   （.detail-summary__*）都写成了**全局样式**，在 styles/index.scss 里 ——
+   弹窗被 teleport 到 body，scoped 够不着；而且总览页的「执行摘要」点开的
+   是同一个弹窗，两边共用同一套排版。 */
 
 .logs-pagination {
   display: flex;

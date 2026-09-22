@@ -30,9 +30,9 @@
           </div>
         </div>
 
-        <div v-if="previewTasks.length" class="task-preview-list">
+        <div v-if="runningTasks.length" class="task-preview-list">
           <div
-            v-for="item in previewTasks"
+            v-for="item in runningTasks"
             :key="item.id"
             class="task-preview-item"
             :class="{ 'is-running': item.status === 'running' }"
@@ -49,6 +49,16 @@
               <div class="task-preview-item__badges">
                 <span v-if="item.modeLabel" class="dashboard-mode-tag" :class="item.modeClass">{{ item.modeLabel }}</span>
                 <el-tag :type="statusTagType(item.status)" effect="light" size="small">{{ statusLabel(item.status) }}</el-tag>
+                <!-- 运行中的任务就地停止：点一下先弹二次确认，确认后才真的发停止请求。 -->
+                <button
+                  v-if="item.status === 'running'"
+                  type="button"
+                  class="task-preview-item__stop"
+                  :disabled="isTaskCancelling(item.id)"
+                  @click.stop="cancelPreviewTask(item)"
+                >
+                  {{ isTaskCancelling(item.id) ? '停止中' : '停止' }}
+                </button>
               </div>
             </div>
 
@@ -90,7 +100,7 @@
         <el-empty v-else class="task-preview-empty" description="暂无执行中的任务" />
       </div>
 
-      <!-- 右侧：执行摘要 -->
+      <!-- 右侧：执行摘要（一行一个任务，整块可点开任务详情） -->
       <div class="dashboard-side-stack">
         <div class="dashboard-panel dashboard-panel--summary">
           <div class="dashboard-panel__header">
@@ -98,10 +108,18 @@
               <div class="dashboard-panel__eyebrow">EXECUTION</div>
               <h3 class="page-section-title">执行摘要</h3>
             </div>
-            <span class="dashboard-panel__count">{{ summaryItems.length }} 条记录</span>
+            <span class="dashboard-panel__count">{{ summaryItems.length }} 个任务</span>
           </div>
           <div v-if="summaryItems.length" class="summary-list">
-            <div v-for="item in summaryItems" :key="item.id" class="summary-item">
+            <!-- 一条 = 一次任务执行（不是一条运行记录）：同一次执行会写出多行记录，
+                 取的是带完整明细那一条。点开就是这次执行的任务详情。 -->
+            <button
+              v-for="item in summaryItems"
+              :key="item.id"
+              type="button"
+              class="summary-item"
+              @click="openSummaryDetail(item)"
+            >
               <div class="summary-item__header">
                 <div class="summary-item__title">
                   <span class="summary-item__dot"></span>
@@ -116,30 +134,77 @@
                 <span>{{ formatDate(item.started_at) }}</span>
                 <span>{{ formatRunHistorySummary(item.summary) || '无摘要' }}</span>
               </div>
-            </div>
+            </button>
           </div>
           <el-empty v-else class="dashboard-empty" description="暂无执行摘要" />
         </div>
       </div>
     </section>
+
+    <!-- 任务详情窗：与运行日志页同一个弹窗（同一套摘要卡 + 明细表）。
+         明细走 /run-history/detail 单条拉取 —— 列表接口刻意不带明细。 -->
+    <el-dialog
+      v-model="summaryDetailVisible"
+      class="logs-detail-dialog"
+      title="任务详情"
+      width="1080px"
+      top="3vh"
+      destroy-on-close
+    >
+      <template v-if="selectedSummaryTask">
+        <div class="logs-detail-summary">
+          <div class="logs-detail-summary__main">
+            <div class="logs-detail-summary__title">{{ selectedSummaryTitle }}</div>
+            <!-- 统计项兼作筛选入口：点一下只看这一类明细，再点一下取消。 -->
+            <div class="logs-detail-summary__desc">
+              <span class="detail-summary__leading">{{ summaryTriggerText(selectedSummaryTask) }}</span>
+              <span class="detail-summary__sep">·</span>
+              <button
+                v-for="segment in selectedSummarySegments"
+                :key="segment.key"
+                type="button"
+                class="detail-summary__chip"
+                :class="[`is-${segment.key}`, { 'is-active': summaryDetailFilterKey === segment.key }]"
+                @click="toggleSummaryDetailFilter(segment.key)"
+              >
+                {{ segment.label }}<span class="detail-summary__count">{{ segment.value }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="logs-detail-summary__tags">
+            <span
+              v-if="modeLabelOf(selectedSummaryTask.archive_mode, selectedSummaryTask.link_mode)"
+              class="dashboard-mode-tag"
+              :class="modeClassOf(selectedSummaryTask.archive_mode, selectedSummaryTask.link_mode)"
+            >{{ modeLabelOf(selectedSummaryTask.archive_mode, selectedSummaryTask.link_mode) }}</span>
+          </div>
+        </div>
+        <RunDetailList :manifest="selectedSummaryManifest" :filter-key="summaryDetailFilterKey" />
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { fetchRunningBackups } from '../api/backups'
-import { fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
-import { emptyRunHistory, fetchRunHistory, type RunHistoryItem } from '../api/runHistory'
+import RunDetailList from '../components/RunDetailList.vue'
+import { cancelBackup, fetchRunningBackups } from '../api/backups'
+import { cancelRun, fetchRunLogs, fetchRuns, type RunInstance, type RunLogEntry } from '../api/executions'
+import { emptyRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem } from '../api/runHistory'
 import { fetchRules, type RuleItem } from '../api/rules'
 import { fetchHealth } from '../api/system'
+import {
+  backupTriggerLabel,
+  buildRunDetailSummarySegments,
+  parseRunDetail,
+  type RunDetailSummaryKey,
+} from '../utils/backupDetail'
 import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
-// 任务预览最多同时展示的条目数（运行中优先，其余用最近完成补齐）。
-const PREVIEW_LIMIT = 6
-
-// 执行摘要最多展示的条数。这个值同时当分页参数发给后端：不带分页参数的
-// /run-history 会读整张表（还带每行明细），而这里是 5 秒一次的轮询。
+// 执行摘要最多展示的任务数。这个值同时当分页参数发给后端：任务视图（view_mode=task）
+// 每个任务只回一行代表行，所以这里拿回来的是「最近 N 个任务」，与它们各自处理了多少项无关。
 const SUMMARY_LIMIT = 50
 
 type PreviewKind = 'rule' | 'backup' | 'manual'
@@ -149,6 +214,9 @@ interface PreviewPathLine {
   label: string
   value: string
 }
+
+/** 运行中任务的停止入口：规则执行走 cancelRun，备份任务走 cancelBackup。 */
+type PreviewCancelTarget = { kind: 'rule'; runId: string } | { kind: 'backup'; taskId: number }
 
 /** 统一的任务预览条目：规则执行、备份任务、手动解压/压缩/收集都归一到这个结构。 */
 interface PreviewTask {
@@ -168,6 +236,8 @@ interface PreviewTask {
   failure_count: number
   logs: string[]
   logsLoading: boolean
+  // 停止这次执行调哪个接口、用哪个 id（条目上的「停止」按钮用）。
+  cancelTarget: PreviewCancelTarget
 }
 
 const healthError = ref('')
@@ -177,8 +247,14 @@ const rules = ref<RuleItem[]>([])
 const runningTasks = ref<PreviewTask[]>([])
 let previewPollTimer: number | null = null
 
-// 任务预览只展示「正在执行」的任务；历史记录统一由右侧「执行摘要」承载。
-const previewTasks = computed<PreviewTask[]>(() => runningTasks.value.slice(0, PREVIEW_LIMIT))
+// —— 停止运行中的任务（带二次确认）——
+// 与规则卡片 / 备份卡片走同一套后端接口，区别只在于这里必须先过一次确认弹窗：
+// 仪表盘上的按钮容易被误点，而停止会真的打断正在跑的任务。
+const cancellingTaskIds = ref<Set<string>>(new Set())
+
+function isTaskCancelling(taskId: string) {
+  return cancellingTaskIds.value.has(taskId)
+}
 
 const previewBadgeText = computed(() =>
   runningTasks.value.length ? `${runningTasks.value.length} 个任务进行中` : '当前没有执行中的任务',
@@ -362,14 +438,79 @@ async function loadHealth() {
   }
 }
 
-/** 执行摘要的数据源：运行日志（一条数据源覆盖规则 / 备份 / 手动任务）。 */
+/**
+ * 执行摘要的数据源：运行历史的任务视图（一条数据源覆盖规则 / 备份 / 手动任务）。
+ *
+ * view_mode=task 是「一行一个任务」：一次执行会写出多行记录（每处理一项落一行），
+ * 原样拉回来时，一次多文件的执行就会铺出几十行几乎一样的条目 —— 而且只有收尾那条带明细。
+ * 任务视图直接把它折成一行，给的又正是那条带完整明细的代表行，所以点开就能看这次执行干了什么。
+ * 它每 5 秒跑一次，这条路径的体量只跟任务数有关，与某次执行处理了多少项无关。
+ */
 async function loadSummary() {
   try {
-    const items = (await fetchRunHistory({ page: 1, page_size: SUMMARY_LIMIT })).data?.items ?? []
+    const items = (await fetchRunHistory({ page: 1, page_size: SUMMARY_LIMIT, view_mode: 'task' })).data?.items ?? []
     summaryItems.value = items.slice(0, SUMMARY_LIMIT)
   } catch {
     summaryItems.value = []
   }
+}
+
+// —— 任务详情窗（执行摘要条目点开）——
+const summaryDetailVisible = ref(false)
+const selectedSummaryTask = ref<RunHistoryItem | null>(null)
+// 明细载荷单独拉：列表接口刻意不带明细（一次执行的明细可达几十 KB）。
+const selectedSummaryDetail = ref<RunHistoryItem | null>(null)
+const summaryDetailFilterKey = ref<RunDetailSummaryKey | null>(null)
+
+// 执行明细：这次执行真的动了哪些文件（上传 / 删除 / 生成 strm / 打包产出…）。
+const selectedSummaryManifest = computed(() => parseRunDetail(selectedSummaryDetail.value ?? undefined))
+// 统计项：成功 / 跳过 / 失败（+ 删除、strm 与元数据），点击即筛选下面的文件明细。
+const selectedSummarySegments = computed(() =>
+  buildRunDetailSummarySegments(selectedSummaryTask.value ?? {}, selectedSummaryManifest.value),
+)
+
+// 标题与运行日志页同一套写法：「模式 + 任务 · 规则自定义名」，如「净化任务 · 剧集清理」。
+const selectedSummaryTitle = computed(() => {
+  const item = selectedSummaryTask.value
+  if (!item) {
+    return ''
+  }
+  const mode = modeLabelOf(item.archive_mode, item.link_mode)
+  const name = displayRuleName(item)
+  return mode ? `${mode}任务 · ${name}` : name
+})
+
+async function openSummaryDetail(item: RunHistoryItem) {
+  selectedSummaryTask.value = item
+  selectedSummaryDetail.value = null
+  // 换一个任务就回到「不筛选」，免得把上一条的筛选态带过来。
+  summaryDetailFilterKey.value = null
+  summaryDetailVisible.value = true
+  try {
+    const payload = await fetchRunHistoryDetail(item.id)
+    selectedSummaryDetail.value = payload.data?.item ?? null
+  } catch {
+    selectedSummaryDetail.value = null
+  }
+}
+
+// 点中的统计项：再点一次同一个即取消筛选。
+function toggleSummaryDetailFilter(key: RunDetailSummaryKey) {
+  summaryDetailFilterKey.value = summaryDetailFilterKey.value === key ? null : key
+}
+
+// 摘要卡前缀：只讲触发方式，备份任务与其它规则各用一套措辞（与运行日志页保持一致）。
+function summaryTriggerText(item: RunHistoryItem) {
+  if (item.archive_mode === 'backup') {
+    return backupTriggerLabel(item.trigger_mode)
+  }
+  if (item.trigger_mode === 'watch') {
+    return '实时监控触发'
+  }
+  if (item.trigger_mode === 'cron') {
+    return '计划扫描触发'
+  }
+  return '手动执行触发'
 }
 
 async function loadRules() {
@@ -418,6 +559,8 @@ async function loadRuleRunningTasks(): Promise<PreviewTask[]> {
             failure_count: item.failure_count,
             logs: [],
             logsLoading: true,
+            // 停止这次规则执行：用的就是运行实例 id。
+            cancelTarget: { kind: 'rule', runId: item.id },
           },
         }
       })
@@ -468,6 +611,8 @@ async function loadBackupRunningTasks(): Promise<PreviewTask[]> {
         failure_count: snapshot.failed,
         logs: (snapshot.recent_logs ?? []).slice(-5),
         logsLoading: false,
+        // 停止这次备份：走按任务 id 的取消接口。
+        cancelTarget: { kind: 'backup', taskId: snapshot.task_id },
       }
     })
   } catch {
@@ -498,6 +643,47 @@ function stopPreviewPolling() {
   if (previewPollTimer !== null) {
     window.clearInterval(previewPollTimer)
     previewPollTimer = null
+  }
+}
+
+// 停止一个运行中的任务：**先二次确认**，确认后才真的发停止请求（规则 / 备份各走各的接口）。
+// 停止是协作式的：当前正在处理的那一项会先做完，随后立即收尾，所以请求成功后任务还会
+// 在列表里停留几秒 —— 由下一次轮询把它摘掉。请求期间按钮禁用，避免重复点。
+async function cancelPreviewTask(task: PreviewTask) {
+  if (isTaskCancelling(task.id)) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认停止「${task.ruleName}」这次执行吗？当前正在处理的那一项会先做完，随后立即收尾。`,
+      '停止任务',
+      { type: 'warning', confirmButtonText: '停止任务', cancelButtonText: '取消' },
+    )
+  } catch {
+    // 取消 / 关闭确认框：什么都不做（ElMessageBox 用 reject 表达这两种情况）。
+    return
+  }
+
+  const nextCancelling = new Set(cancellingTaskIds.value)
+  nextCancelling.add(task.id)
+  cancellingTaskIds.value = nextCancelling
+
+  try {
+    if (task.cancelTarget.kind === 'rule') {
+      await cancelRun(task.cancelTarget.runId)
+    } else {
+      await cancelBackup(task.cancelTarget.taskId)
+    }
+    ElMessage.success('已请求停止任务')
+    // 立刻刷新一次，不等下一个 5 秒周期。
+    void reloadPreview()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '停止任务失败')
+  } finally {
+    const settled = new Set(cancellingTaskIds.value)
+    settled.delete(task.id)
+    cancellingTaskIds.value = settled
   }
 }
 
@@ -695,6 +881,29 @@ onBeforeUnmount(() => {
   background: #f8fafc;
 }
 
+/* 执行摘要条目整块可点（打开这次执行的任务详情窗）。它是 <button>，
+   浏览器对按钮默认用表单控件字体、内容还居中，这里显式复位成普通卡片的排布。 */
+.summary-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* 可点提示：浅底 + 本色描边（项目约定，不铺实心块）。 */
+.summary-item:hover {
+  border-color: rgba(32, 159, 238, 0.42);
+  background: #f4f9ff;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.summary-item:focus-visible {
+  outline: 2px solid rgba(32, 159, 238, 0.45);
+  outline-offset: 1px;
+}
+
 .summary-item__header,
 .task-preview-item__header {
   display: flex;
@@ -854,6 +1063,35 @@ onBeforeUnmount(() => {
   border-color: rgba(32, 159, 238, 0.22);
   background: linear-gradient(180deg, #f8fbff 0%, #f5f9ff 100%);
   box-shadow: inset 3px 0 0 #73b5de;
+}
+
+/* 条目上的「停止」按钮：浅底 + 本色深字 + 描边（项目约定，不铺实心块），
+   取的是明细里「失败 / 停止」那一支的砖红。 */
+.task-preview-item__stop {
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 12px;
+  border: 1px solid rgba(196, 86, 47, 0.42);
+  border-radius: 999px;
+  background: rgba(196, 86, 47, 0.1);
+  color: #c4562f;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.task-preview-item__stop:hover:not(:disabled) {
+  border-color: rgba(196, 86, 47, 0.62);
+  background: rgba(196, 86, 47, 0.18);
+}
+
+/* 停止请求已发出、后端还在收尾：禁用重复点击。 */
+.task-preview-item__stop:disabled {
+  cursor: default;
+  opacity: 0.62;
 }
 
 .task-preview-item__meta {
