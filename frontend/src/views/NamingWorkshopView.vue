@@ -54,51 +54,64 @@
             </div>
           </header>
 
+          <!-- 源条目列表：虚拟滚动（轮 114）。展开的文件夹会把自己的子项**拍平**成
+               紧随其后的行（见 sourceRows），所以行高只有三种：条目 / 子项 / 空文件夹提示。 -->
           <div class="item-list">
-            <article v-for="item in sortedSourceItems" :key="item.path" :class="['file-item', { 'file-item--folder': item.kind === 'folder', 'is-expanded': item.expanded }]">
-              <div class="file-item__main">
-                <el-button v-if="item.kind === 'folder'" class="file-item__expand" text :loading="item.loadingChildren" :aria-label="item.expanded ? '收起文件夹' : '展开文件夹'" @click="toggleSourceFolder(item)">
-                  <svg v-if="!item.loadingChildren" viewBox="0 0 24 24" aria-hidden="true">
-                    <path :d="item.expanded ? 'm7.2 14.2 4.8-4.8 4.8 4.8' : 'm8.2 7.2 4.8 4.8-4.8 4.8'" />
-                  </svg>
-                </el-button>
-                <span v-else class="file-item__expand-placeholder"></span>
-                <span :class="['file-item__icon', `file-item__icon--${item.kind}`]">
-                  <svg v-if="item.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
-                    <path d="M13.55 4.05v5.05h5.05" />
-                  </svg>
-                </span>
-                <div class="file-item__meta">
-                  <div class="file-item__name">{{ item.name }}</div>
-                  <div class="file-item__path">{{ item.path }}</div>
-                </div>
-                <div class="file-item__extra">
-                  <span>{{ item.kind === 'folder' && item.childrenLoaded ? `${selectedFolderChildCount(item)} / ${folderChildFileCount(item)} 个文件` : item.type }}</span>
-                  <span>{{ item.modifiedAt }}</span>
-                </div>
-                <el-tooltip content="移除" placement="top" :show-after="300">
-                  <el-button class="line-delete-button file-item__delete" text aria-label="移除待命名条目" @click="removeSourceItem(item.path)">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M5.2 6.8h13.6" />
-                      <path d="M9.2 6.8V5.2h5.6v1.6" />
-                      <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
-                      <path d="M10.8 11.8v4.6" />
-                      <path d="M13.2 11.8v4.6" />
-                    </svg>
-                  </el-button>
-                </el-tooltip>
-              </div>
+            <VirtualList
+              v-if="sourceRows.length"
+              class="item-list__scroll"
+              :items="sourceRows"
+              :item-size="sourceRowHeight"
+              :item-key="sourceRowKey"
+              :reset-key="sourceResetKey"
+            >
+              <template #default="{ item: row }">
+                <article
+                  v-if="row.kind === 'item'"
+                  :class="['file-item', { 'file-item--folder': row.item.kind === 'folder', 'is-expanded': row.item.expanded }]"
+                >
+                  <div class="file-item__main">
+                    <el-button v-if="row.item.kind === 'folder'" class="file-item__expand" text :loading="row.item.loadingChildren" :aria-label="row.item.expanded ? '收起文件夹' : '展开文件夹'" @click="toggleSourceFolder(row.item)">
+                      <svg v-if="!row.item.loadingChildren" viewBox="0 0 24 24" aria-hidden="true">
+                        <path :d="row.item.expanded ? 'm7.2 14.2 4.8-4.8 4.8 4.8' : 'm8.2 7.2 4.8 4.8-4.8 4.8'" />
+                      </svg>
+                    </el-button>
+                    <span v-else class="file-item__expand-placeholder"></span>
+                    <span :class="['file-item__icon', `file-item__icon--${row.item.kind}`]">
+                      <svg v-if="row.item.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7.2 3.9h6.5l5.1 5.05v9.2a2 2 0 0 1-2 2H7.2a2 2 0 0 1-2-2V5.9a2 2 0 0 1 2-2Z" />
+                        <path d="M13.55 4.05v5.05h5.05" />
+                      </svg>
+                    </span>
+                    <div class="file-item__meta">
+                      <div class="file-item__name">{{ row.item.name }}</div>
+                      <div class="file-item__path">{{ row.item.path }}</div>
+                    </div>
+                    <div class="file-item__extra">
+                      <span>{{ row.item.kind === 'folder' && row.item.childrenLoaded ? `${selectedFolderChildCount(row.item)} / ${folderChildFileCount(row.item)} 个文件` : row.item.type }}</span>
+                      <span>{{ row.item.modifiedAt }}</span>
+                    </div>
+                    <el-tooltip content="移除" placement="top" :show-after="300">
+                      <el-button class="line-delete-button file-item__delete" text aria-label="移除待命名条目" @click="removeSourceItem(row.item.path)">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M5.2 6.8h13.6" />
+                          <path d="M9.2 6.8V5.2h5.6v1.6" />
+                          <path d="m8.2 10 .55 8.2h6.5L15.8 10" />
+                          <path d="M10.8 11.8v4.6" />
+                          <path d="M13.2 11.8v4.6" />
+                        </svg>
+                      </el-button>
+                    </el-tooltip>
+                  </div>
+                </article>
 
-              <div v-if="item.kind === 'folder' && item.expanded" class="folder-children">
-                <el-empty v-if="item.childrenLoaded && !folderChildFileCount(item)" description="该文件夹下没有可选择的文件" :image-size="56" />
-                <label v-for="child in sortedFolderChildren(item)" :key="child.path" class="folder-child-item">
-                  <el-checkbox v-model="child.selected" @change="clearNamingResult" />
-                  <span :class="['folder-child-item__icon', `folder-child-item__icon--${child.kind}`]">
-                    <svg v-if="child.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
+                <label v-else-if="row.kind === 'child'" class="folder-child-item">
+                  <el-checkbox v-model="row.item.selected" @change="clearNamingResult" />
+                  <span :class="['folder-child-item__icon', `folder-child-item__icon--${row.item.kind}`]">
+                    <svg v-if="row.item.kind === 'folder'" viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M3.8 7.4a2 2 0 0 1 2-2h4.2l1.6 2h6.6a2 2 0 0 1 2 2v7.2a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2V7.4Z" />
                     </svg>
                     <svg v-else viewBox="0 0 24 24" aria-hidden="true">
@@ -107,13 +120,17 @@
                     </svg>
                   </span>
                   <span class="folder-child-item__meta">
-                    <span class="folder-child-item__name">{{ child.name }}</span>
-                    <span class="folder-child-item__path">{{ child.path }}</span>
+                    <span class="folder-child-item__name">{{ row.item.name }}</span>
+                    <span class="folder-child-item__path">{{ row.item.path }}</span>
                   </span>
-                  <span class="folder-child-item__type">{{ child.type }}</span>
+                  <span class="folder-child-item__type">{{ row.item.type }}</span>
                 </label>
-              </div>
-            </article>
+
+                <!-- 空文件夹：原来是一整块 el-empty（弹簧 + 文案），换成一行提示，
+                     行高与其它行同一套算法，虚拟滚动才算得准。 -->
+                <div v-else class="folder-empty-hint">该文件夹下没有可选择的文件</div>
+              </template>
+            </VirtualList>
           </div>
         </section>
 
@@ -185,16 +202,27 @@
             </el-tooltip>
           </header>
 
+          <!-- 命名结果列表：一次可能几千条（整目录预览），同样走虚拟滚动。 -->
           <div v-if="resultItems.length" class="result-list">
-            <article v-for="item in resultItems" :key="item.path" class="result-item">
-              <div class="result-item__before">{{ item.name }}</div>
-              <svg viewBox="0 0 24 24" aria-hidden="true" class="result-item__arrow">
-                <path d="M4.5 12h14" />
-                <path d="m14 7.5 4.5 4.5-4.5 4.5" />
-              </svg>
-              <div class="result-item__after">{{ item.nextName }}</div>
-              <span :class="['result-item__tag', `result-item__tag--${resultMode}`]">{{ resultModeLabel }}</span>
-            </article>
+            <VirtualList
+              class="result-list__scroll"
+              :items="resultItems"
+              :item-size="RESULT_ROW_HEIGHT"
+              :item-key="resultRowKey"
+              :reset-key="resultResetKey"
+            >
+              <template #default="{ item }">
+                <article class="result-item">
+                  <div class="result-item__before">{{ item.name }}</div>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="result-item__arrow">
+                    <path d="M4.5 12h14" />
+                    <path d="m14 7.5 4.5 4.5-4.5 4.5" />
+                  </svg>
+                  <div class="result-item__after">{{ item.nextName }}</div>
+                  <span :class="['result-item__tag', `result-item__tag--${resultMode}`]">{{ resultModeLabel }}</span>
+                </article>
+              </template>
+            </VirtualList>
           </div>
           <el-empty v-else description="点击中间的预览按钮后显示命名结果" />
         </section>
@@ -573,6 +601,7 @@ import ruleSetIcon from '../../icon/规则集.png'
 import addRuleIcon from '../../icon/添加规则.png'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
+import VirtualList from '../components/VirtualList.vue'
 import { browseDirectories, fetchBrowseRoots, type DirectoryEntry } from '../api/paths'
 
 type SourceItemKind = 'file' | 'folder'
@@ -747,6 +776,63 @@ watch(namingRuleSets, (value) => localStorage.setItem(namingRuleSetsStorageKey, 
 watch(addedRules, (value) => localStorage.setItem(namingRulesStorageKey, JSON.stringify(value)), { deep: true })
 
 const sortedSourceItems = computed(() => sortSourceItems(sourceItems.value))
+
+// —— 虚拟滚动（轮 114）——
+// 源条目列表把「展开的文件夹 + 它的子项」**拍平**成一行一行的列表：
+// 一个文件夹 = 一行（卡片），子项各自成行，空文件夹补一行提示。
+// 拍平之后行高只剩三种定值，偏移表才算得准。
+type SourceRowKind = 'item' | 'child' | 'empty'
+
+interface SourceRow {
+  key: string
+  kind: SourceRowKind
+  item: SourceItem
+}
+
+const sourceRows = computed<SourceRow[]>(() => {
+  const rows: SourceRow[] = []
+  for (const item of sortedSourceItems.value) {
+    rows.push({ key: `item:${item.path}`, kind: 'item', item })
+    if (item.kind !== 'folder' || !item.expanded) {
+      continue
+    }
+    const children = sortedFolderChildren(item)
+    if (item.childrenLoaded && children.length === 0) {
+      rows.push({ key: `empty:${item.path}`, kind: 'empty', item })
+      continue
+    }
+    for (const child of children) {
+      rows.push({ key: `child:${item.path}>${child.path}`, kind: 'child', item: child })
+    }
+  }
+  return rows
+})
+
+/* 行高必须与 CSS 里写死的卡片高度对上（行是绝对定位的，算错就重叠）：
+   每个常量 = 卡片高 + 10px（原来的列表 gap 折进行高里）。 */
+const SOURCE_ITEM_ROW_HEIGHT = 82
+const SOURCE_CHILD_ROW_HEIGHT = 68
+const SOURCE_EMPTY_ROW_HEIGHT = 50
+const RESULT_ROW_HEIGHT = 64
+
+function sourceRowHeight(row: SourceRow) {
+  if (row.kind === 'child') {
+    return SOURCE_CHILD_ROW_HEIGHT
+  }
+  return row.kind === 'empty' ? SOURCE_EMPTY_ROW_HEIGHT : SOURCE_ITEM_ROW_HEIGHT
+}
+
+function sourceRowKey(row: SourceRow) {
+  return row.key
+}
+
+function resultRowKey(item: SourceItem) {
+  return item.path
+}
+
+// 源条目 / 结果集换了一批就回顶（增删条目、换排序、预览切已命名都算）。
+const sourceResetKey = computed(() => `${sourceItems.value.length}|${sortBy.value}|${sortOrder.value}`)
+const resultResetKey = computed(() => `${resultItems.value.length}|${resultMode.value}`)
 
 const effectiveSourceItems = computed(() => {
   return sortedSourceItems.value.flatMap((item) => {
@@ -1469,11 +1555,18 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   width: 112px;
 }
 
+/* 两个长列表都交给 VirtualList（轮 114）：滚动容器在列表自己身上，
+   所以这里必须给出**确定的高度**（否则列表会一直长高，虚拟滚动就白做了）。
+   高度按视口留出上方头部的位置。 */
 .item-list,
 .result-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: block;
+}
+
+.item-list__scroll,
+.result-list__scroll {
+  height: calc(100vh - 330px);
+  min-height: 420px;
 }
 
 .file-item,
@@ -1486,6 +1579,13 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(226, 232, 240, 0.88);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* 卡片高 + 10px 下边距 = 脚本里的行高常量（原来的列表 gap 折进行高里）。
+   行高写死是因为行是绝对定位的，内容一律不换行、超高即裁。 */
+.file-item {
+  height: 72px;
+  margin-bottom: 10px;
 }
 
 .file-item--folder {
@@ -1635,26 +1735,35 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   flex-shrink: 0;
 }
 
-.folder-children {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-left: 36px;
-  padding: 10px 0 0 14px;
-  border-left: 1px dashed rgba(148, 163, 184, 0.32);
-}
-
+/* 展开的子项原来是嵌在文件夹卡片里的一个子容器（.folder-children）；
+   虚拟滚动把它拍平成独立行，缩进与虚线引导线改挂在行自己身上。 */
 .folder-child-item {
   display: grid;
   grid-template-columns: 28px 30px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+  height: 58px;
+  margin: 0 0 10px 50px;
   padding: 9px 10px;
   border: 1px solid rgba(226, 232, 240, 0.72);
+  border-left: 1px dashed rgba(148, 163, 184, 0.32);
   border-radius: 12px;
   background: rgba(248, 250, 252, 0.66);
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+/* 空文件夹的提示行：原来是 el-empty 那一整块，换成与行高同一套算法的一行文字。 */
+.folder-empty-hint {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin: 0 0 10px 50px;
+  padding: 0 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.32);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .folder-child-item:hover {
@@ -1849,7 +1958,10 @@ function moveRuleSetItem(index: number, direction: -1 | 1) {
   stroke-linejoin: round;
 }
 
+/* 结果行同样是「卡片高 + 10px 下边距」= 脚本里的 RESULT_ROW_HEIGHT。 */
 .result-item {
+  height: 54px;
+  margin-bottom: 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr) auto;
 }

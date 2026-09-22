@@ -12,22 +12,25 @@
          面板**常驻**：没有明细时只显示空态，整块不隐藏——任务详情要能一眼看出
          「这次确实没动文件」，无论这条记录是成功、失败还是跳过。
 
-         分页：一次执行动辄成百上千个文件，整份铺出来只能靠滚动条硬翻。
-         一页条数**跟随系统设置里的「每页文件数」**（与运行日志 / 文件管理同一处），
-         底部只留翻页与总数，不给独立的页大小下拉——条数统一由设置控制。 -->
-    <div class="run-detail__body">
-      <el-table
-        :data="pagedRows"
-        class="run-detail__table"
-        size="small"
-        height="100%"
-      >
-        <template #empty>
-          <div class="run-detail__empty">{{ emptyText }}</div>
-        </template>
+         **虚拟滚动（轮 114）**：一次执行动辄成百上千个文件，原来靠「每页文件数」翻页硬翻；
+         现在整份条目交给 VirtualList，只渲染可视区那几十行，一次滚到底看完，
+         不再有页码（数据本来就整份在 manifest 里，翻页只是为了少建 DOM）。 -->
+    <div class="run-detail__head">
+      <span class="run-detail__head-cell">{{ sourceColumnLabel }}</span>
+      <span class="run-detail__head-cell run-detail__head-cell--action">结果</span>
+    </div>
 
-        <el-table-column :label="sourceColumnLabel" min-width="360">
-          <template #default="scope">
+    <div class="run-detail__body">
+      <VirtualList
+        v-if="rows.length > 0"
+        class="run-detail__list"
+        :items="rows"
+        :item-size="rowHeight"
+        :item-key="rowKey"
+        :reset-key="filterKey ?? 'all'"
+      >
+        <template #default="{ item }">
+          <div class="run-detail__item">
             <!-- 悬浮提示：在**条目下方**弹出，鼠标停够 0.5s 才出现（扫过整列时不会一路弹），
                  移开立刻收回（hide-after=0，EP 默认还要再等 200ms）。enterable=false 让指针一旦
                  离开条目就关闭——只做「看一眼完整路径」的用途，不需要能点进提示框里。 -->
@@ -41,57 +44,44 @@
               :offset="6"
             >
               <template #content>
-                <div class="run-detail-tip__path">{{ scope.row.entry.path }}</div>
-                <div v-if="scope.row.entry.target" class="run-detail-tip__target">→ {{ scope.row.entry.target }}</div>
-                <div v-if="scope.row.entry.note" class="run-detail-tip__note">{{ scope.row.entry.note }}</div>
+                <div class="run-detail-tip__path">{{ item.entry.path }}</div>
+                <div v-if="item.entry.target" class="run-detail-tip__target">→ {{ item.entry.target }}</div>
+                <div v-if="item.entry.note" class="run-detail-tip__note">{{ item.entry.note }}</div>
               </template>
               <span class="run-detail__cell">
                 <span class="run-detail__line">
                   <el-icon class="run-detail__icon">
-                    <Folder v-if="scope.row.entry.dir" />
+                    <Folder v-if="item.entry.dir" />
                     <Document v-else />
                   </el-icon>
-                  <span class="run-detail__path">{{ scope.row.source }}</span>
+                  <span class="run-detail__path">{{ item.source }}</span>
                 </span>
                 <!-- 第二行只在「有产物落点」时出现（上传 / strm / 元数据 / 打包 / 移动）；
                      跳过、失败、删除没有落点，只显示上面那行文件路径。 -->
-                <span v-if="scope.row.secondary" class="run-detail__line">
+                <span v-if="item.secondary" class="run-detail__line">
                   <span class="run-detail__arrow" aria-hidden="true">↳</span>
-                  <span class="run-detail__target">{{ scope.row.secondary }}</span>
+                  <span class="run-detail__target">{{ item.secondary }}</span>
                 </span>
               </span>
             </el-tooltip>
-          </template>
-        </el-table-column>
 
-        <el-table-column label="结果" width="126" align="center">
-          <template #default="scope">
-            <span class="run-detail__action" :class="actionClass(scope.row.action)">
-              {{ actionLabel(scope.row.action) }}
+            <span class="run-detail__action-cell">
+              <span class="run-detail__action" :class="actionClass(item.action)">{{ actionLabel(item.action) }}</span>
             </span>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+          </div>
+        </template>
+      </VirtualList>
 
-    <!-- 只要有明细就出这一条：总数让「这次到底动了几个文件」一目了然，
-         页数少了也只是「共 N 条」一行，不会白占高度。 -->
-    <div v-if="rows.length > 0" class="run-detail__pager">
-      <el-pagination
-        v-model:current-page="currentPage"
-        :page-size="pageSize"
-        :total="rows.length"
-        background
-        layout="total, prev, pager, next"
-      />
+      <div v-else class="run-detail__empty">{{ emptyText }}</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { Document, Folder } from '@element-plus/icons-vue'
 
+import VirtualList from './VirtualList.vue'
 import {
   backupFileActionClass,
   backupFileActionLabel,
@@ -107,15 +97,12 @@ import {
   type RunDetailSummaryKey,
   type RunFileAction,
 } from '../utils/backupDetail'
-import { defaultPageSize, useSettingsStore } from '../stores/settings'
 
 const props = defineProps<{
   manifest: BackupFileManifest | null
   // 顶部统计栏选中的筛选项：null 表示不筛选，列出全部条目。
   filterKey?: RunDetailSummaryKey | null
 }>()
-
-const settingsStore = useSettingsStore()
 
 // 列名：备份任务的明细是「备份操作」（第一行源路径，第二行箭头 + 目标端落地的文件夹），
 // 其它链路仍是「源路径」——它们的第二行（strm / 打包等）同样挂在同一列下。
@@ -128,12 +115,6 @@ const sourceColumnLabel = computed(() => {
     return '备份操作'
   }
   return nameOnlyMode.value ? '名称' : '源路径'
-})
-
-// 一页条数跟随系统设置（基础设置窗口的「每页文件数」）；未加载出设置时按默认值兜底。
-const pageSize = computed(() => {
-  const size = Number(settingsStore.pageSize)
-  return Number.isFinite(size) && size > 0 ? size : defaultPageSize
 })
 
 interface RunDetailRow {
@@ -149,7 +130,7 @@ interface RunDetailRow {
   secondary: string
 }
 
-// 当前筛选下的**全部**条目（未分页）——总数与翻页都基于它。
+// 当前筛选下的**全部**条目（不分页）——虚拟滚动直接吃这一份。
 const rows = computed<RunDetailRow[]>(() => {
   const manifest = props.manifest
   const kind = manifest?.kind
@@ -171,21 +152,22 @@ const rows = computed<RunDetailRow[]>(() => {
   })
 })
 
-const currentPage = ref(1)
+/* 行高必须与 CSS 里写死的一致（行是绝对定位的，算错了就地重叠）：
+   上下各 7px 内边距 + 20px 行高，两行之间再留 1px 缝 —— 单行 34、两行 55。 */
+const ROW_HEIGHT_SINGLE = 34
+const ROW_HEIGHT_DOUBLE = 55
 
-// 表格只渲染当前这一页。
-const pagedRows = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return rows.value.slice(start, start + pageSize.value)
-})
+function rowHeight(row: RunDetailRow) {
+  return row.secondary ? ROW_HEIGHT_DOUBLE : ROW_HEIGHT_SINGLE
+}
 
-// 换筛选 / 换记录 / 改「每页文件数」都回到第一页，避免停在已不存在的页码上。
-watch(
-  [() => props.filterKey, () => props.manifest, pageSize],
-  () => {
-    currentPage.value = 1
-  },
-)
+function rowKey(row: RunDetailRow) {
+  return `${row.entry.path}|${row.action}`
+}
+
+// 换筛选由 VirtualList 的 resetKey 处理（换筛选项自动回到顶部）。
+// 不回去的话，从「全部」切到条目更少的筛选项时，滚动位置会停在原处，
+// 看起来像「筛出来是空的」。
 
 // 空态要分清「本来就没有明细」与「筛出来是空的」。
 const emptyText = computed(() => {
@@ -206,7 +188,7 @@ function actionClass(action: RunFileAction) {
 </script>
 
 <style scoped>
-/* 竖直方向被弹窗正文的 flex 分配高度：自己撑满剩余空间，把余下的高度全给表格。 */
+/* 竖直方向被弹窗正文的 flex 分配高度：自己撑满剩余空间，把余下的高度全给列表。 */
 .run-detail {
   display: flex;
   flex: 1 1 auto;
@@ -214,41 +196,55 @@ function actionClass(action: RunFileAction) {
   min-height: 0;
 }
 
-/* 表格区：独占除翻页条以外的全部高度。包一层是为了让 el-table 的 height:100%
-   有一个高度确定、可伸缩的父级（翻页条是它的兄弟，不能再算进 100%）。 */
-.run-detail__body {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* 表格高度由组件的 height="100%" 写成内联样式，这里再兜一层 flex，保证它是唯一的伸缩项。 */
-.run-detail__table {
-  flex: 1 1 auto;
-  width: 100%;
-  min-height: 0;
-}
-
-/* 翻页条：固定高度、不参与伸缩，右对齐与运行日志页保持一致。 */
-.run-detail__pager {
-  display: flex;
+/* 表头：与行同一套栅格（名称吃掉剩余宽度 + 结果 126px），列必然对齐。
+   背景 / 文字色沿用全局 .el-table 那支表头色，换成自绘表头也不跳色。 */
+.run-detail__head {
+  display: grid;
   flex: 0 0 auto;
-  justify-content: flex-end;
-  padding: 10px 4px 2px;
+  grid-template-columns: minmax(0, 1fr) 126px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-/* 一行一条：把单元格的上下内边距压到最小，同样高度里能多铺几行。
-   注意有**两层**上下内边距：`td.el-table__cell` 一层，内层 `.cell` 一层；全局
-   `styles/index.scss` 的 `.el-table .cell { padding-top/bottom: var(--table-cell-padding-y) }`
-   给内层留了 12px，只压外层的话行高仍会停在 58px（明细表要单独清零）。
-   上下各留 7px：4px 时条目挤成一片、扫不出行，7px 是「分得清行又不浪费高度」的折中。 */
-.run-detail__table :deep(.el-table__cell) {
+.run-detail__head-cell {
+  padding: 0 12px;
+}
+
+.run-detail__head-cell--action {
+  text-align: center;
+}
+
+/* 列表区：独占除表头以外的全部高度。 */
+.run-detail__body {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.run-detail__list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 滚动条压到 4px：明细表内一直用细浅滚动条（弹窗里空间紧，6px 会显眼）。 */
+.run-detail__list::-webkit-scrollbar {
+  width: 4px;
+}
+
+/* 一行 = 名称（flex 撑开）+ 结果，两列与表头同栅格。行高由 VirtualList 内联写死，
+   这里只管上下内边距与两行之间的缝。 */
+.run-detail__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 126px;
+  align-items: center;
+  height: 100%;
   padding: 7px 0;
-}
-
-.run-detail__table :deep(.cell) {
-  padding-top: 0;
-  padding-bottom: 0;
+  box-sizing: border-box;
 }
 
 /* 一个条目 = 一列（备份任务是两行，其它链路只有第一行），行内各自是 flex 横排。 */
@@ -257,6 +253,8 @@ function actionClass(action: RunFileAction) {
   flex-direction: column;
   gap: 1px;
   min-width: 0;
+  padding: 0 12px;
+  box-sizing: border-box;
 }
 
 .run-detail__line {
@@ -264,6 +262,8 @@ function actionClass(action: RunFileAction) {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  /* 行高定死 20px：上面的行高常量就是按它算的。 */
+  height: 20px;
 }
 
 .run-detail__icon {
@@ -278,6 +278,7 @@ function actionClass(action: RunFileAction) {
   overflow: hidden;
   font-size: 13px;
   font-weight: 600;
+  line-height: 20px;
   color: var(--el-text-color-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -299,12 +300,18 @@ function actionClass(action: RunFileAction) {
   overflow: hidden;
   font-size: 12px;
   font-weight: 600;
+  line-height: 20px;
   color: #5f7fa8;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 筛选后没有条目时的说明文案（el-table 的 empty 插槽）。 */
+.run-detail__action-cell {
+  display: flex;
+  justify-content: center;
+}
+
+/* 筛选后没有条目时的说明文案（原来挂在 el-table 的 empty 插槽上）。 */
 .run-detail__empty {
   padding: 18px 12px;
   font-size: 13px;

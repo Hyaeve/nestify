@@ -225,108 +225,128 @@
           </span>
         </div>
 
-        <el-table
-          ref="tableRef"
-          v-loading="loading"
-          :data="pagedEntries"
-          row-key="path"
-          :empty-text="tableEmptyText"
-          :row-class-name="getRowClassName"
-          @selection-change="handleSelectionChange"
-          @select="handleSelectRow"
-          @row-contextmenu="handleRowContextMenu"
-          @click="handleTableClick"
-        >
-          <el-table-column type="selection" width="52" :selectable="isRowSelectable" />
-          <el-table-column label="名称" min-width="520">
-            <template #default="scope">
-              <button
-                type="button"
-                class="entry-name"
-                :class="{ 'is-dir': scope.row.is_dir }"
-                @click.stop="handleEntryPrimaryAction(scope.row)"
-              >
-                <el-tooltip v-if="scope.row.is_dir && !isSourceRootLevel" :content="isStarred(scope.row.path) ? '取消星标' : '添加星标'" placement="top" :show-after="500">
-                  <el-button
-                    link
-                    class="entry-star"
-                    :class="{ 'is-active': isStarred(scope.row.path) }"
-                    :aria-label="isStarred(scope.row.path) ? '取消星标' : '添加星标'"
-                    @click.stop="toggleFolderStar(scope.row.path)"
-                  >
-                    <el-icon class="entry-star__icon">
-                      <StarFilled v-if="isStarred(scope.row.path)" />
-                      <Star v-else />
-                    </el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-icon class="entry-name__icon" :class="{ 'entry-name__icon--mount': scope.row.is_mount }">
-                  <Cloudy v-if="scope.row.is_mount" />
-                  <FolderOpened v-else-if="scope.row.is_dir" />
-                  <Document v-else />
-                </el-icon>
-                <div class="entry-name__text">
-                  <el-tooltip :content="scope.row.path" placement="top" :show-after="500" :disabled="!scope.row.path">
-                    <div class="entry-name__title">{{ scope.row.name }}</div>
-                  </el-tooltip>
-                </div>
-              </button>
-            </template>
-          </el-table-column>
-          <el-table-column label="大小" width="120">
-            <template #default="scope">
-              {{ scope.row.is_dir ? '—' : formatBytes(scope.row.size) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="修改时间" width="190">
-            <template #default="scope">
-              {{ formatTimestamp(scope.row.modified_at) }}
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
-            <template #default="scope">
-              <div class="entry-actions">
-                <el-tooltip v-if="scope.row.is_dir" content="打开" placement="top">
-                  <el-button link class="entry-actions__icon" @click.stop="openEntry(scope.row)">
-                    <el-icon><Folder /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip v-if="!isSourceRootLevel" content="打包" placement="top">
-                  <el-button link class="entry-actions__icon entry-actions__icon--warning" @click.stop="openPackDialog(scope.row)">
-                    <el-icon><Files /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-dropdown v-if="!isSourceRootLevel" trigger="click" @command="(command: string) => handleMoreCommand(command, scope.row)">
-                  <el-button link class="entry-actions__icon">
-                    <el-icon><MoreFilled /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="rename"><el-icon><Edit /></el-icon>重命名</el-dropdown-item>
-                        <el-dropdown-item command="move"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg>移动</el-dropdown-item>
-                        <el-dropdown-item command="copy"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg>复制</el-dropdown-item>
-                        <el-dropdown-item v-if="isArchiveEntry(scope.row)" command="extract"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--extract"><path d="M6.35 3.75h7.25l4.05 4.05v12.45H6.35Z" /><path d="M13.55 4.05V7.85h3.8" /><path d="M9.75 6.45h1.3" /><path d="M11.05 8.55h1.3" /><path d="M9.75 10.65h1.3" /><path d="M11.05 12.75h1.3" /><path d="M9.75 14.85h1.3" /><path d="M9.65 16.9h2.95v2.1H9.65Z" /></svg>解压到当前目录</el-dropdown-item>
-                        <el-dropdown-item command="delete" divided><el-icon><Delete /></el-icon>删除</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+        <!-- 文件列表（虚拟滚动，轮 114）：一次只渲染可视区那几十行，
+             所以上万条目的目录也能直接滚，不用再翻页。
+             表头与行共用同一套栅格，列宽天然对齐。 -->
+        <div class="entry-table">
+          <div class="entry-table__head">
+            <span class="entry-table__col entry-table__col--check">
+              <el-tooltip content="全选 / 取消全选（当前列表）" placement="top" :show-after="300" :disabled="isSourceRootLevel || !filteredEntries.length">
+                <el-checkbox
+                  :model-value="allEntriesSelected"
+                  :indeterminate="someEntriesSelected"
+                  :disabled="isSourceRootLevel || !filteredEntries.length"
+                  @change="toggleSelectAllEntries"
+                />
+              </el-tooltip>
+            </span>
+            <span class="entry-table__col">名称</span>
+            <span class="entry-table__col entry-table__col--size">大小</span>
+            <span class="entry-table__col entry-table__col--time">修改时间</span>
+            <span class="entry-table__col entry-table__col--actions">操作</span>
+          </div>
 
-        <div class="table-pagination">
+          <div class="entry-table__body" v-loading="loading" @click="handleTableClick">
+            <VirtualList
+              class="entry-table__list"
+              :items="filteredEntries"
+              :item-size="ENTRY_ROW_HEIGHT"
+              :item-key="entryRowKey"
+              :reset-key="listResetKey"
+            >
+              <template #default="{ item }">
+                <div
+                  class="entry-row"
+                  :class="{ 'is-selected': selectedPathSet.has(item.path) }"
+                  @contextmenu.prevent="handleRowContextMenu(item, $event)"
+                >
+                  <span class="entry-row__col entry-row__col--check">
+                    <el-checkbox
+                      :model-value="selectedPathSet.has(item.path)"
+                      :disabled="!isRowSelectable()"
+                      @change="(value: CheckboxValueType) => setEntrySelected(item.path, Boolean(value))"
+                    />
+                  </span>
+                  <span class="entry-row__col">
+                    <button
+                      type="button"
+                      class="entry-name"
+                      :class="{ 'is-dir': item.is_dir }"
+                      @click.stop="handleEntryPrimaryAction(item)"
+                    >
+                      <el-tooltip v-if="item.is_dir && !isSourceRootLevel" :content="isStarred(item.path) ? '取消星标' : '添加星标'" placement="top" :show-after="500">
+                        <el-button
+                          link
+                          class="entry-star"
+                          :class="{ 'is-active': isStarred(item.path) }"
+                          :aria-label="isStarred(item.path) ? '取消星标' : '添加星标'"
+                          @click.stop="toggleFolderStar(item.path)"
+                        >
+                          <el-icon class="entry-star__icon">
+                            <StarFilled v-if="isStarred(item.path)" />
+                            <Star v-else />
+                          </el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-icon class="entry-name__icon" :class="{ 'entry-name__icon--mount': item.is_mount }">
+                        <Cloudy v-if="item.is_mount" />
+                        <FolderOpened v-else-if="item.is_dir" />
+                        <Document v-else />
+                      </el-icon>
+                      <div class="entry-name__text">
+                        <el-tooltip :content="item.path" placement="top" :show-after="500" :disabled="!item.path">
+                          <div class="entry-name__title">{{ item.name }}</div>
+                        </el-tooltip>
+                      </div>
+                    </button>
+                  </span>
+                  <span class="entry-row__col entry-row__col--size">
+                    {{ item.is_dir ? '—' : formatBytes(item.size) }}
+                  </span>
+                  <span class="entry-row__col entry-row__col--time">
+                    {{ formatTimestamp(item.modified_at) }}
+                  </span>
+                  <span class="entry-row__col entry-row__col--actions">
+                    <div class="entry-actions">
+                      <el-tooltip v-if="item.is_dir" content="打开" placement="top">
+                        <el-button link class="entry-actions__icon" @click.stop="openEntry(item)">
+                          <el-icon><Folder /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-tooltip v-if="!isSourceRootLevel" content="打包" placement="top">
+                        <el-button link class="entry-actions__icon entry-actions__icon--warning" @click.stop="openPackDialog(item)">
+                          <el-icon><Files /></el-icon>
+                        </el-button>
+                      </el-tooltip>
+                      <el-dropdown v-if="!isSourceRootLevel" trigger="click" @command="(command: string) => handleMoreCommand(command, item)">
+                        <el-button link class="entry-actions__icon">
+                          <el-icon><MoreFilled /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="rename"><el-icon><Edit /></el-icon>重命名</el-dropdown-item>
+                              <el-dropdown-item command="move"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--move"><path d="M4 4.75h8.5a2.25 2.25 0 0 1 2.25 2.25v2.5" /><path d="M10.5 13.25h9" /><path d="m16.75 9.5 3.75 3.75L16.75 17" /><path d="M4 19.25h8.5a2.25 2.25 0 0 0 2.25-2.25v-2.5" /></svg>移动</el-dropdown-item>
+                              <el-dropdown-item command="copy"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--copy"><rect x="8" y="7" width="10" height="12" rx="2" /><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></svg>复制</el-dropdown-item>
+                              <el-dropdown-item v-if="isArchiveEntry(item)" command="extract"><svg viewBox="0 0 24 24" aria-hidden="true" class="dropdown-menu-icon dropdown-menu-icon--extract"><path d="M6.35 3.75h7.25l4.05 4.05v12.45H6.35Z" /><path d="M13.55 4.05V7.85h3.8" /><path d="M9.75 6.45h1.3" /><path d="M11.05 8.55h1.3" /><path d="M9.75 10.65h1.3" /><path d="M11.05 12.75h1.3" /><path d="M9.75 14.85h1.3" /><path d="M9.65 16.9h2.95v2.1H9.65Z" /></svg>解压到当前目录</el-dropdown-item>
+                              <el-dropdown-item command="delete" divided><el-icon><Delete /></el-icon>删除</el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
+                    </div>
+                  </span>
+                </div>
+              </template>
+            </VirtualList>
+
+            <div v-if="!filteredEntries.length" class="entry-table__empty">{{ tableEmptyText }}</div>
+          </div>
+        </div>
+
+        <!-- 虚拟滚动取代了翻页条：全部条目都在列表里，滚动即加载。
+             这里只留总条数，页码与「每页条数」一并去掉（设置里的每页文件数不再管这一页）。 -->
+        <div class="table-footer">
           <span class="footer-count">共 {{ filteredEntries.length }} 条</span>
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            background
-            layout="sizes, prev, pager, next"
-            :page-sizes="pageSizeOptions"
-            :total="filteredEntries.length"
-            @current-change="handleCurrentPageChange"
-            @size-change="handlePageSizeChange"
-          />
+          <span class="table-footer__hint">已全部载入，滚动查看</span>
         </div>
 
         <input ref="uploadInputRef" type="file" multiple webkitdirectory directory class="file-upload-input" @change="handleUploadSelected" />
@@ -462,11 +482,11 @@
 import { OutlinedInput as ElInput, OutlinedInputNumber as ElInputNumber, OutlinedSelect as ElSelect } from '../components/outlinedControls'
 import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowDown, Back, Clock, Cloudy, Delete, Document, Edit, Files, Folder, FolderAdd, FolderOpened, Monitor, MoreFilled, Refresh, Star, StarFilled, UploadFilled } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type CheckboxValueType } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import DirectoryPickerDialog from '../components/DirectoryPickerDialog.vue'
-import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
+import VirtualList from '../components/VirtualList.vue'
 import {
   browseAnyDirectory,
   browseDirectories,
@@ -524,7 +544,9 @@ const roots = ref<BrowseRoot[]>([])
 const entries = ref<FileManagerEntry[]>([])
 const parentPath = ref('')
 const rootMenuVisible = ref(false)
-const selectedRows = ref<FileManagerEntry[]>([])
+// 选中项按**路径**记（不再依赖 el-table 的选中 API）：虚拟滚动下 DOM 行会被随时回收，
+// 「哪些被勾了」只能靠这份路径集合还原。
+const selectedPathList = ref<string[]>([])
 const shiftPressed = ref(false)
 const lastAnchorPath = ref<string | null>(null)
 const searchKeyword = ref('')
@@ -551,8 +573,10 @@ function resolveSourceFromQuery(): SourceMode {
   const value = Array.isArray(raw) ? raw[0] : raw
   return value === 'mount' ? 'mount' : 'local'
 }
-const tableRef = ref<any>(null)
 const uploadInputRef = ref<HTMLInputElement | null>(null)
+// 列表「回顶」令牌：换目录 / 重新拉取 / 换搜索词 / 换排序都推进一格，
+// VirtualList 见到这个键变了就滚回顶部（比拿组件实例调方法更省事）。
+const listResetToken = ref(0)
 
 const createFolderDialogVisible = ref(false)
 const createFolderName = ref('')
@@ -582,9 +606,18 @@ const contextMenu = ref<{ visible: boolean; x: number; y: number; entry: FileMan
   entry: null,
 })
 
-const selectedCount = computed(() => selectedRows.value.length)
 const currentPathDisplay = computed(() => directoryPath.value || sourceLabel.value)
-const selectedPathSet = computed(() => new Set(selectedRows.value.map((item) => item.path)))
+const selectedPathSet = computed(() => new Set(selectedPathList.value))
+// 选中的条目按**当前列表顺序**还原（供复制 / 移动 / 打包对话框与各种「仅当选中项都是X」判断用）。
+const selectedRows = computed(() => filteredEntries.value.filter((entry) => selectedPathSet.value.has(entry.path)))
+const selectedCount = computed(() => selectedRows.value.length)
+// 表头「全选」的三态：勾满 / 半勾 / 未勾。
+const allEntriesSelected = computed(
+  () => filteredEntries.value.length > 0 && filteredEntries.value.every((entry) => selectedPathSet.value.has(entry.path)),
+)
+const someEntriesSelected = computed(
+  () => !allEntriesSelected.value && filteredEntries.value.some((entry) => selectedPathSet.value.has(entry.path)),
+)
 const canExtractSelectedArchives = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => isArchiveEntry(item)))
 const canPackSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
 const canCollectSelectedFolders = computed(() => selectedRows.value.length > 0 && selectedRows.value.every((item) => item.is_dir))
@@ -647,14 +680,17 @@ const filteredEntries = computed(() => {
 	}
 	return source.filter((item) => item.lowerName.includes(keyword) || item.lowerPath.includes(keyword)).map((item) => item.entry)
 })
-const settingsStore = useSettingsStore()
-const pageSizeOptions = settingsPageSizeOptions
-const pageSize = ref(settingsStore.pageSize || 50)
-const currentPage = ref(1)
-const pagedEntries = computed(() => {
-	const start = (currentPage.value - 1) * pageSize.value
-	return filteredEntries.value.slice(start, start + pageSize.value)
-})
+// 虚拟滚动的行高：**必须与 CSS 栅格里的行高一致**（行是绝对定位的，算错就重叠）。
+const ENTRY_ROW_HEIGHT = 40
+
+// 行 key 用路径（同一目录内路径唯一）：行被回收重建时靠它复用。
+function entryRowKey(entry: FileManagerEntry) {
+  return entry.path
+}
+
+// 搜索词一变结果集就换了一批，列表滚回顶部（不然会停在一个已经没有意义的位置上）。
+// 排序同理：顺序整个换掉后留在原滚动位置只会让人以为是同一批数据。
+const listResetKey = computed(() => `${listResetToken.value}|${searchKeyword.value}|${sortBy.value}|${sortOrder.value}`)
 
 const pickerInitialPath = computed(() => {
   switch (pickerMode.value) {
@@ -791,7 +827,7 @@ function showSourceRootLevel() {
   directoryPath.value = ''
   parentPath.value = ''
   entries.value = rootEntries()
-  currentPage.value = 1
+  listResetToken.value += 1
   clearSelection()
 }
 
@@ -900,15 +936,6 @@ function comparePreparedEntries(a: PreparedFileManagerEntry, b: PreparedFileMana
 
 function comparePreparedByName(a: PreparedFileManagerEntry, b: PreparedFileManagerEntry) {
   return entryNameCollator.compare(a.entry.name, b.entry.name)
-}
-
-function handleCurrentPageChange(page: number) {
-	currentPage.value = page
-}
-
-function handlePageSizeChange(size: number) {
-	pageSize.value = size
-	currentPage.value = 1
 }
 
 function loadStarredFolders() {
@@ -1048,8 +1075,42 @@ function isArchiveEntry(entry: FileManagerEntry) {
   return /\.(zip|cbz)$/i.test(entry.name)
 }
 
-function getRowClassName({ row }: { row: FileManagerEntry }) {
-  return selectedPathSet.value.has(row.path) ? 'file-manager-row--selected' : ''
+// 把一批「路径 → 选中与否」应用到选中集合：单选 / shift 范围选 / 全选都走这里。
+function applySelectionChanges(changes: Array<[string, boolean]>) {
+  const next = new Set(selectedPathList.value)
+  for (const [path, value] of changes) {
+    if (value) {
+      next.add(path)
+    } else {
+      next.delete(path)
+    }
+  }
+  selectedPathList.value = [...next]
+}
+
+// 表头全选：勾上就把当前列表（含搜索后的结果）全部选中，取消就全部取消。
+function toggleSelectAllEntries(value: CheckboxValueType) {
+  const checked = Boolean(value)
+  applySelectionChanges(filteredEntries.value.map((entry): [string, boolean] => [entry.path, checked]))
+  lastAnchorPath.value = checked ? filteredEntries.value[filteredEntries.value.length - 1]?.path ?? null : null
+}
+
+// 单行勾选：按住 shift 时在锚点与当前行之间做范围选择（与原来 el-table 的 @select 同义）。
+function setEntrySelected(path: string, value: boolean) {
+  if (shiftPressed.value && lastAnchorPath.value) {
+    const anchorIndex = filteredEntries.value.findIndex((entry) => entry.path === lastAnchorPath.value)
+    const currentIndex = filteredEntries.value.findIndex((entry) => entry.path === path)
+    if (anchorIndex >= 0 && currentIndex >= 0 && anchorIndex !== currentIndex) {
+      const start = Math.min(anchorIndex, currentIndex)
+      const end = Math.max(anchorIndex, currentIndex)
+      applySelectionChanges(
+        filteredEntries.value.slice(start, end + 1).map((entry): [string, boolean] => [entry.path, value]),
+      )
+      return
+    }
+  }
+  applySelectionChanges([[path, value]])
+  lastAnchorPath.value = path
 }
 
 function handleDirectorySelected(path: string) {
@@ -1142,7 +1203,8 @@ async function openCurrentPath() {
     if (directoryPath.value) {
       persistRecentVisitedPath(directoryPath.value)
     }
-    currentPage.value = 1
+    // 换了目录（或原地刷新）就把列表滚回顶部：虚拟滚动没有分页，位置得自己收回来。
+    listResetToken.value += 1
     clearSelection()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '目录加载失败'
@@ -1182,54 +1244,24 @@ function handleEntryPrimaryAction(entry: FileManagerEntry) {
   }
 }
 
-function handleSelectionChange(rows: FileManagerEntry[]) {
-  selectedRows.value = rows
-  if (rows.length > 0) {
-    lastAnchorPath.value = rows[rows.length - 1].path
-  }
-}
-
-function handleSelectRow(_selection: FileManagerEntry[], row: FileManagerEntry) {
-  // shift + 点击复选框时，在锚点与当前行之间做范围选择。
-  if (shiftPressed.value && lastAnchorPath.value) {
-    const anchorIndex = pagedEntries.value.findIndex((item) => item.path === lastAnchorPath.value)
-    const currentIndex = pagedEntries.value.findIndex((item) => item.path === row.path)
-    if (anchorIndex >= 0 && currentIndex >= 0 && anchorIndex !== currentIndex) {
-      const start = Math.min(anchorIndex, currentIndex)
-      const end = Math.max(anchorIndex, currentIndex)
-      const rangeRows = pagedEntries.value.slice(start, end + 1)
-      const selectedSet = new Set(rangeRows.map((item) => item.path))
-      // 保证范围内的行被选中，范围外的保持现有状态。
-      pagedEntries.value.forEach((item) => {
-        const shouldSelect = selectedSet.has(item.path)
-        const isSelected = selectedPathSet.value.has(item.path)
-        if (shouldSelect && !isSelected) {
-          tableRef.value?.toggleRowSelection(item, true)
-        }
-      })
-      return
-    }
-  }
-  lastAnchorPath.value = row.path
-}
-
 function clearSelection() {
-  tableRef.value?.clearSelection?.()
-  selectedRows.value = []
+  selectedPathList.value = []
+  lastAnchorPath.value = null
 }
 
 function handleTableClick(event: MouseEvent) {
-  // 点击非条目区域（未命中任何表格行）时取消多选。
+  // 点击非条目区域（未命中任何列表行）时取消多选。
   const target = event.target as HTMLElement | null
   if (!target) return
 
-  const rowElement = target.closest('tr.el-table__row') as HTMLElement | null
+  const rowElement = target.closest('.entry-row') as HTMLElement | null
   if (!rowElement && selectedRows.value.length > 0) {
     clearSelection()
   }
 }
 
-function handleRowContextMenu(row: FileManagerEntry, _column: unknown, event: MouseEvent) {
+// 右键菜单：挂在每一行上（原来是 el-table 的 @row-contextmenu，参数里那张表已经不在了）。
+function handleRowContextMenu(row: FileManagerEntry, event: MouseEvent) {
   event.preventDefault()
   contextMenu.value = {
     visible: true,
@@ -1622,15 +1654,6 @@ async function removeItems(entry?: FileManagerEntry) {
   }
 }
 
-async function applyPageSizeSetting() {
-  await settingsStore.ensureLoaded()
-  const size = settingsStore.pageSize || 50
-  if (pageSizeOptions.includes(size)) {
-    pageSize.value = size
-    currentPage.value = 1
-  }
-}
-
 // 浏览器前进 / 后退或直接改 URL 时同步页面：两块页面都能常驻、刷新、收藏。
 watch(
   () => route.query[SOURCE_QUERY_KEY],
@@ -1666,7 +1689,6 @@ onMounted(() => {
   window.addEventListener('keydown', handleWindowKeyDown)
   window.addEventListener('keyup', handleWindowKeyUp)
   window.addEventListener('scroll', hideContextMenu, true)
-  void applyPageSizeSetting()
   void initialize()
 })
 
@@ -2202,13 +2224,19 @@ onBeforeUnmount(() => {
   color: #f59e0b;
 }
 
-.table-pagination {
-	margin-top: 16px;
+/* 列表底部：翻页条已去掉（虚拟滚动取代分页），只留总条数与一句说明。 */
+.table-footer {
+	margin-top: 12px;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
 	flex-wrap: wrap;
+}
+
+.table-footer__hint {
+	color: var(--text-secondary);
+	font-size: 13px;
 }
 
 .footer-count {
@@ -2314,24 +2342,92 @@ onBeforeUnmount(() => {
   background: var(--el-border-color-lighter);
 }
 
-:deep(.file-manager-row--selected > td.el-table__cell) {
-  background: var(--accent-soft) !important;
+/* —— 文件列表（虚拟滚动，轮 114）——
+   表头与行共用同一套栅格，所以列必然对齐；行高写死 40px（与脚本里的
+   ENTRY_ROW_HEIGHT 一致，行是绝对定位的，两边必须同步改）。 */
+.entry-table {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-:deep(.el-table__body tr:hover > td.el-table__cell) {
+.entry-table__head,
+.entry-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 120px 190px 160px;
+  align-items: center;
+}
+
+.entry-table__head {
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px 10px 0 0;
+}
+
+.entry-table__col {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.entry-table__col--check {
+  display: flex;
+  justify-content: center;
+}
+
+/* 列表区本身就是虚拟滚动的滚动容器：高度必须定住（否则会一直长高，滚到窗口上就白虚拟了）。
+   高度按视口留出上方工具栏与下方统计条的位置。 */
+.entry-table__body {
+  position: relative;
+  height: calc(100vh - 402px);
+  min-height: 260px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.entry-table__list {
+  height: 100%;
+}
+
+.entry-table__empty {
+  padding: 28px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.entry-row {
+  height: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  transition: background-color 0.16s ease;
+}
+
+/* 选中 / 悬浮一律「浅底」——项目约定：不铺实心块。 */
+.entry-row.is-selected,
+.entry-row:hover {
   background: var(--accent-soft);
 }
 
-:deep(.el-table__body tr.current-row > td.el-table__cell) {
-  background: var(--accent-soft);
+.entry-row__col {
+  min-width: 0;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--text-primary);
 }
 
-/* 压缩条目行高 */
-:deep(.el-table .el-table__cell) {
-  padding: 2px 0;
+.entry-row__col--check {
+  display: flex;
+  justify-content: center;
 }
 
-:deep(.el-table .cell) {
-  line-height: 1.25;
+.entry-row__col--actions {
+  display: flex;
+  align-items: center;
 }
 </style>

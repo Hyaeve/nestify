@@ -118,47 +118,64 @@
       </div>
 
       <div class="logs-table-shell">
-        <el-table v-loading="loading" :data="logTreeRows" class="logs-table logs-tree-table" row-key="id" empty-text="暂无运行日志" @row-click="openLogDetailDialog">
-          <!-- 「折叠任务」原来是唯一的弹性列，会把表格剩余宽度全部吃掉（实测 854px），
-               后面的列因此被顶到很远。改成定宽后，剩余宽度交给末尾的弹性空列。
-               780 = 表格宽 1364 − 后面四列 510 − 右边留白 74（与归巢历史折叠表同款留白），
-               时间及其后各列因此整体左移 74px。 -->
-          <el-table-column label="折叠任务" width="780">
-            <template #default="scope">
-              <button type="button" class="logs-detail-card" @click.stop="openLogDetailDialog(scope.row)">
-                <span class="logs-detail-card__title">{{ scope.row.title }}</span>
-                <span class="logs-detail-card__desc">{{ scope.row.description }}</span>
-              </button>
-            </template>
-          </el-table-column>
+        <!-- 表头自绘：与行同一套栅格（折叠任务弹性 + 四个定宽列 + 尾部留白），
+             列宽因此和原来那张表完全一致。 -->
+        <div class="logs-table__head">
+          <span class="logs-table__col">折叠任务</span>
+          <span class="logs-table__col logs-table__col--center">时间</span>
+          <span class="logs-table__col logs-table__col--center">模式</span>
+          <span class="logs-table__col logs-table__col--center">结果</span>
+          <span class="logs-table__col logs-table__col--center">数量</span>
+          <span class="logs-table__col logs-table__col--tail"></span>
+        </div>
 
-          <!-- 时间紧跟在「折叠任务」后面，只到月日与时分秒：标题行已经不重复时间，
-               列里再带上年份只是噪音。列序与归巢历史的折叠表保持一致。 -->
-          <el-table-column label="时间" width="150" align="center">
-            <template #default="scope">
-              <span class="logs-time">{{ formatMonthDayTime(scope.row.started_at) }}</span>
+        <div v-loading="loading" class="logs-table__body">
+          <VirtualList
+            v-if="logTreeRows.length"
+            class="logs-table__list"
+            :items="logTreeRows"
+            :item-size="LOG_ROW_HEIGHT"
+            :item-key="logRowKey"
+            :has-more="hasMoreLogs"
+            :loading-more="logsMoreLoading"
+            :reset-key="logsResetToken"
+            @reach-end="loadMoreLogs"
+          >
+            <template #default="{ item }">
+              <div class="logs-row" @click="openLogDetailDialog(item)">
+                <span class="logs-table__col">
+                  <button type="button" class="logs-detail-card" @click.stop="openLogDetailDialog(item)">
+                    <span class="logs-detail-card__title">{{ item.title }}</span>
+                    <span class="logs-detail-card__desc">{{ item.description }}</span>
+                  </button>
+                </span>
+                <span class="logs-table__col logs-table__col--center">
+                  <span class="logs-time">{{ formatMonthDayTime(item.started_at) }}</span>
+                </span>
+                <span class="logs-table__col logs-table__col--center">
+                  <span class="logs-mode-tag" :class="historyModeTagClass(item)">{{ historyModeLabel(item) }}</span>
+                </span>
+                <span class="logs-table__col logs-table__col--center">
+                  <el-tag class="logs-level-tag" :type="statusTagType(item.status)" effect="light">{{ statusLabel(item.status) }}</el-tag>
+                </span>
+                <span class="logs-table__col logs-table__col--center">{{ item.processed_files }}</span>
+                <span class="logs-table__col logs-table__col--tail"></span>
+              </div>
             </template>
-          </el-table-column>
 
-          <el-table-column label="模式" width="130" align="center">
-            <template #default="scope">
-              <span class="logs-mode-tag" :class="historyModeTagClass(scope.row)">{{ historyModeLabel(scope.row) }}</span>
+            <!-- 尾部：还剩就继续加载（再滚到底会自动取下一页），到底了给一句明确的收尾。 -->
+            <template #footer>
+              <div class="logs-list-more">
+                <el-button v-if="hasMoreLogs" class="logs-list-more__button" :loading="logsMoreLoading" @click="loadMoreLogs">
+                  加载更多（已加载 {{ logTreeRows.length }} / {{ filteredTotal }} 条）
+                </el-button>
+                <span v-else class="logs-list-more__done">已加载全部 {{ logTreeRows.length }} 条</span>
+              </div>
             </template>
-          </el-table-column>
+          </VirtualList>
 
-          <el-table-column label="结果" width="120" align="center">
-            <template #default="scope">
-              <el-tag class="logs-level-tag" :type="statusTagType(scope.row.status)" effect="light">{{ statusLabel(scope.row.status) }}</el-tag>
-            </template>
-          </el-table-column>
-
-          <el-table-column label="数量" width="110" align="center">
-            <template #default="scope">{{ scope.row.processed_files }}</template>
-          </el-table-column>
-          <!-- 收尾的弹性空列：专门吃掉表格的剩余宽度。少了它，剩余宽度会被摊回上面各列，
-               「折叠任务」又会被撑宽，后面的列就跟着往回跑。 -->
-          <el-table-column min-width="1" />
-        </el-table>
+          <div v-else class="logs-table__empty">暂无运行日志</div>
+        </div>
       </div>
 
       <el-dialog v-model="logDetailDialogVisible" class="logs-detail-dialog" title="任务详情" width="1080px" top="3vh" destroy-on-close>
@@ -191,17 +208,12 @@
         </template>
       </el-dialog>
 
+      <!-- 翻页条已去掉：改「滚到底自动续加载」（见 loadMoreLogs）。已加载 / 总数
+           显示在列表尾部与工具栏的「共 N 条结果」上。 -->
       <div v-if="filteredTotal > 0" class="logs-pagination">
-        <el-pagination
-          v-model:current-page="logsCurrentPage"
-          v-model:page-size="logsPageSize"
-          background
-          layout="total, sizes, prev, pager, next"
-          :page-sizes="logsPageSizeOptions"
-          :total="filteredTotal"
-          @current-change="handlePageChange"
-          @size-change="handlePageSizeChange"
-        />
+        <span class="logs-pagination__loaded">
+          已加载 {{ logTreeRows.length }} / {{ filteredTotal }} 条{{ hasMoreLogs ? '，继续下滑自动加载' : '' }}
+        </span>
       </div>
     </section>
   </div>
@@ -213,6 +225,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import RunDetailList from '../components/RunDetailList.vue'
+import VirtualList from '../components/VirtualList.vue'
 import { clearRunHistory, fetchRunHistory, fetchRunHistoryDetail, type RunHistoryItem, type RunHistorySummary } from '../api/runHistory'
 import {
   backupTriggerLabel,
@@ -220,7 +233,7 @@ import {
   parseRunDetail,
   type RunDetailSummaryKey,
 } from '../utils/backupDetail'
-import { pageSizeOptions as settingsPageSizeOptions, useSettingsStore } from '../stores/settings'
+import { useSettingsStore } from '../stores/settings'
 
 type LogTreeRow = RunHistoryItem & {
   // 分组行的 id 加了前缀，仅用于表格 row-key。
@@ -253,9 +266,15 @@ const ruleTypeFilter = ref<'all' | 'archive' | 'cleanup' | 'link' | 'naming' | '
 const logsSortBy = ref<'name' | 'modified_at'>('modified_at')
 const logsSortOrder = ref<'asc' | 'desc'>('desc')
 const settingsStore = useSettingsStore()
-const logsPageSizeOptions = settingsPageSizeOptions
+// 一次取多少条：沿用系统设置的「每页文件数」当**每批**条数（翻页条已去掉，
+// 它现在是「滚到底自动续加载」的批次大小）。
 const logsPageSize = ref(settingsStore.pageSize || 50)
+// 下一页要取的页码（1 起）。取到空页就认定到底了。
 const logsCurrentPage = ref(1)
+const logsMoreLoading = ref(false)
+const logsReachedEnd = ref(false)
+// 数据源换了（筛选 / 搜索 / 排序 / 清空）就推进这个令牌，列表据此滚回顶部。
+const logsResetToken = ref(0)
 const logDetailDialogVisible = ref(false)
 const selectedLogGroup = ref<LogTreeRow | null>(null)
 // 运行详情（detail_json）：各链路共用，不再只服务备份。
@@ -269,6 +288,15 @@ const successLogs = computed(() => historySummary.value.success)
 const failedLogs = computed(() => historySummary.value.failed)
 const skippedLogs = computed(() => historySummary.value.skipped)
 const logTreeRows = computed(() => buildLogTreeRows(historyItems.value))
+// 「折叠任务」一行的高度：与 CSS 里写死的一致（标题 25 + 副行 21 + 两行之间 8 + 上下内边距各 16）。
+const LOG_ROW_HEIGHT = 86
+
+function logRowKey(row: LogTreeRow) {
+  return row.id
+}
+
+// 已加载的**任务数**还不到总数 → 还有下一页可拉（滚到底自动续加载）。
+const hasMoreLogs = computed(() => !logsReachedEnd.value && logTreeRows.value.length < filteredTotal.value)
 // 执行明细：本次执行真的动了哪些文件（备份上传/删除，strm 生成/元数据，打包产出…）。
 const selectedRunDetailManifest = computed(() => parseRunDetail(selectedRunDetail.value ?? undefined))
 // 详情窗口标题下的第一段文字：只留触发方式。标题已经是「X任务 · 规则自定义名」，
@@ -291,8 +319,42 @@ function toggleDetailFilter(key: RunDetailSummaryKey) {
   detailFilterKey.value = detailFilterKey.value === key ? null : key
 }
 
-async function loadHistory() {
-  loading.value = true
+// 追加下一页：服务端一页给的是「折叠组」的下 N 组，同一组的多行会一起回来，
+// 换页之间也可能出现重复行（排序边界），所以按 id 去重后再追加。
+function appendUniqueHistory(current: RunHistoryItem[], incoming: RunHistoryItem[]) {
+  if (incoming.length === 0) {
+    return current
+  }
+  const seen = new Set(current.map((item) => item.id))
+  const merged = [...current]
+  for (const item of incoming) {
+    if (seen.has(item.id)) {
+      continue
+    }
+    seen.add(item.id)
+    merged.push(item)
+  }
+  return merged
+}
+
+// reset = true：从第一页重新取（筛选 / 搜索 / 排序 / 清空 / 手动刷新都走这条）。
+// reset = false：往下续取一页（滚到底自动触发，或点「加载更多」）。
+async function fetchHistoryPage(reset: boolean) {
+  if (!reset) {
+    if (logsMoreLoading.value || !hasMoreLogs.value) {
+      return
+    }
+    logsMoreLoading.value = true
+  } else {
+    loading.value = true
+    logsReachedEnd.value = false
+    logsMoreLoading.value = false
+    logsCurrentPage.value = 1
+    historyItems.value = []
+    // 换数据源就回顶：不回去的话，缩过水的列表会停在一个没有意义的滚动位置。
+    logsResetToken.value += 1
+  }
+
   try {
     const response = await fetchRunHistory({
       page: logsCurrentPage.value,
@@ -305,14 +367,36 @@ async function loadHistory() {
       // 展示方式固定为折叠（分组）视图，平铺已取消。
       view_mode: 'tree',
     })
-    historyItems.value = response.data?.items ?? []
+    const items = response.data?.items ?? []
     filteredTotal.value = response.data?.total ?? 0
     historySummary.value = response.data?.summary ?? createDefaultHistorySummary()
+    historyItems.value = reset ? items : appendUniqueHistory(historyItems.value, items)
+
+    if (items.length === 0) {
+      // 空页 = 真的到底了。停在当前页码上，不再往后取。
+      logsReachedEnd.value = true
+    } else {
+      logsCurrentPage.value += 1
+    }
+    if (!reset && logTreeRows.value.length >= filteredTotal.value) {
+      logsReachedEnd.value = true
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '运行日志加载失败')
+    // 失败不标「到底」：条目数没变，VirtualList 不会重复触发同一页，
+    // 用户继续往下滚（或点「加载更多」）就是一次重试。
   } finally {
     loading.value = false
+    logsMoreLoading.value = false
   }
+}
+
+function loadHistory() {
+  void fetchHistoryPage(true)
+}
+
+function loadMoreLogs() {
+  void fetchHistoryPage(false)
 }
 
 function handleSearch() {
@@ -338,17 +422,6 @@ function resetFilters() {
   ruleTypeFilter.value = 'all'
   logsSortBy.value = 'modified_at'
   logsSortOrder.value = 'desc'
-  logsCurrentPage.value = 1
-  void loadHistory()
-}
-
-function handlePageChange(page: number) {
-  logsCurrentPage.value = page
-  void loadHistory()
-}
-
-function handlePageSizeChange(pageSize: number) {
-  logsPageSize.value = pageSize
   logsCurrentPage.value = 1
   void loadHistory()
 }
@@ -566,11 +639,12 @@ function historyModeTagClass(item?: { archive_mode?: string; link_mode?: string 
 
 onMounted(async () => {
   await settingsStore.ensureLoaded()
+  // 每批取多少条沿用系统设置里的「每页文件数」——翻页条已去掉，它现在是续加载的批次大小。
   const size = settingsStore.pageSize || 50
-  if (logsPageSizeOptions.includes(size)) {
+  if (size > 0) {
     logsPageSize.value = size
-    logsCurrentPage.value = 1
   }
+  logsCurrentPage.value = 1
   void loadHistory()
 })
 </script>
@@ -849,14 +923,18 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.logs-table {
-  --el-table-border-color: transparent;
-  --el-table-header-bg-color: #f8fafc;
-  --el-table-tr-bg-color: #ffffff;
-  --el-table-row-hover-bg-color: #f8fbff;
+/* —— 运行日志列表（虚拟滚动，轮 114）——
+   表头自绘、行共用同一套栅格：折叠任务弹性 + 四个定宽列 + 尾部留白 74px
+   （与原表「折叠任务 780 定宽 + 弹性空列」的观感一致）。
+   行高写死 86px，必须与脚本里的 LOG_ROW_HEIGHT 同步改。 */
+.logs-table__head,
+.logs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px 130px 120px 110px 74px;
+  align-items: center;
 }
 
-.logs-table :deep(.el-table__header-wrapper th) {
+.logs-table__head {
   height: 54px;
   color: #64748b;
   background: #f8fafc;
@@ -864,9 +942,62 @@ onMounted(async () => {
   font-weight: 800;
 }
 
-.logs-table :deep(.el-table__cell) {
-  padding: 16px 0;
-  vertical-align: top;
+.logs-table__col {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.logs-table__col--center {
+  text-align: center;
+}
+
+/* 列表区定高：滚动条就落在这一层，这是虚拟滚动的前提（否则列表会一直长高）。 */
+.logs-table__body {
+  position: relative;
+  height: calc(100vh - 470px);
+  min-height: 320px;
+  background: #ffffff;
+}
+
+.logs-table__list {
+  height: 100%;
+}
+
+.logs-row {
+  height: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  background: #ffffff;
+  border-bottom: 1px solid #eef2f7;
+  transition: background-color 0.16s ease;
+}
+
+.logs-row:hover {
+  background: #f8fbff;
+}
+
+.logs-table__empty {
+  padding: 40px 12px;
+  font-size: 13px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+/* 列表尾部：「加载更多」/「已加载全部」。 */
+.logs-list-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.logs-list-more__done {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.logs-pagination__loaded {
+  font-size: 13px;
+  color: #64748b;
 }
 
 .logs-time {
@@ -908,14 +1039,13 @@ onMounted(async () => {
 /* 备份：莫奈低饱和雾霾蓝，此前未被占用的色相 */
 .logs-mode-tag--backup { color: #5f7fa8; background: rgba(95, 127, 168, 0.12); }
 
-.logs-tree-table :deep(.el-table__row) { cursor: pointer; }
-
 /* 折叠任务列：文字整体往右挪一档（表头与内容一起挪，保持对齐）。
-   为了让后面几列往左靠，任务列宽度由 min-width 改成了定宽，见模板注释。
-   注意 `.logs-tree-table` 本身就是 el-table 根元素，选择器里**不能再写 `.el-table`**
-   （那要求 el-table 是它的后代，永远匹配不上）。 */
-.logs-tree-table :deep(th:first-child .cell),
-.logs-tree-table :deep(td:first-child .cell) { padding-left: 24px; }
+   原来靠 `th:first-child .cell` / `td:first-child .cell` 实现，换成自绘栅格后
+   直接落在第一列上（24px 与原来一致）。 */
+.logs-table__head .logs-table__col:first-child,
+.logs-row .logs-table__col:first-child {
+  padding-left: 24px;
+}
 
 /* 折叠任务列的任务条目（标题 + 副行）：走系统默认 UI 字体（--font-ui），
    与页面其它文字一致。原来是自托管的鸿蒙字体，用户反馈不好看，已去掉。
