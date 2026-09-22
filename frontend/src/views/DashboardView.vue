@@ -205,7 +205,7 @@ import { formatRunHistorySummary } from '../utils/runHistorySummary'
 
 // 执行摘要最多展示的任务数。这个值同时当分页参数发给后端：任务视图（view_mode=task）
 // 每个任务只回一行代表行，所以这里拿回来的是「最近 N 个任务」，与它们各自处理了多少项无关。
-const SUMMARY_LIMIT = 50
+const SUMMARY_LIMIT = 25
 
 type PreviewKind = 'rule' | 'backup' | 'manual'
 type PreviewStatus = 'running' | 'success' | 'failed' | 'skipped'
